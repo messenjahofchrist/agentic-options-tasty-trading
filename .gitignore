@@ -152,6 +152,7 @@ activemq-data/
 # Environments
 .env
 .envrc
+.env.*.local
 .venv
 env/
 venv/
@@ -207,6 +208,11 @@ tempCodeRunnerFile.py
 
 # Ruff stuff:
 .ruff_cache/
+
+# Local broker/account data, logs and kill-switch state
+data/
+KILL_SWITCH
+*.jsonl
 
 # PyPI configuration file
 .pypirc

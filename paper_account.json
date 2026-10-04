@@ -1,0 +1,12 @@
+{
+  "starting_capital": 10000.0,
+  "cash": 10000.0,
+  "deposits": 0.0,
+  "withdrawals": 0.0,
+  "realized_pnl": 0.0,
+  "unrealized_pnl": 0.0,
+  "fees_paid": 0.0,
+  "slippage_paid": 0.0,
+  "positions": [],
+  "ledger": []
+}

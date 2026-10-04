@@ -1,0 +1,45 @@
+// Machine-readable JSON with // comments. Unknown keys and missing rules fail closed.
+{
+  "version": "0.1.0",
+  "universe": ["SPY", "QQQ"],
+  "bar_interval_minutes": 1,
+  "opening_range_minutes": 15,
+  "entry_window_et": {"start": "09:45", "end": "14:30"},
+  "rules": {
+    "trend_ema_fast": 9,
+    "trend_ema_slow": 21,
+    "relative_volume_min": 1.5,
+    "atr_period": 14,
+    "max_atr_fraction": 0.025,
+    "breakout_buffer_atr": 0.05,
+    "min_dte": 7,
+    "max_dte": 21,
+    "min_abs_delta": 0.45,
+    "max_abs_delta": 0.65,
+    "max_spread_fraction": 0.10,
+    "min_open_interest": 100,
+    "min_option_volume": 10,
+    "max_contracts": 1,
+    "stop_underlying_atr": 1.0,
+    "take_profit_r": 2.0,
+    "max_holding_minutes": 180
+  },
+  "risk": {
+    "max_risk_per_trade_fraction": 0.01,
+    "hard_max_risk_per_trade_fraction": 0.02,
+    "max_daily_loss_fraction": 0.02,
+    "max_weekly_loss_fraction": 0.05,
+    "max_consecutive_losses": 3,
+    "max_trades_per_day": 3,
+    "max_open_positions": 2
+  },
+  "execution": {
+    "paper_buy_price": "ask",
+    "paper_sell_price": "bid",
+    "slippage_per_contract": 0.02,
+    "commission_per_contract": 0.65,
+    "exchange_fee_per_contract": 0.05,
+    "min_expected_net_r": 1.0,
+    "mode": "PAPER"
+  }
+}

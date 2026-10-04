@@ -1,0 +1,5 @@
+{
+  "Codex": {"status": "IDLE", "last_access_at": null, "next_planned_access_at": null, "started_at": null, "expected_end_at": null, "heartbeat_at": null, "purpose": null, "last_review_id": null},
+  "Claude": {"status": "IDLE", "last_access_at": null, "next_planned_access_at": null, "started_at": null, "expected_end_at": null, "heartbeat_at": null, "purpose": null, "last_review_id": null},
+  "Gemini": {"status": "IDLE", "last_access_at": null, "next_planned_access_at": null, "started_at": null, "expected_end_at": null, "heartbeat_at": null, "purpose": null, "last_review_id": null}
+}

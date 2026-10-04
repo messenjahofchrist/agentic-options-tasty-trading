@@ -1,0 +1,11 @@
+{
+  "active_strategy_version": "0.1.0",
+  "filename": "strategy.txt",
+  "sha256": "413c561af9d8b96b704e05cc323f7894eb10a363da0f95e73c91517d35315c3d",
+  "activated_at": "2026-10-04T00:00:00+00:00",
+  "deployment_metadata": {
+    "status": "research-candidate",
+    "mode": "PAPER",
+    "note": "No historical or out-of-sample performance verification has been performed."
+  }
+}
