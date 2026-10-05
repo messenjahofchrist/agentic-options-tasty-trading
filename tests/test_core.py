@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 from trader.config import AppConfig, Mode
+from trader.config import load_dotenv
 from trader.backtest import load_bars
 from trader.fees import FeeSchedule, economic_gate
 from trader.metrics import calculate_performance
 from trader.models import Bar, OptionQuote, Position
 from trader.option_selector import select_option
+from trader.market_data import parse_candle_feed
 from trader.paper_execution import PaperExecutor
 from trader.portfolio import PaperAccount, load_or_initialize
 from trader.position_manager import exit_reason
@@ -49,6 +53,29 @@ class CoreTests(unittest.TestCase):
             missing = Path(directory) / "bars.csv"
             with self.assertRaisesRegex(FileNotFoundError, "real 1-minute OHLCV file"):
                 load_bars(missing)
+
+    def test_dotenv_loads_local_credentials_without_overriding_environment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / ".env"
+            path.write_text("OPTIOBOT_TEST_SECRET=local-value\nOPTIOBOT_TEST_EXISTING=from-file\n", encoding="utf-8")
+            with patch.dict(os.environ, {"OPTIOBOT_TEST_EXISTING": "process-value"}, clear=False):
+                load_dotenv(path)
+                self.assertEqual(os.environ["OPTIOBOT_TEST_SECRET"], "local-value")
+                self.assertEqual(os.environ["OPTIOBOT_TEST_EXISTING"], "process-value")
+                os.environ.pop("OPTIOBOT_TEST_SECRET", None)
+
+    def test_candle_feed_filters_requested_range_and_requires_complete_snapshot(self):
+        start = datetime(2024, 1, 2, 14, 30, tzinfo=timezone.utc)
+        end = start + timedelta(minutes=1)
+        symbol = "SPY{=1m,a=s,tho=true}"
+        first = ["Candle", symbol, 0, int(start.timestamp() * 1000), 0, 1, 470, 471, 469, 470.5, 1000, 4]
+        second = ["Candle", symbol, 0, int(end.timestamp() * 1000), 0, 1, 470.5, 472, 470, 471.5, 900, 8]
+        rows = parse_candle_feed([{"data": ["Candle", first, "Candle", second]}], start=start,
+                                 end=end - timedelta(milliseconds=1), symbol="SPY")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["close"], 470.5)
+        with self.assertRaisesRegex(RuntimeError, "truncated"):
+            parse_candle_feed([{"data": ["Candle", first[:-1] + [16]]}], start=start, end=end, symbol="SPY")
 
     def _option(self, **kwargs):
         base = dict(symbol="SPY 261016C00650000", underlying="SPY", expiration=datetime.now(timezone.utc) + timedelta(days=12),

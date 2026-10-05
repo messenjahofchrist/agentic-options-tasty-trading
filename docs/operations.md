@@ -19,6 +19,8 @@ OAuth refresh-token grants mint 15-minute access tokens; sandbox and production 
 
 Official sources: [OAuth](https://developer.tastytrade.com/oauth/), [streaming](https://developer.tastytrade.com/docs/concepts/streaming/), [market data](https://developer.tastytrade.com/docs/concepts/market-data/), [orders](https://developer.tastytrade.com/docs/concepts/orders-and-order-types/), [sandbox](https://developer.tastytrade.com/docs/sandbox/), [backtesting](https://developer.tastytrade.com/docs/guides/backtesting/).
 
+Local backtests can retrieve one-minute SPY/QQQ Candle events from the production DXLink feed by providing `--symbol`, `--start`, and `--end`. The command obtains an OAuth access token and API quote token from the credentials in `.env`, requests a Candle history snapshot beginning at `fromTime`, verifies the DXLink snapshot end marker, and filters returned bars to the requested end time. Truncated snapshots are rejected. Test this against the owner's entitled account before relying on a requested history range; no authenticated candle request has yet been verified in this repository.
+
 ## Required before autonomous PAPER operation
 
 1. Supply production OAuth credentials in local secret storage; verify account-market-data entitlement, quote freshness, DXLink event layouts, full option-chain/Greek normalization, reconnection and API rate behavior.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -27,6 +28,7 @@ class AppConfig:
 
     @classmethod
     def from_env(cls) -> "AppConfig":
+        load_dotenv()
         mode_raw = os.getenv("TRADING_MODE", "PAPER").upper()
         try:
             mode = Mode(mode_raw)
@@ -44,6 +46,13 @@ class AppConfig:
             account_number=os.getenv("TASTYTRADE_ACCOUNT_NUMBER", ""),
         )
 
+    def require_market_data_credentials(self) -> None:
+        missing = [name for name, value in (("TASTYTRADE_CLIENT_ID", self.client_id),
+                   ("TASTYTRADE_CLIENT_SECRET", self.client_secret),
+                   ("TASTYTRADE_REFRESH_TOKEN", self.refresh_token)) if not value]
+        if missing:
+            raise RuntimeError("Missing " + ", ".join(missing) + ". Put them in the ignored local .env file; never paste credentials into chat.")
+
     def validate_startup(self) -> None:
         if self.starting_cash <= 0:
             raise ValueError("PAPER_STARTING_CASH must be positive")
@@ -54,3 +63,26 @@ class AppConfig:
                        ("refresh token", self.refresh_token), ("account number", self.account_number)) if not value]
             if missing:
                 raise RuntimeError("LIVE blocked: missing " + ", ".join(missing))
+
+
+def load_dotenv(path: str | Path = ".env") -> None:
+    """Load simple KEY=VALUE entries without overriding already-set process variables."""
+    file = Path(path)
+    if not file.is_file():
+        return
+    for number, raw in enumerate(file.read_text(encoding="utf-8").splitlines(), 1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].strip()
+        if "=" not in line:
+            raise ValueError(f"Invalid .env entry on line {number}; expected KEY=VALUE")
+        key, value = (part.strip() for part in line.split("=", 1))
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+            raise ValueError(f"Invalid .env variable name on line {number}")
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        elif " #" in value:
+            value = value.split(" #", 1)[0].rstrip()
+        os.environ.setdefault(key, value)
