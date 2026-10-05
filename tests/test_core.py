@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from trader.config import AppConfig, Mode
+from trader.backtest import load_bars
 from trader.fees import FeeSchedule, economic_gate
 from trader.metrics import calculate_performance
 from trader.models import Bar, OptionQuote, Position
@@ -42,6 +43,12 @@ class CoreTests(unittest.TestCase):
     def test_ema_atr_need_sufficient_bars(self):
         self.assertEqual(ema([1, 2, 3], 2), 2.5)
         with self.assertRaises(ValueError): atr([], 14)
+
+    def test_missing_backtest_csv_explains_required_real_data(self):
+        with tempfile.TemporaryDirectory() as directory:
+            missing = Path(directory) / "bars.csv"
+            with self.assertRaisesRegex(FileNotFoundError, "real 1-minute OHLCV file"):
+                load_bars(missing)
 
     def _option(self, **kwargs):
         base = dict(symbol="SPY 261016C00650000", underlying="SPY", expiration=datetime.now(timezone.utc) + timedelta(days=12),

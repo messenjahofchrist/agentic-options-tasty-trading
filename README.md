@@ -23,11 +23,11 @@ python -m pip install -e '.[dashboard,streaming,test]'
 Copy-Item .env.example .env
 python -m trader.cli validate-strategy
 python -m trader.cli init-paper
-python -m trader.cli backtest .\data\bars.csv --in-sample-end 2024-12-31T23:59:59Z
+python -m trader.cli backtest .\data\your_real_1m_bars.csv --in-sample-end 2024-12-31T23:59:59Z
 python -m trader.cli dashboard
 ```
 
-The dashboard binds to localhost by default. Backtest CSV columns are `timestamp,open,high,low,close,volume` and optional `vwap`; timestamps must include a timezone. No example market prices are fabricated. `init-paper` creates `data/paper_account.json` using `PAPER_STARTING_CASH` (default USD 10,000); committed `paper_account.json` is a clean template only.
+The dashboard binds to localhost by default. The backtest command requires an actual data file at the path you pass; no historical CSV is bundled. Use real one-minute underlying bars for SPY/QQQ with columns `timestamp,open,high,low,close,volume` and optional `vwap`; timestamps must include a timezone. If the file is missing, the CLI reports the required schema and stops. No example market prices are fabricated. `init-paper` creates `data/paper_account.json` using `PAPER_STARTING_CASH` (default USD 10,000); committed `paper_account.json` is a clean template only.
 
 There is currently no PAPER start command because the complete market-data-to-execution loop has not been verified. Do not enable LIVE. For LIVE, do not proceed until all integration and operational gates listed in `docs/operations.md` have actually passed; the explicit confirmation is a last local gate, not a substitute for validation.
 

@@ -11,7 +11,15 @@ from .strategy_loader import Strategy
 
 
 def load_bars(path: str | Path) -> list[Bar]:
-    with Path(path).open(newline="", encoding="utf-8") as stream:
+    file = Path(path)
+    if not file.is_file():
+        raise FileNotFoundError(
+            f"Historical market-data CSV not found: {file.resolve()}. "
+            "Supply a real 1-minute OHLCV file for SPY or QQQ; required columns are "
+            "timestamp,open,high,low,close,volume (optional: vwap). "
+            "Timestamps must include a UTC offset. No sample prices are generated."
+        )
+    with file.open(newline="", encoding="utf-8") as stream:
         rows = csv.DictReader(stream)
         needed = {"timestamp", "open", "high", "low", "close", "volume"}
         if not rows.fieldnames or not needed.issubset(rows.fieldnames):
