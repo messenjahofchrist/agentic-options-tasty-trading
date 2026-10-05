@@ -57,7 +57,7 @@ class CoreTests(unittest.TestCase):
         self.assertIsNone(select_option([best], "PUT", datetime.now(timezone.utc), self.strategy))
 
     def test_fees_and_economic_gate(self):
-        self.assertEqual(FeeSchedule().estimate(2), 1.4)
+        self.assertAlmostEqual(FeeSchedule().estimate(2), 1.4)
         result = economic_gate(entry=1, exit_price=2, contracts=1, spread_cost=10, slippage=2, fees=1, risk_dollars=100, min_net_r=.5)
         self.assertEqual(result["net_opportunity"], 87)
         self.assertTrue(result["accepted"])
@@ -80,7 +80,7 @@ class CoreTests(unittest.TestCase):
         self.assertGreaterEqual(buy.fill_price, quote.ask)
         sell = executor.fill(quote, "SELL", 1, "test-exit")
         self.assertLessEqual(sell.fill_price, quote.bid)
-        self.assertEqual(account.fees_paid, 1.4)
+        self.assertAlmostEqual(account.fees_paid, 1.4)
         self.assertEqual(len(account.ledger), 2)
 
     def test_account_initialization_separates_capital_movements(self):
