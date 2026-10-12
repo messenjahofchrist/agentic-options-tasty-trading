@@ -58,3 +58,11 @@ class PaperExecutor:
                                     "slippage": slippage, "reason": reason, "quote": fill.quote,
                                     "timestamp": when.isoformat(), "fill_model": fill.fill_model})
         return fill
+
+
+def realized_option_pnl(*, entry_fill_price: float, exit_fill_price: float, quantity: int,
+                        entry_fees: float, exit_fees: float) -> float:
+    """Net realized P/L from the actual simulated option fills; underlying ATR is not used."""
+    if quantity <= 0 or entry_fill_price < 0 or exit_fill_price < 0 or entry_fees < 0 or exit_fees < 0:
+        raise ValueError("Invalid option fill or fee values")
+    return ((exit_fill_price - entry_fill_price) * 100 * quantity) - entry_fees - exit_fees

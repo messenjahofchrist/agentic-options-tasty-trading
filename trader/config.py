@@ -25,6 +25,7 @@ class AppConfig:
     refresh_token: str = ""
     account_number: str = ""
     production_base_url: str = "https://api.tastyworks.com"
+    massive_api_key: str = ""
 
     @classmethod
     def from_env(cls) -> "AppConfig":
@@ -44,6 +45,7 @@ class AppConfig:
             client_secret=os.getenv("TASTYTRADE_CLIENT_SECRET", ""),
             refresh_token=os.getenv("TASTYTRADE_REFRESH_TOKEN", ""),
             account_number=os.getenv("TASTYTRADE_ACCOUNT_NUMBER", ""),
+            massive_api_key=os.getenv("MASSIVE_API_KEY", ""),
         )
 
     def require_market_data_credentials(self) -> None:

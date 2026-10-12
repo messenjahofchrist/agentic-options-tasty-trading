@@ -81,6 +81,7 @@ class Decision:
     underlying_price: float | None
     strategy_version: str
     strategy_hash: str
+    strategy_id: str
     decision: str
     reason: str
     diagnostics: dict[str, Any] = field(default_factory=dict)

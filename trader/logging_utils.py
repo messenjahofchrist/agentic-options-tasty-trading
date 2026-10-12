@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -19,6 +21,11 @@ def get_logger(name: str = "optio_bot") -> logging.Logger:
 def append_jsonl(path: str | Path, record: dict[str, Any]) -> None:
     file = Path(path)
     file.parent.mkdir(parents=True, exist_ok=True)
+    max_bytes = max(1024, int(os.getenv("OPTIOBOT_LOG_MAX_BYTES", str(10 * 1024 * 1024))))
+    if file.is_file() and file.stat().st_size >= max_bytes:
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        archive = file.with_name(f"{file.name}.{stamp}.{uuid.uuid4().hex[:6]}.archive")
+        os.replace(file, archive)
     payload = dict(record)
     payload.setdefault("timestamp_utc", datetime.now(timezone.utc).isoformat())
     with file.open("a", encoding="utf-8") as stream:

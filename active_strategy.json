@@ -1,11 +1,70 @@
 {
-  "active_strategy_version": "0.1.0",
+  "strategy_id": "opening_range_breakout_options",
+  "version": "0.1.0",
+  "status": "research_test",
   "filename": "strategy.txt",
-  "sha256": "413c561af9d8b96b704e05cc323f7894eb10a363da0f95e73c91517d35315c3d",
-  "activated_at": "2026-10-04T00:00:00+00:00",
+  "sha256": "fc0131139a8cec5a1d1d189360b1cafc43fc8ceaaa1eed3116d1a8060ca69a3b",
+  "configuration_hash": "fc0131139a8cec5a1d1d189360b1cafc43fc8ceaaa1eed3116d1a8060ca69a3b",
+  "active_strategy_version": "0.1.0",
+  "activated_at": "2026-10-09T22:00:19.252494+00:00",
+  "configuration": {
+    "strategy_id": "opening_range_breakout_options",
+    "version": "0.1.0",
+    "status": "research_test",
+    "universe": [
+      "SPY",
+      "QQQ"
+    ],
+    "bar_interval_minutes": 1,
+    "opening_range_minutes": 15,
+    "entry_window_et": {
+      "start": "09:45",
+      "end": "14:30"
+    },
+    "rules": {
+      "trend_ema_fast": 9,
+      "trend_ema_slow": 21,
+      "relative_volume_min": 1.5,
+      "atr_period": 14,
+      "max_atr_fraction": 0.025,
+      "breakout_buffer_atr": 0.05,
+      "min_dte": 7,
+      "max_dte": 21,
+      "min_abs_delta": 0.45,
+      "max_abs_delta": 0.65,
+      "target_abs_delta": 0.55,
+      "max_spread_fraction": 0.1,
+      "max_spread_dollars": 0.1,
+      "min_open_interest": 100,
+      "min_option_volume": 10,
+      "max_contracts": 1,
+      "stop_underlying_atr": 1.0,
+      "target_atr_multiple": 2.0,
+      "max_holding_minutes": 180
+    },
+    "risk": {
+      "max_risk_per_trade_fraction": 0.01,
+      "hard_max_risk_per_trade_fraction": 0.02,
+      "max_daily_loss_fraction": 0.02,
+      "max_weekly_loss_fraction": 0.05,
+      "max_consecutive_losses": 3,
+      "max_trades_per_day": 3,
+      "max_open_positions": 2
+    },
+    "execution": {
+      "paper_buy_price": "ask",
+      "paper_sell_price": "bid",
+      "slippage_per_contract": 0.02,
+      "commission_per_contract": 0.65,
+      "exchange_fee_per_contract": 0.05,
+      "min_expected_net_r": 1.0,
+      "mode": "PAPER"
+    }
+  },
   "deployment_metadata": {
-    "status": "research-candidate",
+    "status": "research_test",
     "mode": "PAPER",
-    "note": "No historical or out-of-sample performance verification has been performed."
+    "live_enabled": false,
+    "note": "Owner-requested deterministic hardening; no LIVE authorization."
   }
 }

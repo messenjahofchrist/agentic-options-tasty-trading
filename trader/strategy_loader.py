@@ -16,7 +16,9 @@ class StrategyError(ValueError):
 
 @dataclass(frozen=True)
 class Strategy:
+    strategy_id: str
     version: str
+    status: str
     universe: tuple[str, ...]
     bar_interval_minutes: int
     opening_range_minutes: int
@@ -24,14 +26,15 @@ class Strategy:
     rules: dict[str, Any]
     risk: dict[str, Any]
     execution: dict[str, Any]
+    configuration: dict[str, Any]
     sha256: str
     filename: str
 
 
-_TOP = {"version", "universe", "bar_interval_minutes", "opening_range_minutes", "entry_window_et", "rules", "risk", "execution"}
+_TOP = {"strategy_id", "version", "status", "universe", "bar_interval_minutes", "opening_range_minutes", "entry_window_et", "rules", "risk", "execution"}
 _RULES = {"trend_ema_fast", "trend_ema_slow", "relative_volume_min", "atr_period", "max_atr_fraction", "breakout_buffer_atr",
-          "min_dte", "max_dte", "min_abs_delta", "max_abs_delta", "max_spread_fraction", "min_open_interest", "min_option_volume",
-          "max_contracts", "stop_underlying_atr", "take_profit_r", "max_holding_minutes"}
+          "min_dte", "max_dte", "min_abs_delta", "max_abs_delta", "target_abs_delta", "max_spread_fraction", "max_spread_dollars",
+          "min_open_interest", "min_option_volume", "max_contracts", "stop_underlying_atr", "target_atr_multiple", "max_holding_minutes"}
 _RISK = {"max_risk_per_trade_fraction", "hard_max_risk_per_trade_fraction", "max_daily_loss_fraction", "max_weekly_loss_fraction",
          "max_consecutive_losses", "max_trades_per_day", "max_open_positions"}
 _EXEC = {"paper_buy_price", "paper_sell_price", "slippage_per_contract", "commission_per_contract", "exchange_fee_per_contract", "min_expected_net_r", "mode"}
@@ -90,7 +93,8 @@ def parse_strategy(path: str | Path) -> Strategy:
             raise StrategyError(f"{section} must be an object")
         _keys(data[section], allowed, section)
     required = {
-        "version": str, "universe": list, "bar_interval_minutes": int, "opening_range_minutes": int,
+        "strategy_id": str, "version": str, "status": str, "universe": list,
+        "bar_interval_minutes": int, "opening_range_minutes": int,
         "entry_window_et": dict,
     }
     for key, kind in required.items():
@@ -100,6 +104,8 @@ def parse_strategy(path: str | Path) -> Strategy:
         raise StrategyError("universe must contain uppercase ticker symbols")
     if not data["version"].strip():
         raise StrategyError("version must be non-empty")
+    if not data["strategy_id"].strip() or data["status"] != "research_test":
+        raise StrategyError("strategy_id must be non-empty and status must remain research_test")
     try:
         for value in data["entry_window_et"].values():
             datetime.strptime(value, "%H:%M")
@@ -127,7 +133,8 @@ def parse_strategy(path: str | Path) -> Strategy:
             raise StrategyError(f"rules.{key} must be a positive integer")
     if rules["trend_ema_fast"] >= rules["trend_ema_slow"] or rules["min_dte"] > rules["max_dte"]:
         raise StrategyError("EMA periods and DTE range are inconsistent")
-    if rules["min_dte"] < 1 or not 0 < rules["min_abs_delta"] <= rules["max_abs_delta"] <= 1 or rules["max_spread_fraction"] >= 1:
+    if (rules["min_dte"] < 1 or not 0 < rules["min_abs_delta"] <= rules["target_abs_delta"] <= rules["max_abs_delta"] <= 1
+            or rules["max_spread_fraction"] >= 1 or rules["max_spread_dollars"] <= 0):
         raise StrategyError("DTE, delta, and spread bounds are invalid")
     if not 0 < risk["max_risk_per_trade_fraction"] <= risk["hard_max_risk_per_trade_fraction"] <= .02:
         raise StrategyError("Per-trade risk must be positive and hard capped at 2%")
@@ -136,7 +143,7 @@ def parse_strategy(path: str | Path) -> Strategy:
     for key in ("max_consecutive_losses", "max_trades_per_day", "max_open_positions"):
         if risk[key] < 1 or not float(risk[key]).is_integer():
             raise StrategyError(f"risk.{key} must be a positive integer")
-    for key in ("max_atr_fraction", "relative_volume_min", "max_spread_fraction", "take_profit_r", "max_contracts", "max_holding_minutes"):
+    for key in ("max_atr_fraction", "relative_volume_min", "max_spread_fraction", "max_spread_dollars", "target_atr_multiple", "max_contracts", "max_holding_minutes"):
         if rules[key] <= 0:
             raise StrategyError(f"rules.{key} must be positive")
     if execution["mode"] != "PAPER":
@@ -146,8 +153,11 @@ def parse_strategy(path: str | Path) -> Strategy:
     for key in ("slippage_per_contract", "commission_per_contract", "exchange_fee_per_contract", "min_expected_net_r"):
         if not isinstance(execution[key], (int, float)) or isinstance(execution[key], bool) or not math.isfinite(execution[key]) or execution[key] < 0:
             raise StrategyError(f"execution.{key} must be a finite nonnegative number")
-    return Strategy(data["version"], tuple(data["universe"]), data["bar_interval_minutes"], data["opening_range_minutes"],
-                    data["entry_window_et"], rules, risk, execution, hashlib.sha256(raw.encode("utf-8")).hexdigest(), file.name)
+    canonical = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    config_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return Strategy(data["strategy_id"], data["version"], data["status"], tuple(data["universe"]),
+                    data["bar_interval_minutes"], data["opening_range_minutes"], data["entry_window_et"],
+                    rules, risk, execution, data, config_hash, file.name)
 
 
 def _keys(value: dict[str, Any], allowed: set[str], name: str) -> None:
@@ -157,15 +167,24 @@ def _keys(value: dict[str, Any], allowed: set[str], name: str) -> None:
 
 
 def write_manifest(strategy: Strategy, path: str | Path, deployment: dict[str, Any] | None = None) -> None:
-    payload = {"active_strategy_version": strategy.version, "filename": strategy.filename, "sha256": strategy.sha256,
-               "activated_at": datetime.now(timezone.utc).isoformat(), "deployment_metadata": deployment or {"status": "candidate", "mode": "PAPER"}}
+    payload = {"strategy_id": strategy.strategy_id, "version": strategy.version, "status": strategy.status,
+               "filename": strategy.filename, "sha256": strategy.sha256, "configuration_hash": strategy.sha256,
+               "active_strategy_version": strategy.version,
+               "activated_at": datetime.now(timezone.utc).isoformat(), "configuration": strategy.configuration,
+               "deployment_metadata": deployment or {"status": "research_test", "mode": "PAPER", "live_enabled": False}}
     _atomic_json(Path(path), payload)
 
 
 def verify_manifest(strategy_path: str | Path, manifest_path: str | Path) -> dict[str, Any]:
     strategy = parse_strategy(strategy_path)
     manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
-    if manifest.get("sha256") != strategy.sha256 or manifest.get("filename") != strategy.filename or manifest.get("active_strategy_version") != strategy.version:
+    if (manifest.get("sha256") != strategy.sha256 or manifest.get("configuration_hash") != strategy.sha256
+            or manifest.get("filename") != strategy.filename or manifest.get("version") != strategy.version
+            or manifest.get("active_strategy_version") != strategy.version
+            or manifest.get("strategy_id") != strategy.strategy_id or manifest.get("status") != "research_test"
+            or manifest.get("configuration") != strategy.configuration
+            or (manifest.get("deployment_metadata") or {}).get("mode") != "PAPER"
+            or (manifest.get("deployment_metadata") or {}).get("live_enabled") is not False):
         raise StrategyError("Active strategy manifest hash/version mismatch")
     return manifest
 

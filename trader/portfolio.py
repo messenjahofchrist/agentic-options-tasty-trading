@@ -23,7 +23,9 @@ class PaperAccount:
 
     @property
     def equity(self) -> float:
-        return self.cash + self.unrealized_pnl
+        market_value = sum(float(position.get("last_bid", position.get("entry_price", 0))) *
+                           int(position.get("quantity", 0)) * 100 for position in self.positions)
+        return self.cash + market_value
 
     @property
     def buying_power(self) -> float:

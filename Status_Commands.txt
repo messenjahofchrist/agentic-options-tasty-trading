@@ -1,0 +1,25 @@
+
+Run these from `C:\development\optiobot\agentic-options-tasty-trading`:
+
+```
+# Check trading and supervisory status
+.\.venv\Scripts\python.exe -m trader.cli status
+.\.venv\Scripts\python.exe -m trader.supervisor status
+& .\scripts\supervisor-tasks.ps1 -Action Status
+
+# Run an advisory review or daily report manually
+.\.venv\Scripts\python.exe -m trader.supervisor review
+.\.venv\Scripts\python.exe -m trader.supervisor daily-report
+
+# Inspect reports and alerts
+Get-ChildItem .\data\reviews | Sort-Object LastWriteTime -Descending
+Get-Content .\data\supervisor_status.json
+Get-Content .\data\critical_alerts.jsonl -Tail 50 -ErrorAction SilentlyContinue
+
+# Disable, re-enable, or remove supervisory tasks
+& .\scripts\supervisor-tasks.ps1 -Action Disable
+& .\scripts\supervisor-tasks.ps1 -Action Enable
+& .\scripts\supervisor-tasks.ps1 -Action Remove
+```
+
+If you manually start `paper-session`, stop it with Ctrl+C in its PowerShell window. It must start before the market open and refuses to start with existing simulated positions. There is **no safe automatic engine restart command** yet.

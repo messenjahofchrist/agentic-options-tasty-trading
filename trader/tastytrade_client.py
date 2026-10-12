@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import gzip
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import zlib
 from dataclasses import dataclass
 from typing import Any
 
@@ -25,6 +27,19 @@ class TransportError(BrokerError):
 class OAuthToken:
     access_token: str
     expires_at: float
+
+
+def _decode_content(body: bytes, content_encoding: str) -> bytes:
+    """Decode HTTP content encodings before parsing JSON or surfacing API errors."""
+    for encoding in reversed([part.strip().lower() for part in content_encoding.split(",") if part.strip()]):
+        if encoding in {"gzip", "x-gzip"}:
+            body = gzip.decompress(body)
+        elif encoding == "deflate":
+            try:
+                body = zlib.decompress(body)
+            except zlib.error:
+                body = zlib.decompress(body, -zlib.MAX_WBITS)
+    return body
 
 
 class TastytradeClient:
@@ -51,9 +66,11 @@ class TastytradeClient:
         req = urllib.request.Request(self.base_url + path, data=payload, headers=headers, method=method)
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                return json.loads(response.read().decode("utf-8"))
+                content = _decode_content(response.read(), response.headers.get("Content-Encoding", ""))
+                return json.loads(content.decode("utf-8"))
         except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")[:1000]
+            content = _decode_content(exc.read(), exc.headers.get("Content-Encoding", ""))
+            detail = content.decode("utf-8", errors="replace")[:1000]
             raise BrokerError(f"tastytrade HTTP {exc.code} for {method} {path}: {detail} (status={exc.code})") from exc
         except (urllib.error.URLError, TimeoutError) as exc:
             raise TransportError(f"tastytrade request failed: {exc}") from exc
