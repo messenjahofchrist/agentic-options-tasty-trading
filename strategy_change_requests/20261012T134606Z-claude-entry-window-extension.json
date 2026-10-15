@@ -1,0 +1,57 @@
+{
+  "proposal_id": "20261012T134606Z-claude-entry-window-extension",
+  "timestamp": "2026-10-12T13:46:06Z",
+  "author": "Claude (advisory reviewer) recording an owner-requested change; not an evidence-driven recommendation",
+  "is_deployment_request": false,
+  "alters_active_strategy": false,
+  "current_strategy": {
+    "strategy_id": "opening_range_breakout_options",
+    "version": "0.1.0",
+    "configuration_hash": "fc0131139a8cec5a1d1d189360b1cafc43fc8ceaaa1eed3116d1a8060ca69a3b",
+    "entry_window_et": {
+      "start": "09:45",
+      "end": "14:30"
+    }
+  },
+  "proposed_strategy_version": "0.1.1",
+  "exact_change": "strategy.txt entry_window_et.end: \"14:30\" -> \"16:00\"; regenerate active_strategy.json via the established manifest process; update docs/operations.md and docs/strategy_plain_english.md, which state 'Entries stop after 14:30 ET'. PAPER only. No other rule, risk, or execution field changes.",
+  "rationale": "Owner explicitly requested that paper-entry signals be evaluated throughout every regular U.S. session, 09:45-16:00 ET, for testing. Entries still require all strategy and safety conditions; no trade is forced.",
+  "supporting_evidence": "Owner request only. There is no performance evidence: paper trading has not started and 0 trades exist.",
+  "sample_size": 0,
+  "backtest_replay_results": null,
+  "out_of_sample_results": null,
+  "walk_forward_results": null,
+  "fee_spread_slippage_effects": "Unknown. Later entries leave less time before the forced end_of_session_close exit (session close minus 1 minute, paper_runner.py), so late entries incur a full round-trip spread and fees with little holding time.",
+  "risk_impact": "Per-trade, daily, weekly, streak, trades/day and open-position limits are unchanged. More eligible minutes may produce more entries per day, bounded by max_trades_per_day=3. PAPER only; no LIVE effect.",
+  "expected_benefit": "More signal evaluations and decision records per session for research; tests the owner's hypothesis about afternoon breakouts.",
+  "expected_downside": [
+    "Opening-range breakouts late in the day are a different setup from the documented hypothesis; mixing them may muddy results. Recommend segmenting results by time of day.",
+    "calendar.entry_window_ok permits entries until 15:59. An entry after about 15:45 is force-closed within minutes at close-1min. Codex should consider whether the effective cutoff should leave exit room, as paper-test-session does with close-15min; the owner decides.",
+    "The window is not the binding constraint today: KILL_SWITCH startup race, the $100 premium budget, and the 1R Greek gate on a 2x one-minute-ATR target (see review 20261012T134606Z-claude-independent-review.md, findings F3-F5) are likely to block entries regardless of the window."
+  ],
+  "confidence": "High that this implements the owner request; no claim about profitability.",
+  "limitations": "No data. This is not evidence of edge. It must not be read as authorization for LIVE.",
+  "rollback_plan": "If the owner later requests rollback, create a new research version 0.1.2 with entry_window_et.end restored to 14:30, regenerate and verify active_strategy.json with a new hash, update documentation, and append a rollback audit record. Do not reuse the prior 0.1.0 version/hash as the active version.",
+  "required_process": [
+    "Owner approval of this exact change",
+    "Codex implements it in the executable configuration (Claude does not)",
+    "Tests: entry_window_ok at 14:31, 15:45, 15:59 and 16:00 ET; manifest/hash regeneration; early-close days",
+    "Version bump, new hash, audit record; Codex confirms resulting runtime behavior"
+  ],
+  "independent_review_status": {
+    "Claude": "AGREE (PAPER evaluation only; late entries may be force-closed at session close)",
+    "Codex": "AGREE after supplied executable-path evidence; owner accepts near-immediate close for very late entries"
+  },
+  "two_agent_agreement_reached": true,
+  "implementation": {
+    "status": "active",
+    "activated_at_utc": "2026-10-13T21:30:13.941748+00:00",
+    "old_version": "0.1.0",
+    "old_configuration_hash": "fc0131139a8cec5a1d1d189360b1cafc43fc8ceaaa1eed3116d1a8060ca69a3b",
+    "new_version": "0.1.1",
+    "new_configuration_hash": "06ab03650666d511481e6b5af8ff156f78772e8d22622997e9eeed1cd2bc1c5c",
+    "owner_direction": "PAPER entries may be considered until the market closes; no extra minimum-hold buffer requested.",
+    "live_enabled": false,
+    "validation": "Manifest generated and verified; regular-close, 15:59/16:00 boundary, and 2026-11-27 early-close tests added."
+  }
+}

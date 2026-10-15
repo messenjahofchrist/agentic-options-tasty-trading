@@ -66,7 +66,6 @@ def decision_cycle(*, strategy: Strategy, strategy_path: str | Path, manifest_pa
                          "underlying_stop_trigger": signal.stop_price,
                          "underlying_target_trigger": signal.target_price,
                          "atr_stop_is_dollar_loss_cap": False})
-            selected, option_audit = evaluate_options(option_chain_by_symbol.get(symbol, []), signal.side, now, strategy)
             entry_slippage_estimate = float(strategy.execution["slippage_per_contract"])
             round_trip_fees_per_contract = FeeSchedule(
                 commission_per_contract=float(strategy.execution["commission_per_contract"]),
@@ -75,6 +74,10 @@ def decision_cycle(*, strategy: Strategy, strategy_path: str | Path, manifest_pa
             max_risk_fraction = min(float(strategy.risk["max_risk_per_trade_fraction"]),
                                     float(strategy.risk["hard_max_risk_per_trade_fraction"]))
             risk_budget = max(0.0, risk_state.equity * max_risk_fraction)
+            selected, option_audit = evaluate_options(
+                option_chain_by_symbol.get(symbol, []), signal.side, now, strategy,
+                max_risk_dollars_per_contract=risk_budget,
+                costs_per_contract=2 * entry_slippage_estimate + round_trip_fees_per_contract)
             for row in option_audit:
                 ask = row["ask"]
                 row.update({"quote_timestamp": next((q.quote_timestamp.isoformat() for q in option_chain_by_symbol.get(symbol, [])
@@ -136,27 +139,38 @@ def decision_cycle(*, strategy: Strategy, strategy_path: str | Path, manifest_pa
                         diag["rejection_reasons"] = ["option_greeks_missing"]
                     else:
                         # This is a paper-only scenario estimate, not an empirical profitability claim.
-                        # It projects the option to the strategy target using current Greeks, charges one
-                        # full spread across entry/exit, and includes round-trip fees and slippage.
-                        underlying_move = signal.target_price - price
+                        # It projects the option to the strategy target and to the stop using current
+                        # Greeks, charges one full spread across entry/exit, and includes round-trip fees
+                        # and slippage. R is the modeled loss if the stop is hit. It was previously the
+                        # whole premium, which demanded a 100%+ option gain at target and rejected every
+                        # trade; the full premium still caps sizing in the risk engine.
                         holding_days = int(strategy.rules["max_holding_minutes"]) / 1440
-                        projected_change = (option.delta * underlying_move +
-                                            0.5 * option.gamma * underlying_move * underlying_move +
-                                            option.theta * holding_days)
+
+                        def option_change(underlying_move: float) -> float:
+                            return (option.delta * underlying_move +
+                                    0.5 * option.gamma * underlying_move * underlying_move +
+                                    option.theta * holding_days)
+
+                        projected_change = option_change(signal.target_price - price)
                         expected_exit = max(0.0, option.ask + projected_change - option.spread)
+                        stop_exit = max(0.0, option.ask + option_change(signal.stop_price - price) - option.spread)
                         fees = round_trip_fees_per_contract * risk.quantity
                         slippage = execution_slippage * risk.quantity * 2
+                        loss_at_stop = min((option.ask - stop_exit) * 100 * risk.quantity + fees + slippage,
+                                           risk.risk_dollars)
                         gate = economic_gate(
                             entry=option.ask, exit_price=expected_exit, contracts=risk.quantity,
                             spread_cost=0.0, slippage=slippage, fees=fees,
-                            risk_dollars=risk.risk_dollars,
+                            risk_dollars=max(loss_at_stop, 0.01),
                             min_net_r=float(strategy.execution["min_expected_net_r"]),
                         )
                         diag.update({"expected_exit": expected_exit, "expected_exit_model": "current_greeks_at_underlying_target",
+                                     "expected_stop_exit": stop_exit, "modeled_loss_at_stop_dollars": loss_at_stop,
                                      "projected_change": projected_change, "gross_opportunity": gate["gross_opportunity"],
                                      "net_opportunity": gate["net_opportunity"], "expected_net_r": gate["expected_r"],
                                      "economic_gate_result": "accepted" if gate["accepted"] else "rejected",
-                                     "economic_gate_assumption": "target reached within max holding time; actual paper exits use live bid"})
+                                     "economic_gate_assumption": ("target or stop reached within max holding time; R = modeled "
+                                                                  "loss at stop; actual paper exits use live bid")})
                         if gate["accepted"]:
                             decision, reason = "PAPER_ENTRY", ("paper_test_risk_and_greek_economic_gate_passed" if paper_test_mode
                                                                  else "paper_risk_and_greek_economic_gate_passed")

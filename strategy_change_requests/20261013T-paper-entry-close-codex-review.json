@@ -1,0 +1,34 @@
+{
+  "proposal_id": "20261012T134606Z-claude-entry-window-extension",
+  "reviewer": "Codex",
+  "decision": "AGREE",
+  "reviewed_at_utc": "2026-10-13T21:30:13.942269+00:00",
+  "findings": [
+    {
+      "id": "F1",
+      "type": "informational",
+      "finding": "With the verified XNYS calendar, end=16:00 admits the final regular-session minute, rejects 16:00 and later, and actual early closes remain enforced."
+    },
+    {
+      "id": "F2",
+      "type": "accepted_tradeoff",
+      "finding": "Very late entries may be force-closed almost immediately with the existing end-of-session behavior and full modeled costs; the owner explicitly accepts this for research."
+    },
+    {
+      "id": "F3-F5",
+      "type": "not_a_blocker",
+      "finding": "Other gates may still reject trades. No risk limits or parameters are being tuned."
+    },
+    {
+      "id": "F6",
+      "type": "accepted_limitation",
+      "finding": "No performance evidence; research only and no LIVE authorization."
+    }
+  ],
+  "required_conditions": [
+    "Only the entry end, strategy version, manifest/hash, docs, and audit record change.",
+    "PAPER-only execution and LIVE controls stay unchanged.",
+    "Verify time boundaries, manifest/hash, and early-close behavior."
+  ],
+  "rationale": "Verified source excerpts showed the calendar bounds entries by each actual close and the paper runner has no LIVE session path. The owner accepted near-immediate closing for very late entries."
+}

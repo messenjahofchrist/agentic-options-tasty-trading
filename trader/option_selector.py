@@ -14,8 +14,11 @@ class OptionSelection:
     rejected: tuple[str, ...] = ()
 
 
-def evaluate_options(candidates: list[OptionQuote], direction: str, now: datetime, strategy: Strategy
+def evaluate_options(candidates: list[OptionQuote], direction: str, now: datetime, strategy: Strategy,
+                     *, max_risk_dollars_per_contract: float | None = None, costs_per_contract: float = 0.0
                      ) -> tuple[OptionSelection | None, list[dict]]:
+    """Pick the best eligible contract. With a budget, unaffordable contracts are ineligible, so a cheaper
+    in-range contract (e.g. 0.47 rather than 0.56 delta) is chosen instead of rejecting the whole trade."""
     rules = strategy.rules
     right = "C" if direction == "CALL" else "P"
     eligible: list[tuple[float, OptionQuote]] = []
@@ -40,6 +43,9 @@ def evaluate_options(candidates: list[OptionQuote], direction: str, now: datetim
             reasons.append("spread_dollars_exceeded")
         if valid_market and spread_fraction > float(rules["max_spread_fraction"]):
             reasons.append("spread_percentage_exceeded")
+        if (valid_market and max_risk_dollars_per_contract is not None
+                and option.ask * 100 + costs_per_contract > max_risk_dollars_per_contract):
+            reasons.append("premium_above_risk_budget")
         if option.open_interest < int(rules["min_open_interest"]) or option.volume < int(rules["min_option_volume"]):
             if option.open_interest < int(rules["min_open_interest"]): reasons.append("open_interest_below_minimum")
             if option.volume < int(rules["min_option_volume"]): reasons.append("option_volume_below_minimum")

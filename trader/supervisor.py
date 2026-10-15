@@ -5,16 +5,19 @@ import json
 import os
 import re
 import shutil
+import smtplib
 import subprocess
 import sys
 import tempfile
 import threading
 import time
 import uuid
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from .config import load_dotenv
 from .logging_utils import append_jsonl
@@ -30,6 +33,133 @@ LOCK = DATA / "supervisor_review.lock"
 REVIEW_DIR = DATA / "reviews"
 _STATUS_MUTEX = threading.Lock()
 SEVERITIES = {"info", "low", "medium", "high", "critical"}
+HEARTBEAT_FUTURE_TOLERANCE_SECONDS = 2.0
+REASON_LANGUAGE = {
+    "breakout_not_triggered": "Price was not beyond the opening range after a recent break above or below it.",
+    "volume_filter_failed": "The breakout did not have enough trading volume.",
+    "atr_filter_failed": "Price movement was too volatile for the strategy's limit.",
+    "volatility_spike_filter_failed": "A setup appeared, but that stock was much jumpier than its own day so far, so it was skipped.",
+    "premium_above_risk_budget": "The option cost more than the per-trade budget allows.",
+    "market_closed_or_outside_entry_window": "It was outside the strategy's trading hours.",
+    "kill_switch_active": "The safety switch was on, so new trades were blocked.",
+    "data_freshness": "Market data was missing or too old, so the safety checks blocked entries.",
+    "account_state": "The paper account status could not be confirmed, so entries were blocked.",
+    "reconciliation": "The account records could not be reconciled, so entries were blocked.",
+    "protection": "A required position safety check did not pass.",
+    "risk_limits_passed": "A possible trade passed the risk checks.",
+    "premium_risk_budget_exceeded": "The option cost and estimated fees were above the per-trade risk limit.",
+    "paper_execution_not_enabled": "Paper execution was not enabled.",
+    "option_greeks_missing_for_paper_economic_gate": "Required option pricing details were unavailable.",
+    "paper_expected_net_r_below_minimum": "The estimated reward did not pass the strategy's minimum after costs.",
+    "no_option_contracts_returned": "No eligible option contracts were available.",
+    "spread_dollars_exceeded": "The option's bid-ask gap was wider than the allowed dollar limit.",
+    "spread_percentage_exceeded": "The option's bid-ask gap was too large compared with its price.",
+    "delta_outside_range_or_missing": "The available option's price sensitivity was outside the allowed range.",
+    "dte_outside_range": "Available options were outside the allowed expiration window.",
+    "open_interest_below_minimum": "Available options did not have enough open interest.",
+    "option_volume_below_minimum": "Available options did not have enough trading activity.",
+}
+
+
+def _reason_text(reason: Any) -> str:
+    """Translate logged reason codes into short wording suitable for the owner email."""
+    value = str(reason or "").strip()
+    if value in REASON_LANGUAGE:
+        return REASON_LANGUAGE[value]
+    if value.startswith("safety_gate_blocked:"):
+        gates = value.partition(":")[2].split(",")
+        return "Safety checks blocked new entries: " + ", ".join(
+            REASON_LANGUAGE.get(gate, gate.replace("_", " ")) for gate in gates if gate
+        ) + "."
+    if value.startswith("option_filters_rejected_candidates:"):
+        reasons = value.partition(":")[2].split(",")
+        readable = [REASON_LANGUAGE.get(reason, reason.replace("_", " ")) for reason in reasons if reason]
+        return "Available options did not meet the selection rules" + (": " + ", ".join(readable) if readable else "") + "."
+    if value:
+        return value.replace("_", " ").rstrip(".") + "."
+    return "The decision log did not include a reason."
+
+
+def _decision_email_summary(decisions: list[dict[str, Any]]) -> str:
+    """Summarize the newest logged session without dumping internal decision JSON."""
+    parsed: list[tuple[datetime, dict[str, Any]]] = []
+    for row in decisions:
+        if not isinstance(row, dict):
+            continue
+        stamp = row.get("timestamp_et") or row.get("timestamp")
+        try:
+            parsed.append((datetime.fromisoformat(str(stamp).replace("Z", "+00:00")), row))
+        except (TypeError, ValueError):
+            continue
+    if not parsed:
+        return "Trading summary: No recent decision records were available, so I can't tell why the bot did or did not trade."
+
+    newest = max(stamp for stamp, _ in parsed)
+    session_date = newest.date()
+    session = [(stamp, row) for stamp, row in parsed if stamp.date() == session_date]
+    entries = sum(str(row.get("decision", "")).upper() == "PAPER_ENTRY" for _, row in session)
+    candidates = sum(str(row.get("decision", "")).upper() == "CANDIDATE" for _, row in session)
+    counts: dict[str, int] = {}
+    for _, row in session:
+        if str(row.get("decision", "")).upper() == "NO_TRADE":
+            reason = str(row.get("reason") or "unknown")
+            counts[reason] = counts.get(reason, 0) + 1
+    if entries:
+        line = f"Trading summary: {entries} simulated {'entry' if entries == 1 else 'entries'} were made in the latest logged session."
+        if candidates:
+            line += f" {candidates} additional {'setup was' if candidates == 1 else 'setups were'} identified."
+    elif candidates:
+        line = f"Trading summary: No simulated positions were opened. {candidates} possible {'setup passed' if candidates == 1 else 'setups passed'} the risk checks, but no entry was recorded."
+    else:
+        line = "Trading summary: No simulated positions were opened."
+    if counts:
+        top = sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:2]
+        details = [f"{count} check{'s' if count != 1 else ''}: {_reason_text(reason)}" for reason, count in top]
+        line += " Main reasons: " + " ".join(details)
+    return line
+
+
+def _review_email_summary(review: dict[str, Any]) -> str:
+    """Render Claude/Codex findings and owner follow-up as a compact plain-language email."""
+    status = "completed" if review.get("status") == "complete" else "incomplete"
+    lines = [f"Claude and Codex review: The review is {status}."]
+    for name in ("Claude", "Codex"):
+        report = review.get("reviewers", {}).get(name, {})
+        if report.get("status") == "failed":
+            lines.append(f"{name}: The review did not finish. {report.get('error', 'No report was returned.')}")
+            continue
+        severity = str(report.get("overall_severity", "not reported")).capitalize()
+        lines.append(f"{name}: Review complete; overall concern level: {severity}.")
+        findings = report.get("findings", [])
+        recommendations = report.get("recommendations", [])
+        items: list[str] = []
+        for finding in findings:
+            if isinstance(finding, dict):
+                text = finding.get("recommendation") or finding.get("finding")
+                if text:
+                    items.append(str(text).strip())
+        items.extend(str(item).strip() for item in recommendations if str(item).strip())
+        for item in list(dict.fromkeys(items))[:2]:
+            lines.append(f"  - {item}")
+    disagreements = review.get("disagreements", [])
+    if disagreements:
+        lines.append("Claude and Codex did not fully agree: " + " ".join(str(item) for item in disagreements[:2]))
+    owner_items: list[str] = []
+    for report in review.get("reviewers", {}).values():
+        if report.get("status") == "failed":
+            continue
+        owner_items.extend(str(item).strip() for item in report.get("recommendations", []) if str(item).strip())
+    owner_items = list(dict.fromkeys(owner_items))
+    has_suggestions = any(report.get("recommendations") or any(
+        isinstance(finding, dict) and finding.get("recommendation")
+        for finding in report.get("findings", [])) for report in review.get("reviewers", {}).values())
+    if owner_items or has_suggestions:
+        lines.append("Your decision: Decide whether to pursue the suggestions above. No changes were made; any strategy change needs your explicit approval.")
+    elif review.get("status") != "complete":
+        lines.append("Your decision: Wait for both reviews to complete before deciding on any proposed change.")
+    else:
+        lines.append("Your decision: No owner approval is requested by these reports. Any future strategy change still needs your explicit approval.")
+    return "\n".join(lines)
 
 
 class ReviewLock:
@@ -99,6 +229,49 @@ def _tail_jsonl(path: Path, count: int = 200) -> list[dict[str, Any]]:
         return [{"evidence_error": f"could_not_read_{path.name}"}]
 
 
+def blocker_summary(decisions_path: Path, sessions: int = 5) -> dict[str, Any]:
+    """Count why the engine did not trade, per ET session, from the full decision log.
+
+    The review snapshot only carries the last 200 decision rows; this keeps whole-session totals so
+    reviewers can see which single gate is binding instead of inferring it from a short tail.
+    """
+    per_session: dict[str, dict[str, Any]] = {}
+    if decisions_path.is_file():
+        with decisions_path.open(encoding="utf-8") as stream:
+            for line in stream:
+                try:
+                    row = json.loads(line)
+                    stamp = datetime.fromisoformat(str(row["timestamp"]).replace("Z", "+00:00"))
+                except (ValueError, KeyError, TypeError):
+                    continue
+                day = stamp.astimezone(ZoneInfo("America/New_York")).date().isoformat()
+                session = per_session.setdefault(day, {"decisions": 0, "paper_entries": 0, "reasons": Counter(),
+                                                       "signal_filters": Counter(), "expected_net_r": []})
+                session["decisions"] += 1
+                if row.get("decision") == "PAPER_ENTRY":
+                    session["paper_entries"] += 1
+                else:
+                    session["reasons"][str(row.get("reason") or "unknown")] += 1
+                diagnostics = row.get("diagnostics") or {}
+                session["signal_filters"][str(diagnostics.get("underlying_filter_reason") or "unknown")] += 1
+                if isinstance(diagnostics.get("expected_net_r"), (int, float)):
+                    session["expected_net_r"].append(float(diagnostics["expected_net_r"]))
+    out: dict[str, Any] = {}
+    for day in sorted(per_session)[-sessions:]:
+        session = per_session[day]
+        reasons: Counter = session["reasons"]
+        # Being outside the window is expected before/after hours; the binding gate is the top other reason.
+        binding = next((reason for reason, _ in reasons.most_common() if reason != "market_closed_or_outside_entry_window"), None)
+        r_values = session["expected_net_r"]
+        out[day] = {"decisions": session["decisions"], "paper_entries": session["paper_entries"],
+                    "no_trade_reasons": dict(reasons.most_common()),
+                    "signal_filter_outcomes": dict(session["signal_filters"].most_common()),
+                    "binding_constraint": binding,
+                    "economic_gate_expected_net_r": {"count": len(r_values), "max": max(r_values),
+                                                     "median": sorted(r_values)[len(r_values) // 2]} if r_values else None}
+    return out
+
+
 def capture_snapshot(root: Path = ROOT, data_dir: Path = DATA) -> dict[str, Any]:
     """Capture only strategy, paper ledger, decision records, and bounded local health evidence."""
     strategy = _safe_json(root / "active_strategy.json", {})
@@ -124,6 +297,7 @@ def capture_snapshot(root: Path = ROOT, data_dir: Path = DATA) -> dict[str, Any]
             "recent_trades": closed[-100:],
             "recent_ledger": account.get("ledger", [])[-100:],
         },
+        "blocker_summary_by_session": blocker_summary(data_dir / "decisions.jsonl"),
         "recent_decisions": decisions,
         "recent_test_decisions": test_decisions,
         "health": {
@@ -154,7 +328,12 @@ def _prompt(snapshot: dict[str, Any], reviewer: str) -> str:
         "from hypotheses. If evidence is absent, say so. Return ONLY one JSON object with keys: reviewer, timestamp_utc, "
         "overall_severity (info|low|medium|high|critical), evidence (array of strings), findings (array of objects with "
         "severity, kind (fact|hypothesis), finding, evidence, recommendation, confidence from 0 to 1), missing_data (array), "
-        "recommendations (array). Any recommendation must require owner review and cannot authorize strategy changes.\n\n"
+        "recommendations (array). Any recommendation must require owner review and cannot authorize strategy changes.\n"
+        "Start from blocker_summary_by_session: name the binding_constraint for the latest session, say whether it is "
+        "operational (data, kill switch, engine health) or a strategy/risk gate, and propose at most one concrete "
+        "parameter change aimed at it, with the exact strategy.txt key, current and proposed value, and the effect you "
+        "expect on the counts. A strategy change only takes effect after it passes the backtest gate "
+        "(python -m trader.cli activate-strategy) and the owner approves it, so say what that backtest should show.\n\n"
         "SNAPSHOT_JSON:\n" + json.dumps(snapshot, default=str, ensure_ascii=True)
     )
 
@@ -234,9 +413,21 @@ def _save_status(update: dict[str, Any], data_dir: Path = DATA) -> None:
     with _STATUS_MUTEX:
         current = _safe_json(path, {})
         current.update(update)
-        temp = path.with_suffix(".tmp")
+        # A watchdog, scheduled review, and daily report can overlap. Give each writer
+        # its own temporary file so they cannot replace or delete each other's temp.
+        temp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
         temp.write_text(json.dumps(current, indent=2, default=str) + "\n", encoding="utf-8")
-        os.replace(temp, path)
+        try:
+            for attempt in range(5):
+                try:
+                    os.replace(temp, path)
+                    break
+                except PermissionError:
+                    if attempt == 4:
+                        raise
+                    time.sleep(0.05 * (attempt + 1))
+        finally:
+            temp.unlink(missing_ok=True)
 
 
 def run_review(*, root: Path = ROOT, data_dir: Path = DATA, timeout: int = 240) -> dict[str, Any]:
@@ -303,9 +494,10 @@ def run_review(*, root: Path = ROOT, data_dir: Path = DATA, timeout: int = 240) 
         email_failure = None
         if _email_configured():
             try:
-                summary = json.dumps({"review_id": review_id, "status": consolidated["status"], "reviewers": reports,
-                                      "disagreements": disagreements, "unresolved": consolidated["unresolved"]}, indent=2)
-                send_email(f"OptioBot {consolidated['status']} supervisory review {review_id}", summary)
+                summary = _decision_email_summary(snapshot.get("recent_decisions", []))
+                body = (f"{summary}\n\n{_review_email_summary(consolidated)}\n\n"
+                        "This is a paper-trading research report. No live order was placed and no strategy change was made.")
+                send_email(f"OptioBot review summary ({consolidated['status']})", body)
                 consolidated["email_status"] = "sent"
                 path.write_text(json.dumps(consolidated, indent=2, default=str) + "\n", encoding="utf-8")
             except Exception as exc:
@@ -331,11 +523,16 @@ def run_daily_report(*, root: Path = ROOT, data_dir: Path = DATA) -> dict[str, A
     account = snapshot.get("paper_account", {})
     trades = account.get("recent_trades", [])
     perf = calculate_performance(trades)
+    review_status = _safe_json(data_dir / "supervisor_status.json", {})
+    latest_review = _safe_json(data_dir / "reviews" / str(review_status.get("last_report", "")), {})
+    review_summary = (_review_email_summary(latest_review) if latest_review else
+                      "Claude and Codex review: No completed review report is available yet.")
     report = {
         "created_at_utc": utc_now(), "mode": "PAPER", "strategy": snapshot["strategy"],
         "realized_pnl_usd": account.get("realized_pnl"), "unrealized_pnl_usd": account.get("unrealized_pnl"),
         "open_positions": account.get("open_positions", []), "closed_trade_metrics": perf.__dict__,
         "recent_decisions": snapshot.get("recent_decisions", [])[-100:],
+        "review_summary": review_summary,
         "data_limitations": ["Only locally persisted paper records were available; absent rows are not evidence of zero activity."],
     }
     path = data_dir / "reviews" / f"daily-{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}.json"
@@ -344,7 +541,12 @@ def run_daily_report(*, root: Path = ROOT, data_dir: Path = DATA) -> dict[str, A
     email_status, error = "not_configured", None
     if _email_configured():
         try:
-            send_email("OptioBot daily PAPER risk and performance report", json.dumps(report, indent=2, default=str))
+            body = "\n\n".join((
+                _decision_email_summary(report["recent_decisions"]),
+                review_summary,
+                "This is a paper-trading research report. No live order was placed and no strategy change was made.",
+            ))
+            send_email("OptioBot daily paper summary", body)
             email_status = "sent"
         except Exception as exc:
             email_status, error = "failed", f"{type(exc).__name__}: {exc}"
@@ -415,17 +617,35 @@ def status(root: Path = ROOT, data_dir: Path = DATA) -> dict[str, Any]:
 
 
 def watchdog_check(*, root: Path = ROOT, data_dir: Path = DATA, now: datetime | None = None,
-                   max_heartbeat_age_seconds: int = 100) -> dict[str, Any]:
+                   max_heartbeat_age_seconds: int = 100,
+                   startup_grace_seconds: int = 300) -> dict[str, Any]:
     """Fail closed during market hours; never restart or flatten an uncertain paper position."""
     load_dotenv(root / ".env")
-    now = now or datetime.now(timezone.utc)
+    check_time = now or datetime.now(timezone.utc)
     from .calendar import MarketCalendar
     calendar = MarketCalendar()
-    if not calendar.is_open(now):
-        result = {"status": "outside_market_session", "checked_at_utc": now.isoformat()}
+    if not calendar.is_open(check_time):
+        result = {"status": "outside_market_session", "checked_at_utc": check_time.isoformat()}
         append_jsonl(data_dir / "watchdog.jsonl", result)
         return result
     heartbeat = _safe_json(data_dir / "engine_heartbeat.json", None)
+    expectation = _safe_json(data_dir / "engine_expectation.json", None)
+    if isinstance(expectation, dict):
+        expected_running = expectation.get("expected_running") is True
+    elif isinstance(heartbeat, dict):
+        expected_running = heartbeat.get("expected_running", heartbeat.get("status") not in {"stopped", "not_started"}) is True
+    else:
+        expected_running = False
+    if not expected_running:
+        result = {"status": "not_expected_to_run", "checked_at_utc": check_time.isoformat(),
+                  "heartbeat_state": heartbeat.get("lifecycle_state") if isinstance(heartbeat, dict) else None}
+        append_jsonl(data_dir / "watchdog.jsonl", result)
+        _save_status({"watchdog_at_utc": check_time.isoformat(), "watchdog_status": "not_expected_to_run"}, data_dir)
+        return result
+    # Sample time after reading the heartbeat. The engine and watchdog run concurrently;
+    # sampling before the read can make a just-written, healthy heartbeat appear future-dated.
+    # An explicitly supplied `now` remains fixed for deterministic checks.
+    now = check_time if now is not None else datetime.now(timezone.utc)
     latest = None
     if isinstance(heartbeat, dict) and heartbeat.get("updated_at_utc"):
         try:
@@ -433,18 +653,50 @@ def watchdog_check(*, root: Path = ROOT, data_dir: Path = DATA, now: datetime | 
         except (TypeError, ValueError):
             latest = None
     age = (now - latest).total_seconds() if latest else None
-    healthy = bool(heartbeat and heartbeat.get("status") == "running" and age is not None and
-                   0 <= age <= max_heartbeat_age_seconds)
+    state = (heartbeat.get("lifecycle_state") or str(heartbeat.get("status", "")).upper()) \
+        if isinstance(heartbeat, dict) else "MISSING"
+    if state in {"STARTING", "RECOVERING"} and age is not None and -HEARTBEAT_FUTURE_TOLERANCE_SECONDS <= age <= startup_grace_seconds:
+        deadline = heartbeat.get("startup_deadline_utc") if isinstance(heartbeat, dict) else None
+        try:
+            within_deadline = deadline is None or now <= datetime.fromisoformat(deadline.replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            within_deadline = False
+        if within_deadline:
+            result = {"status": "startup_in_progress", "checked_at_utc": now.isoformat(),
+                      "heartbeat_state": state, "heartbeat_age_seconds": round(age, 2)}
+            append_jsonl(data_dir / "watchdog.jsonl", result)
+            _save_status({"watchdog_at_utc": now.isoformat(), "watchdog_status": "startup_in_progress"}, data_dir)
+            return result
+    switch = KillSwitch(root / "KILL_SWITCH")
+    switch_active = switch.entries_blocked()
+    healthy_state = state == "RUNNING" or (state == "KILL_SWITCH_ACTIVE" and switch_active)
+    # Allow a small negative age: the engine and watchdog write/read the heartbeat concurrently, and a
+    # 0.28s "future" heartbeat falsely tripped the kill switch on 2026-10-13.
+    healthy = bool(healthy_state and age is not None and -HEARTBEAT_FUTURE_TOLERANCE_SECONDS <= age <= max_heartbeat_age_seconds)
     if healthy:
-        result = {"status": "healthy", "checked_at_utc": now.isoformat(), "heartbeat_age_seconds": round(age, 2)}
+        status = "kill_switch_active" if state == "KILL_SWITCH_ACTIVE" else "healthy"
+        if switch_active and switch.source() == "watchdog":
+            # The engine is alive and writing fresh heartbeats again, so the condition this watchdog
+            # blocked entries for has cleared. Kill switches written by hand are left alone.
+            switch.reset()
+            status = "kill_switch_auto_cleared"
+            append_jsonl(data_dir / "watchdog_resets.jsonl", {
+                "timestamp_utc": now.isoformat(), "event": "kill_switch_auto_cleared_engine_healthy",
+                "mode": "PAPER", "lifecycle_state": state, "heartbeat_age_seconds": round(age, 2),
+                "open_positions": len(_safe_json(data_dir / "paper_account.json", {}).get("positions", []))})
+        result = {"status": status,
+                  "checked_at_utc": now.isoformat(), "lifecycle_state": state,
+                  "heartbeat_age_seconds": round(age, 2)}
         append_jsonl(data_dir / "watchdog.jsonl", result)
-        _save_status({"watchdog_at_utc": now.isoformat(), "watchdog_status": "healthy",
+        _save_status({"watchdog_at_utc": now.isoformat(), "watchdog_status": result["status"],
                       "watchdog_heartbeat_age_seconds": round(age, 2)}, data_dir)
         return result
     account = _safe_json(data_dir / "paper_account.json", {})
     open_positions = len(account.get("positions", []))
-    reason = "engine heartbeat missing, failed, future-dated, or stale"
-    KillSwitch(root / "KILL_SWITCH").block_entries(reason)
+    reason = f"engine expected state failed health validation (state={state}, age_seconds={age})"
+    if not switch_active:
+        # Never overwrite an existing (possibly hand-made) switch, which would make it auto-clearable.
+        switch.block_entries(reason, source="watchdog")
     fingerprint = f"{heartbeat.get('updated_at_utc') if isinstance(heartbeat, dict) else 'missing'}:{heartbeat.get('status') if isinstance(heartbeat, dict) else 'missing'}:{open_positions}"
     alert_file = data_dir / "watchdog_alert_state.json"
     prior = _safe_json(alert_file, {})
@@ -454,7 +706,7 @@ def watchdog_check(*, root: Path = ROOT, data_dir: Path = DATA, now: datetime | 
         if _email_configured():
             try:
                 send_email("CRITICAL: OptioBot PAPER engine heartbeat failure",
-                           f"UTC: {now.isoformat()}\nMode: PAPER\nIssue: {reason}\nHeartbeat age seconds: {age}\nOpen simulated positions: {open_positions}\nNew entries were blocked using KILL_SWITCH. No automatic restart or position close was attempted.")
+                           f"UTC: {now.isoformat()}\nMode: PAPER\nIssue: {reason}\nHeartbeat age seconds: {age}\nOpen simulated positions: {open_positions}\nNew entries were blocked using KILL_SWITCH. The engine restarts itself after connection failures, and the watchdog clears this switch automatically once the engine's heartbeat is healthy again. No position close was attempted.")
                 alert_sent = True
             except (OSError, RuntimeError, ValueError, smtplib.SMTPException) as exc:
                 email_error = f"{type(exc).__name__}: {exc}"

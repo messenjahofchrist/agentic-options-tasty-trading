@@ -1,0 +1,32 @@
+{
+  "reviewer": "Codex",
+  "decision": "AGREE",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "informational",
+      "finding": "The proposed end time matches the owner’s stated goal. The verified calendar logic admits entries through 15:59 ET during a regular session and excludes 16:00 ET; actual early closes still apply."
+    },
+    {
+      "id": "F2",
+      "severity": "accepted_tradeoff",
+      "finding": "Very late entries may be exited almost immediately under the existing end_of_session_close rule and may incur full modeled transaction costs. The owner explicitly accepts this for the research sample; it does not block the change."
+    },
+    {
+      "id": "F3-F5",
+      "severity": "not_a_blocker",
+      "finding": "The cited KILL_SWITCH, premium-budget, and Greek-gate concerns are presented as possible constraints on entries. They do not invalidate the requested PAPER window change and are not grounds to tune other parameters in this review."
+    },
+    {
+      "id": "F6",
+      "severity": "accepted_limitation",
+      "finding": "There is no performance evidence or sample. The proposal is for research, makes no profitability claim, and does not authorize LIVE trading."
+    }
+  ],
+  "required_conditions": [
+    "Implement only the specified entry_window_et.end change, version bump, manifest/hash regeneration, documentation updates, and audit record.",
+    "Keep PAPER mode and deployment metadata requirements intact; make no LIVE settings, adapters, orders, or unrelated strategy changes.",
+    "During implementation, verify the specified time boundaries, manifest/hash, and early-close behavior. No sessions or tests were run as part of this review."
+  ],
+  "rationale": "The supplied source excerpts establish that the requested setting produces the intended PAPER entry window, bounded by each actual session close, while existing close handling remains in effect. The owner has expressly accepted the late-entry/short-hold behavior. The cited possible entry constraints and absence of results limit what can be concluded about the research sample, but do not block this narrowly scoped, non-deployment configuration proposal."
+}

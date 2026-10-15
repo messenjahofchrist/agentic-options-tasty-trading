@@ -1,30 +1,43 @@
 {
   "strategy_id": "opening_range_breakout_options",
-  "version": "0.1.0",
+  "version": "0.1.6",
   "status": "research_test",
   "filename": "strategy.txt",
-  "sha256": "fc0131139a8cec5a1d1d189360b1cafc43fc8ceaaa1eed3116d1a8060ca69a3b",
-  "configuration_hash": "fc0131139a8cec5a1d1d189360b1cafc43fc8ceaaa1eed3116d1a8060ca69a3b",
-  "active_strategy_version": "0.1.0",
-  "activated_at": "2026-10-09T22:00:19.252494+00:00",
+  "sha256": "c597cfe86d7971a7e96b08ed71bc58eff6dca6942fcb0288b24498dedf6e902b",
+  "configuration_hash": "c597cfe86d7971a7e96b08ed71bc58eff6dca6942fcb0288b24498dedf6e902b",
+  "active_strategy_version": "0.1.6",
+  "activated_at": "2026-10-14T17:50:13.424894+00:00",
   "configuration": {
     "strategy_id": "opening_range_breakout_options",
-    "version": "0.1.0",
+    "version": "0.1.6",
     "status": "research_test",
     "universe": [
       "SPY",
-      "QQQ"
+      "QQQ",
+      "IWM",
+      "DIA",
+      "TLT",
+      "NVDA",
+      "AAPL",
+      "AMZN",
+      "GOOGL",
+      "PLTR",
+      "NFLX",
+      "INTC",
+      "UBER",
+      "BAC"
     ],
     "bar_interval_minutes": 1,
     "opening_range_minutes": 15,
     "entry_window_et": {
-      "start": "09:45",
-      "end": "14:30"
+      "start": "09:30",
+      "end": "16:00"
     },
     "rules": {
       "trend_ema_fast": 9,
       "trend_ema_slow": 21,
-      "relative_volume_min": 1.5,
+      "relative_volume_min": 1.2,
+      "breakout_lookback_bars": 15,
       "atr_period": 14,
       "max_atr_fraction": 0.025,
       "breakout_buffer_atr": 0.05,
@@ -38,18 +51,21 @@
       "min_open_interest": 100,
       "min_option_volume": 10,
       "max_contracts": 1,
+      "stop_range_multiple": 0.5,
+      "target_range_multiple": 1.0,
       "stop_underlying_atr": 1.0,
       "target_atr_multiple": 2.0,
+      "max_atr_expansion": 2.0,
       "max_holding_minutes": 180
     },
     "risk": {
-      "max_risk_per_trade_fraction": 0.01,
-      "hard_max_risk_per_trade_fraction": 0.02,
+      "max_risk_per_trade_fraction": 0.1,
+      "hard_max_risk_per_trade_fraction": 0.1,
       "max_daily_loss_fraction": 0.02,
       "max_weekly_loss_fraction": 0.05,
       "max_consecutive_losses": 3,
-      "max_trades_per_day": 3,
-      "max_open_positions": 2
+      "max_trades_per_day": 6,
+      "max_open_positions": 4
     },
     "execution": {
       "paper_buy_price": "ask",
@@ -58,13 +74,15 @@
       "commission_per_contract": 0.65,
       "exchange_fee_per_contract": 0.05,
       "min_expected_net_r": 1.0,
-      "mode": "PAPER"
+      "mode": "PAPER",
+      "enable_time_exit": false,
+      "flatten_at_session_close": true
     }
   },
   "deployment_metadata": {
     "status": "research_test",
     "mode": "PAPER",
     "live_enabled": false,
-    "note": "Owner-requested deterministic hardening; no LIVE authorization."
+    "note": "Owner-directed 2026-10-14: re-enable flatten_at_session_close (no overnight carry). Hotfix manifest to restore the running engine; formal backtest-gate record follows."
   }
 }

@@ -2,16 +2,22 @@
 // Plain-English companion: docs/strategy_plain_english.md. This remains a research/test hypothesis.
 {
   "strategy_id": "opening_range_breakout_options",
-  "version": "0.1.0",
+  "version": "0.1.6",
   "status": "research_test",
-  "universe": ["SPY", "QQQ"],
+  // Watched together in one session. Liquid ETFs and large caps whose near-the-money options mostly fit a
+  // ~$1,000 per-trade budget (survey 2026-10-13). Same-minute signals are ranked; volatile names are skipped.
+  "universe": ["SPY", "QQQ", "IWM", "DIA", "TLT", "NVDA", "AAPL", "AMZN", "GOOGL", "PLTR", "NFLX", "INTC", "UBER", "BAC"],
   "bar_interval_minutes": 1,
   "opening_range_minutes": 15,
-  "entry_window_et": {"start": "09:45", "end": "14:30"},
+  // Full regular session. Signals still need the 15-minute opening range and indicator warm-up to form.
+  "entry_window_et": {"start": "09:30", "end": "16:00"},
   "rules": {
     "trend_ema_fast": 9,
     "trend_ema_slow": 21,
-    "relative_volume_min": 1.5,
+    // Was 1.5: met on only 33 of 292 bars on 2026-10-13.
+    "relative_volume_min": 1.2,
+    // Price may still be beyond the breakout level up to this many bars after crossing it (was effectively 1).
+    "breakout_lookback_bars": 15,
     "atr_period": 14,
     "max_atr_fraction": 0.025,
     "breakout_buffer_atr": 0.05,
@@ -25,18 +31,25 @@
     "min_open_interest": 100,
     "min_option_volume": 10,
     "max_contracts": 1,
+    // Exits: stop 0.5x and target 1.0x the opening-range height from entry; the ATR multiples are floors.
+    "stop_range_multiple": 0.5,
+    "target_range_multiple": 1.0,
     "stop_underlying_atr": 1.0,
     "target_atr_multiple": 2.0,
+    // Skip a symbol whose recent ATR is more than this multiple of its own session-average 1-minute range.
+    "max_atr_expansion": 2.0,
     "max_holding_minutes": 180
   },
   "risk": {
-    "max_risk_per_trade_fraction": 0.01,
-    "hard_max_risk_per_trade_fraction": 0.02,
+    // Was 1%/2%. Long options are sized against their full premium; a ~0.55-delta SPY contract cost
+    // ~$789 on 2026-10-13, so 1% of $10k ($100) could never buy one. 10% of $10k = $1,000.
+    "max_risk_per_trade_fraction": 0.10,
+    "hard_max_risk_per_trade_fraction": 0.10,
     "max_daily_loss_fraction": 0.02,
     "max_weekly_loss_fraction": 0.05,
     "max_consecutive_losses": 3,
-    "max_trades_per_day": 3,
-    "max_open_positions": 2
+    "max_trades_per_day": 6,
+    "max_open_positions": 4
   },
   "execution": {
     "paper_buy_price": "ask",
@@ -45,6 +58,10 @@
     "commission_per_contract": 0.65,
     "exchange_fee_per_contract": 0.05,
     "min_expected_net_r": 1.0,
-    "mode": "PAPER"
+    "mode": "PAPER",
+    // false: max_holding_minutes no longer forces a time_exit (still used by the economic-gate projection).
+    "enable_time_exit": false,
+    // true: force-close any open position ~1 minute before the equity close; nothing carries overnight.
+    "flatten_at_session_close": true
   }
 }

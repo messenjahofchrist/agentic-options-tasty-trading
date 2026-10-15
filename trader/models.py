@@ -1,9 +1,20 @@
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
+
+
+_TICKER = re.compile(r"[A-Z.]{1,8}")
+
+
+def require_ticker(symbol: str) -> str:
+    """Validate an equity/ETF ticker (same rule as the strategy universe) before it reaches a URL or feed."""
+    if not isinstance(symbol, str) or not _TICKER.fullmatch(symbol):
+        raise ValueError(f"Invalid ticker symbol: {symbol!r}")
+    return symbol
 
 
 @dataclass(frozen=True)

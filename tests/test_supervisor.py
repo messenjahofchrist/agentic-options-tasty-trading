@@ -9,8 +9,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from trader.supervisor import (ReviewLock, _call_reviewer, _email_configured, _parse_report, _prompt,
-                                _reviewer_environment, capture_snapshot, run_email_test, run_review, send_email,
-                                watchdog_check)
+                                _reviewer_environment, blocker_summary, capture_snapshot, run_email_test, run_review,
+                                send_email, watchdog_check)
 from trader.logging_utils import append_jsonl
 
 
@@ -96,6 +96,79 @@ class SupervisorTests(unittest.TestCase):
             alert = json.loads((data / "critical_alerts.jsonl").read_text(encoding="utf-8").splitlines()[0])
             self.assertEqual(alert["open_positions"], 1)
             self.assertFalse(alert["email_sent"])
+
+    def _healthy_engine(self, root: Path, *, kill_switch: dict | None) -> Path:
+        data = root / "data"
+        data.mkdir()
+        (data / "paper_account.json").write_text(json.dumps({"positions": []}), encoding="utf-8")
+        (data / "engine_heartbeat.json").write_text(json.dumps({
+            "status": "kill_switch_active", "lifecycle_state": "KILL_SWITCH_ACTIVE",
+            "updated_at_utc": "2026-10-09T18:59:30+00:00"}), encoding="utf-8")
+        if kill_switch is not None:
+            (root / "KILL_SWITCH").write_text(json.dumps(kill_switch), encoding="utf-8")
+        return data
+
+    def test_watchdog_clears_its_own_kill_switch_once_engine_is_healthy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data = self._healthy_engine(root, kill_switch={"blocked": True, "reason": "stale", "source": "watchdog"})
+            with patch("trader.supervisor._save_status"):
+                result = watchdog_check(root=root, data_dir=data, now=datetime(2026, 10, 9, 19, 0, tzinfo=timezone.utc))
+            self.assertEqual(result["status"], "kill_switch_auto_cleared")
+            self.assertFalse((root / "KILL_SWITCH").exists())
+            reset = json.loads((data / "watchdog_resets.jsonl").read_text(encoding="utf-8").splitlines()[0])
+            self.assertEqual(reset["event"], "kill_switch_auto_cleared_engine_healthy")
+
+    def test_watchdog_never_clears_a_hand_made_kill_switch(self):
+        for contents in ({"blocked": True, "reason": "owner"}, {"blocked": True, "source": "manual"}):
+            with self.subTest(contents=contents), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                data = self._healthy_engine(root, kill_switch=contents)
+                with patch("trader.supervisor._save_status"):
+                    result = watchdog_check(root=root, data_dir=data, now=datetime(2026, 10, 9, 19, 0, tzinfo=timezone.utc))
+                self.assertEqual(result["status"], "kill_switch_active")
+                self.assertTrue((root / "KILL_SWITCH").exists())
+
+    def test_watchdog_tolerates_heartbeat_slightly_in_the_future(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data = root / "data"
+            data.mkdir()
+            (data / "engine_heartbeat.json").write_text(json.dumps({
+                "status": "running", "updated_at_utc": "2026-10-09T19:00:00.280000+00:00"}), encoding="utf-8")
+            with patch("trader.supervisor._save_status"):
+                result = watchdog_check(root=root, data_dir=data, now=datetime(2026, 10, 9, 19, 0, tzinfo=timezone.utc))
+            self.assertEqual(result["status"], "healthy")
+            self.assertFalse((root / "KILL_SWITCH").exists())
+
+    def test_watchdog_does_not_overwrite_existing_hand_made_switch_on_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data = root / "data"
+            data.mkdir()
+            (root / "KILL_SWITCH").write_text("owner stop", encoding="utf-8")
+            (data / "engine_heartbeat.json").write_text(json.dumps({
+                "status": "running", "updated_at_utc": "2026-10-09T17:00:00+00:00"}), encoding="utf-8")
+            with patch("trader.supervisor._save_status"), patch("trader.supervisor._email_configured", return_value=False):
+                result = watchdog_check(root=root, data_dir=data, now=datetime(2026, 10, 9, 19, 0, tzinfo=timezone.utc))
+            self.assertEqual(result["status"], "critical")
+            self.assertEqual((root / "KILL_SWITCH").read_text(encoding="utf-8"), "owner stop")
+
+    def test_blocker_summary_counts_whole_sessions_and_names_binding_gate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "decisions.jsonl"
+            rows = ([("2026-10-13T13:00:00+00:00", "market_closed_or_outside_entry_window", "breakout_not_triggered")] * 5 +
+                    [("2026-10-13T15:00:00+00:00", "breakout_not_triggered", "breakout_not_triggered")] * 3 +
+                    [("2026-10-13T16:00:00+00:00", "kill_switch_active", "volume_filter_failed")] * 2)
+            for stamp, reason, signal_reason in rows:
+                append_jsonl(log, {"timestamp": stamp, "decision": "NO_TRADE", "reason": reason,
+                                   "diagnostics": {"underlying_filter_reason": signal_reason}})
+            summary = blocker_summary(log)["2026-10-13"]
+            self.assertEqual(summary["decisions"], 10)
+            self.assertEqual(summary["binding_constraint"], "breakout_not_triggered")
+            self.assertEqual(summary["no_trade_reasons"]["kill_switch_active"], 2)
+            self.assertEqual(summary["signal_filter_outcomes"]["volume_filter_failed"], 2)
+            self.assertIn("blocker_summary_by_session", _prompt({}, "Claude"))
 
     def test_email_failure_is_explicit_and_does_not_attempt_without_configuration(self):
         with patch.dict(os.environ, {}, clear=True):

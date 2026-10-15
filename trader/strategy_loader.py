@@ -31,13 +31,20 @@ class Strategy:
     filename: str
 
 
+# Long options are sized against their full premium, so one near-the-money SPY contract (~$500-$1,000)
+# needs far more than the former 2% of a $10k account. This is the code-level ceiling; strategy.txt
+# sets the working value below it.
+MAX_PER_TRADE_RISK_CEILING = 0.20
+
 _TOP = {"strategy_id", "version", "status", "universe", "bar_interval_minutes", "opening_range_minutes", "entry_window_et", "rules", "risk", "execution"}
 _RULES = {"trend_ema_fast", "trend_ema_slow", "relative_volume_min", "atr_period", "max_atr_fraction", "breakout_buffer_atr",
           "min_dte", "max_dte", "min_abs_delta", "max_abs_delta", "target_abs_delta", "max_spread_fraction", "max_spread_dollars",
-          "min_open_interest", "min_option_volume", "max_contracts", "stop_underlying_atr", "target_atr_multiple", "max_holding_minutes"}
+          "min_open_interest", "min_option_volume", "max_contracts", "stop_underlying_atr", "target_atr_multiple", "max_holding_minutes",
+          "breakout_lookback_bars", "stop_range_multiple", "target_range_multiple", "max_atr_expansion"}
 _RISK = {"max_risk_per_trade_fraction", "hard_max_risk_per_trade_fraction", "max_daily_loss_fraction", "max_weekly_loss_fraction",
          "max_consecutive_losses", "max_trades_per_day", "max_open_positions"}
-_EXEC = {"paper_buy_price", "paper_sell_price", "slippage_per_contract", "commission_per_contract", "exchange_fee_per_contract", "min_expected_net_r", "mode"}
+_EXEC = {"paper_buy_price", "paper_sell_price", "slippage_per_contract", "commission_per_contract", "exchange_fee_per_contract", "min_expected_net_r", "mode",
+         "enable_time_exit", "flatten_at_session_close"}
 
 
 def _strip_json_comments(source: str) -> str:
@@ -128,7 +135,7 @@ def parse_strategy(path: str | Path) -> Strategy:
             if isinstance(value, (int, float)) and not math.isfinite(value):
                 raise StrategyError(f"{section_name}.{key} must be finite")
     for key in ("trend_ema_fast", "trend_ema_slow", "atr_period", "min_dte", "max_dte", "min_open_interest",
-                "min_option_volume", "max_contracts", "max_holding_minutes"):
+                "min_option_volume", "max_contracts", "max_holding_minutes", "breakout_lookback_bars"):
         if rules[key] < 1 or not float(rules[key]).is_integer():
             raise StrategyError(f"rules.{key} must be a positive integer")
     if rules["trend_ema_fast"] >= rules["trend_ema_slow"] or rules["min_dte"] > rules["max_dte"]:
@@ -136,14 +143,15 @@ def parse_strategy(path: str | Path) -> Strategy:
     if (rules["min_dte"] < 1 or not 0 < rules["min_abs_delta"] <= rules["target_abs_delta"] <= rules["max_abs_delta"] <= 1
             or rules["max_spread_fraction"] >= 1 or rules["max_spread_dollars"] <= 0):
         raise StrategyError("DTE, delta, and spread bounds are invalid")
-    if not 0 < risk["max_risk_per_trade_fraction"] <= risk["hard_max_risk_per_trade_fraction"] <= .02:
-        raise StrategyError("Per-trade risk must be positive and hard capped at 2%")
+    if not 0 < risk["max_risk_per_trade_fraction"] <= risk["hard_max_risk_per_trade_fraction"] <= MAX_PER_TRADE_RISK_CEILING:
+        raise StrategyError(f"Per-trade risk must be positive and hard capped at {MAX_PER_TRADE_RISK_CEILING:.0%}")
     if not 0 < risk["max_daily_loss_fraction"] <= .02 or not 0 < risk["max_weekly_loss_fraction"] <= .05:
         raise StrategyError("Daily/weekly loss limits exceed hard defaults")
     for key in ("max_consecutive_losses", "max_trades_per_day", "max_open_positions"):
         if risk[key] < 1 or not float(risk[key]).is_integer():
             raise StrategyError(f"risk.{key} must be a positive integer")
-    for key in ("max_atr_fraction", "relative_volume_min", "max_spread_fraction", "max_spread_dollars", "target_atr_multiple", "max_contracts", "max_holding_minutes"):
+    for key in ("max_atr_fraction", "relative_volume_min", "max_spread_fraction", "max_spread_dollars", "target_atr_multiple", "max_contracts", "max_holding_minutes",
+                "stop_range_multiple", "target_range_multiple", "max_atr_expansion"):
         if rules[key] <= 0:
             raise StrategyError(f"rules.{key} must be positive")
     if execution["mode"] != "PAPER":
@@ -153,6 +161,9 @@ def parse_strategy(path: str | Path) -> Strategy:
     for key in ("slippage_per_contract", "commission_per_contract", "exchange_fee_per_contract", "min_expected_net_r"):
         if not isinstance(execution[key], (int, float)) or isinstance(execution[key], bool) or not math.isfinite(execution[key]) or execution[key] < 0:
             raise StrategyError(f"execution.{key} must be a finite nonnegative number")
+    for key in ("enable_time_exit", "flatten_at_session_close"):
+        if not isinstance(execution[key], bool):
+            raise StrategyError(f"execution.{key} must be true or false")
     canonical = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     config_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return Strategy(data["strategy_id"], data["version"], data["status"], tuple(data["universe"]),

@@ -11,11 +11,18 @@ from pathlib import Path
 class KillSwitch:
     def __init__(self, path: str | Path = "KILL_SWITCH"):
         self.path = Path(path)
-    def block_entries(self, reason: str) -> None:
-        self.path.write_text(json.dumps({"blocked": True, "reason": reason,
+    def block_entries(self, reason: str, source: str = "manual") -> None:
+        self.path.write_text(json.dumps({"blocked": True, "reason": reason, "source": source,
                                          "timestamp": datetime.now(timezone.utc).isoformat()}, indent=2), encoding="utf-8")
     def entries_blocked(self) -> bool:
         return self.path.exists()
+    def source(self) -> str | None:
+        """Who wrote the switch. A hand-made or unreadable file reports None and is never auto-cleared."""
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return data.get("source") if isinstance(data, dict) else None
     def reset(self) -> None:
         self.path.unlink(missing_ok=True)
 

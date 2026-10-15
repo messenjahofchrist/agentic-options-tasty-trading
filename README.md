@@ -35,15 +35,17 @@ python -m pip install -e '.[dashboard,streaming,test]'
 Copy-Item .env.example .env
 python -m trader.cli validate-strategy
 python -m trader.cli init-paper
-# Run this before the equity open; it stays active through the close.
-python -m trader.cli paper-session --symbol SPY
-python -m trader.cli backtest --symbol SPY --start 2025-01-01T00:00:00Z --end 2025-12-31T23:59:59Z --in-sample-end 2025-09-30T23:59:59Z
+# Watches every symbol in the strategy universe; add --symbol X (repeatable) to narrow it.
+python -m trader.cli paper-session
+python -m trader.cli backtest --start 2025-01-01T00:00:00Z --end 2025-12-31T23:59:59Z --in-sample-end 2025-09-30T23:59:59Z
+# Strategy changes take effect only through the backtest gate plus explicit approval:
+python -m trader.cli activate-strategy --start 2026-06-01T00:00:00Z --end 2026-10-10T00:00:00Z --in-sample-end 2026-09-01T00:00:00Z [--approve --note "why"]
 python -m trader.cli dashboard
 ```
 
 The dashboard binds to localhost by default. For a backtest, the command retrieves one-minute underlying candles from Massive by default; no manual CSV download is needed. Add `MASSIVE_API_KEY` to the ignored local `.env` file. `--source tastytrade` selects the DXLink candle history path; that requires the existing Tastytrade OAuth credentials and market-data entitlement. A local OHLCV CSV remains an optional input. Massive Stocks Basic is free and includes minute aggregates, but its data is end-of-day, with at most 2 years of history and 5 API calls per minute; it supports backtests only, not live entry signals. The CLI honors Massive pagination limits. Never paste secrets into chat. `init-paper` creates `data/paper_account.json` using `PAPER_STARTING_CASH` (default USD 10,000); committed `paper_account.json` is a clean template only.
 
-`paper-session` is a local simulator only: it never submits broker orders. Start it before the equity open so it can build the opening range from live trades; starting mid-session is blocked. It simulates entries at ask plus slippage, monitors exits at live bids, and persists the paper ledger. The end-to-end live session has not yet passed a full-session validation, and the current $10,000 paper account may be too small to size one SPY/QQQ contract under the active 1% risk cap. Do not enable LIVE. For LIVE, do not proceed until all integration and operational gates listed in `docs/operations.md` have actually passed; the explicit confirmation is a last local gate, not a substitute for validation.
+`paper-session` is a local simulator only: it never submits broker orders. It watches all universe symbols over one DXLink connection with a shared paper account and risk limits; when several qualify in the same minute it ranks them by estimated reward-to-risk and trend steadiness, and it skips a symbol whose volatility spikes. A mid-session start recovers each symbol's session history first; a symbol whose data fails validation is disabled for the day while the others continue. After connection failures it restarts itself. It simulates entries at ask plus slippage, monitors exits at live bids, and persists the paper ledger. The end-to-end live session has not yet passed a full-session validation. Do not enable LIVE. For LIVE, do not proceed until all integration and operational gates listed in `docs/operations.md` have actually passed; the explicit confirmation is a last local gate, not a substitute for validation.
 
 For a supervised same-day connectivity check only, `python -m trader.cli paper-test-session --symbol SPY` uses a separate fake-$100,000 ledger, starts a new rolling 15-minute range, and extends the test entry window to 15 minutes before the close. It retains all strategy and economic gates and does not submit broker orders. See `docs/operations.md` for its limits.
 

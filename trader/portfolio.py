@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from .logging_utils import atomic_replace
 
 
 @dataclass
@@ -61,4 +62,4 @@ def save_account(path: str | Path, account: PaperAccount) -> None:
     file.parent.mkdir(parents=True, exist_ok=True)
     temp = file.with_suffix(file.suffix + ".tmp")
     temp.write_text(json.dumps(asdict(account), indent=2) + "\n", encoding="utf-8")
-    os.replace(temp, file)
+    atomic_replace(temp, file)

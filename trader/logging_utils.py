@@ -3,10 +3,25 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+
+def atomic_replace(src: str | Path, dst: str | Path, *, attempts: int = 10) -> None:
+    """os.replace with retry. On Windows a replace fails with PermissionError (WinError 5) when any
+    other process momentarily has the destination open for reading (a status check, an antivirus
+    scan). The write is still valid, so retry briefly before giving up."""
+    for attempt in range(attempts):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(0.1 * (attempt + 1))
 
 
 def get_logger(name: str = "optio_bot") -> logging.Logger:

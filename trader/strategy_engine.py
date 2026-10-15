@@ -87,21 +87,38 @@ def evaluate_underlying_diagnostics(
     volatility = atr(ordered, int(rules["atr_period"]))
     price = ordered[-1].close
     current = ordered[-1]
-    previous = ordered[-2]
     volume_window = ordered[-20:]
     average_volume = sum(b.volume for b in volume_window[:-1]) / max(1, len(volume_window) - 1)
     relative_volume = current.volume / average_volume if average_volume > 0 else 0.0
     buffer = volatility * float(rules["breakout_buffer_atr"])
     breakout_up = high + buffer
     breakout_down = low - buffer
-    cross_up = current.close > breakout_up and previous.close <= breakout_up
-    cross_down = current.close < breakout_down and previous.close >= breakout_down
+    # Price must still be beyond the level now, having crossed it within the last N bars. N=1 means
+    # the cross must be this exact bar; a larger N lets volume/trend confirm a few minutes after the
+    # break while still refusing to chase a breakout from hours earlier.
+    lookback = int(rules["breakout_lookback_bars"])
+    prior_closes = [b.close for b in ordered[-(lookback + 1):-1]]
+    cross_up = current.close > breakout_up and any(close <= breakout_up for close in prior_closes)
+    cross_down = current.close < breakout_down and any(close >= breakout_down for close in prior_closes)
+    # Volatility regime: recent ATR versus this session's average one-minute true range. A symbol whose
+    # last few minutes are far jumpier than its own day so far is skipped in favour of steadier ones.
+    session_ranges = [max(b.high - b.low, abs(b.high - ordered[i - 1].close), abs(b.low - ordered[i - 1].close))
+                      for i, b in enumerate(ordered[1:], 1)]
+    baseline_range = sum(session_ranges) / len(session_ranges) if session_ranges else 0.0
+    atr_expansion = volatility / baseline_range if baseline_range > 0 else float("inf")
+    # Trend efficiency over the last 30 bars: net move / total path. 1.0 = a straight line, ~0 = chop.
+    window = values[-31:]
+    path = sum(abs(right - left) for left, right in zip(window, window[1:]))
+    efficiency = abs(window[-1] - window[0]) / path if path > 0 else 0.0
+    range_height = high - low
     metrics.update({"ema_fast": fast, "ema_slow": slow, "ema9": fast, "ema21": slow,
                     "atr": volatility, "atr14": volatility, "vwap": current.vwap,
                     "volume": current.volume, "average_volume": average_volume,
                     "relative_volume": relative_volume, "volume_ratio": relative_volume,
                     "breakout_level_call": breakout_up,
-                    "breakout_level_put": breakout_down})
+                    "breakout_level_put": breakout_down,
+                    "opening_range_height": range_height, "atr_expansion": atr_expansion,
+                    "trend_efficiency": efficiency})
     if price <= 0 or volatility / price > float(rules["max_atr_fraction"]):
         return None, metrics, "atr_filter_failed"
     if not cross_up and not cross_down:
@@ -114,11 +131,17 @@ def evaluate_underlying_diagnostics(
     vwap_ok = current.vwap is None or (bullish and current.close > current.vwap) or (bearish and current.close < current.vwap)
     if not vwap_ok:
         return None, metrics, "vwap_filter_failed"
-    metrics["signal_direction"] = "CALL" if bullish else "PUT"
+    if atr_expansion > float(rules["max_atr_expansion"]):
+        return None, metrics, "volatility_spike_filter_failed"
+    # Exits are sized from the opening range (the classic ORB "measured move"), with the one-minute ATR
+    # multiples as a floor for very narrow ranges. Sizing them from one-minute ATR alone gave a ~$0.12
+    # SPY stop and ~$0.23 target: inside normal noise, and too small to cover option spread and costs.
+    stop_distance = max(range_height * float(rules["stop_range_multiple"]), volatility * float(rules["stop_underlying_atr"]))
+    target_distance = max(range_height * float(rules["target_range_multiple"]), volatility * float(rules["target_atr_multiple"]))
+    metrics.update({"signal_direction": "CALL" if bullish else "PUT",
+                    "stop_distance": stop_distance, "target_distance": target_distance})
     if bullish:
-        return Signal("CALL", "opening_range_breakout_up_trend_volume_vwap", price - volatility * float(rules["stop_underlying_atr"]),
-                      price + volatility * float(rules["target_atr_multiple"]), metrics), metrics, "signal_qualified"
-    if bearish:
-        return Signal("PUT", "opening_range_breakout_down_trend_volume_vwap", price + volatility * float(rules["stop_underlying_atr"]),
-                      price - volatility * float(rules["target_atr_multiple"]), metrics), metrics, "signal_qualified"
-    return None, metrics, "ema_filter_failed"
+        return Signal("CALL", "opening_range_breakout_up_trend_volume_vwap", price - stop_distance,
+                      price + target_distance, metrics), metrics, "signal_qualified"
+    return Signal("PUT", "opening_range_breakout_down_trend_volume_vwap", price + stop_distance,
+                  price - target_distance, metrics), metrics, "signal_qualified"

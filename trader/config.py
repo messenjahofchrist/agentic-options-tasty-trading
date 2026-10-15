@@ -26,6 +26,7 @@ class AppConfig:
     account_number: str = ""
     production_base_url: str = "https://api.tastyworks.com"
     massive_api_key: str = ""
+    historical_data_provider: str = "tastytrade_dxlink"
 
     @classmethod
     def from_env(cls) -> "AppConfig":
@@ -46,6 +47,7 @@ class AppConfig:
             refresh_token=os.getenv("TASTYTRADE_REFRESH_TOKEN", ""),
             account_number=os.getenv("TASTYTRADE_ACCOUNT_NUMBER", ""),
             massive_api_key=os.getenv("MASSIVE_API_KEY", ""),
+            historical_data_provider=os.getenv("PAPER_HISTORY_PROVIDER", "tastytrade_dxlink").strip().lower(),
         )
 
     def require_market_data_credentials(self) -> None:
@@ -58,6 +60,8 @@ class AppConfig:
     def validate_startup(self) -> None:
         if self.starting_cash <= 0:
             raise ValueError("PAPER_STARTING_CASH must be positive")
+        if self.historical_data_provider not in {"tastytrade_dxlink", "massive"}:
+            raise ValueError("PAPER_HISTORY_PROVIDER must be tastytrade_dxlink or massive")
         if self.mode == Mode.LIVE:
             if not self.live_enabled or self.live_confirmation != "I UNDERSTAND LIVE TRADING USES REAL MONEY":
                 raise RuntimeError("LIVE blocked: explicit enable flag and startup confirmation are required")

@@ -75,6 +75,32 @@ class TastytradeClient:
         except (urllib.error.URLError, TimeoutError) as exc:
             raise TransportError(f"tastytrade request failed: {exc}") from exc
 
+    def clock_offset_seconds(self, samples: int = 3) -> float:
+        """Estimate (tastytrade server clock - local clock) from the HTTP Date header.
+
+        The header has one-second resolution, so the estimate is good to about +/-0.5s plus latency:
+        enough to catch an unsynchronized PC clock, which otherwise makes fresh quotes look future-dated.
+        """
+        from email.utils import parsedate_to_datetime
+        offsets = []
+        for _ in range(samples):
+            req = urllib.request.Request(self.base_url + "/", headers={"User-Agent": self.user_agent}, method="HEAD")
+            sent = time.time()
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                    stamp = response.headers.get("Date")
+            except urllib.error.HTTPError as exc:  # any status still carries the server's Date header
+                stamp = exc.headers.get("Date")
+            except (urllib.error.URLError, TimeoutError) as exc:
+                raise TransportError(f"tastytrade clock check failed: {exc}") from exc
+            received = time.time()
+            if stamp:
+                # Mid-second of the server's truncated timestamp vs. the local request midpoint.
+                offsets.append(parsedate_to_datetime(stamp).timestamp() + 0.5 - (sent + received) / 2)
+        if not offsets:
+            raise TransportError("tastytrade responses did not include a Date header")
+        return sorted(offsets)[len(offsets) // 2]
+
     def _access_token(self) -> str:
         if self._token and time.time() < self._token.expires_at - 30:
             return self._token.access_token
