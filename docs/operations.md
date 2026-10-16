@@ -88,4 +88,8 @@ The supervisor lock prevents overlapping reviews and removes only locks whose re
 
 ## Required before LIVE
 
+The LIVE workflow (`live-check`, `authorize-live`, `live-session`), its readiness reports and the open blockers are documented in [`live_trading.md`](live_trading.md).
+
+The isolated $1,000 small-account PAPER profile (`paper-session --account-profile small`, `profile-status`) is documented in [`profiles/small_account_profile.md`](profiles/small_account_profile.md). It runs as a separate process; the watchdog and scheduled task still cover only the original engine.
+
 LIVE is unavailable as an operational mode until independent end-to-end validation verifies production OAuth, market feed, order schema, dry-run warnings/fees/buying power, external identifiers, ambiguous retry reconciliation, account state, protective order behavior, kill switch, restart recovery, and risk blocks. Then update only local ignored configuration, obtain the owner's explicit LIVE authorization, and type the startup phrase configured by `AppConfig`. No such validation or authorization has happened. Do not use sandbox P/L as performance evidence.

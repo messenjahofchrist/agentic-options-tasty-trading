@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import time
+import uuid
 from logging.handlers import RotatingFileHandler
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
@@ -258,7 +259,7 @@ def _session_symbols(strategy: Strategy, symbols: tuple[str, ...] | None) -> tup
 
 
 def run_paper_session(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple[str, ...] | None = None,
-                      max_restarts: int = MAX_ENGINE_RESTARTS) -> None:
+                      max_restarts: int = MAX_ENGINE_RESTARTS, profile=None) -> None:
     """Run the session, restarting it after feed/network failures while the market is open.
 
     A restart re-runs the full startup path: manifest check, clock check, full-session history
@@ -270,7 +271,7 @@ def run_paper_session(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols
     restarts = 0
     while True:
         try:
-            _run_paper_session_once(root=root, cfg=cfg, strategy=strategy, symbols=symbols)
+            _run_paper_session_once(root=root, cfg=cfg, strategy=strategy, symbols=symbols, profile=profile)
             return
         except Exception as exc:
             now = datetime.now(timezone.utc)
@@ -290,7 +291,8 @@ def run_paper_session(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols
             time.sleep(delay)
 
 
-def _run_paper_session_once(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple[str, ...]) -> None:
+def _run_paper_session_once(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple[str, ...],
+                            profile=None) -> None:
     logger = _session_logger(cfg.data_dir)
     heartbeat = cfg.data_dir / "engine_heartbeat.json"
     label = ",".join(symbols)
@@ -303,7 +305,7 @@ def _run_paper_session_once(*, root: Path, cfg: AppConfig, strategy: Strategy, s
         verify_manifest(root / "strategy.txt", root / "active_strategy.json")
         _set_engine_expected(cfg.data_dir, expected=True, state="STARTING", symbol=label)
         _write_heartbeat(heartbeat, status="starting", symbol=label)
-        asyncio.run(_run(root=root, cfg=cfg, strategy=strategy, symbols=symbols))
+        asyncio.run(_run(root=root, cfg=cfg, strategy=strategy, symbols=symbols, profile=profile))
     except KeyboardInterrupt:
         logger.info("Paper session stopped by operator symbols=%s", label)
         _set_engine_expected(cfg.data_dir, expected=False, state="STOPPED", symbol=label)
@@ -411,11 +413,24 @@ class _EntryArbiter:
 
 
 async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple[str, ...],
-               test_mode: bool = False, test_capital: float = 100_000) -> None:
+               test_mode: bool = False, test_capital: float = 100_000, live=None, profile=None) -> None:
+    """The one strategy loop for PAPER and LIVE.
+
+    `live` is None for PAPER (simulated fills, unchanged). For LIVE it is a `live_execution.LiveTrader`
+    that executes the same entry/exit decisions on the broker at the points PAPER calls PaperExecutor.
+    `profile` is None for the original account. For an account profile (`account_profiles.AccountProfile`,
+    PAPER only) it sets the per-trade sizing budget to the remaining aggregate allocation and re-checks the
+    aggregate cap at the fill; the strategy's analysis and decisions are otherwise identical.
+    """
+    if live is not None and test_mode:
+        raise RuntimeError("paper-test-session cannot run with LIVE execution")
+    if profile is not None and (live is not None or test_mode):
+        raise RuntimeError("account profiles run only in a normal PAPER session")
+    mode_label = "LIVE" if live is not None else "PAPER"
     logger = _session_logger(cfg.data_dir, test_mode=test_mode)
     label = ",".join(symbols)
-    logger.info("Session initialization started mode=PAPER test_mode=%s symbols=%s provider=%s",
-                test_mode, label, cfg.historical_data_provider)
+    logger.info("Session initialization started mode=%s test_mode=%s symbols=%s provider=%s",
+                mode_label, test_mode, label, cfg.historical_data_provider)
     now = datetime.now(timezone.utc)
     calendar = MarketCalendar()
     market_tz = ZoneInfo("America/New_York")
@@ -444,8 +459,11 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
         active_strategy = replace(strategy, entry_window_et={"start": entry_start.strftime("%H:%M"),
                                                              "end": entry_end.strftime("%H:%M")})
 
-    account_path = cfg.data_dir / ("paper_test_account.json" if test_mode else "paper_account.json")
-    account = load_or_initialize(account_path, test_capital if test_mode else cfg.starting_cash)
+    if live is not None:
+        account_path, account = live.account_path, live.account  # LIVE ledger of broker fills, data/live/
+    else:
+        account_path = cfg.data_dir / ("paper_test_account.json" if test_mode else "paper_account.json")
+        account = load_or_initialize(account_path, test_capital if test_mode else cfg.starting_cash)
     if test_mode and account.starting_capital != test_capital:
         raise RuntimeError(f"Existing test ledger uses ${account.starting_capital:.2f}; pass the same --test-capital or archive {account_path.name}")
     flatten_at_close = bool(strategy.execution["flatten_at_session_close"])
@@ -459,8 +477,8 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
         label = ",".join(symbols)
         logger.warning("Adding %s to the session to manage carried positions", ",".join(carried))
     if account.positions:
-        logger.warning("Resuming %d carried paper position(s) from an earlier session", len(account.positions))
-        print(f"RESUMING {len(account.positions)} carried paper position(s); stops/targets are from the entry session", flush=True)
+        logger.warning("Resuming %d carried %s position(s) from an earlier session", len(account.positions), mode_label)
+        print(f"RESUMING {len(account.positions)} carried {mode_label.lower()} position(s); stops/targets are from the entry session", flush=True)
 
     client = TastytradeClient(cfg.client_id, cfg.client_secret, cfg.refresh_token, base_url=cfg.production_base_url)
     clock_offset = client.clock_offset_seconds()
@@ -482,14 +500,15 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
     def new_report(symbol: str) -> dict:
         return {
             "created_at_utc": datetime.now(timezone.utc).isoformat(),
-            "mode": "PAPER", "symbol": symbol, "session_symbols": list(symbols),
+            "mode": mode_label, "symbol": symbol, "session_symbols": list(symbols),
             "trading_date_et": now.astimezone(market_tz).date().isoformat(),
             "market_session_start_et": session_open.isoformat(), "market_session_close_et": session_close.isoformat(),
             "current_time_et": datetime.now(timezone.utc).astimezone(market_tz).isoformat(),
             "provider": history_provider.name, "retrieval_method": "configured historical candle provider",
             "strategy_id": strategy.strategy_id, "strategy_version": strategy.version,
             "strategy_hash": strategy.sha256, "risk_controls_status": "LOADED_FROM_VERIFIED_STRATEGY",
-            "broker_order_submission": "DISABLED_IN_PAPER", "timezone": "America/New_York",
+            "broker_order_submission": "ENABLED_LIVE" if live is not None else "DISABLED_IN_PAPER",
+            "timezone": "America/New_York",
             "expected_full_session_candle_count": int((session_close - session_open).total_seconds() // 60),
             "indicator_bars_required": max(int(strategy.rules["trend_ema_slow"]), int(strategy.rules["atr_period"])) + 2,
             "indicator_bars_received": 0, "expected_candle_count": 0, "received_candle_count": 0,
@@ -497,7 +516,8 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
             "indicator_warmup_status": "NOT_CHECKED", "opening_range_status": "NOT_CHECKED",
             "historical_to_live_transition_status": "PENDING", "final_readiness": "PENDING",
             "kill_switch_status": "ACTIVE" if (root / "KILL_SWITCH").exists() else "CLEAR",
-            "execution_mode_status": "PAPER_ONLY" if cfg.mode.value == "PAPER" and not cfg.live_enabled else "BLOCKED",
+            "execution_mode_status": ("LIVE_BROKER_EXECUTION" if live is not None
+                                      else "PAPER_ONLY" if cfg.mode.value == "PAPER" and not cfg.live_enabled else "BLOCKED"),
             "local_clock_offset_seconds": round(clock_offset, 3),
             "paper_ledger_position_count": len(account.positions),
             "paper_ledger_state": "CARRIED_POSITIONS_RESUMED" if account.positions else "CLEAR",
@@ -509,6 +529,8 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
     disabled: set[str] = set()
 
     def has_position(symbol: str) -> bool:
+        if live is not None and symbol in live.pending_entries:
+            return True
         return any(str(position["underlying"]) == symbol for position in account.positions)
 
     def disable(state: _SymbolState, exc: Exception) -> None:
@@ -576,7 +598,7 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
             raise RuntimeError(f"Paper startup blocked by historical recovery for {symbol}; report: {path}; {exc}") from exc
         state.session_started = bool(state.bars)
         state.history_end = state.bars[-1].timestamp if state.bars else None
-        print(f"PAPER {symbol} history bootstrap verified {len(state.bars)} complete one-minute bars through "
+        print(f"{mode_label} {symbol} history bootstrap verified {len(state.bars)} complete one-minute bars through "
               f"{state.bars[-1].timestamp.isoformat() if state.bars else 'session open'}", flush=True)
 
     decision_log = cfg.data_dir / ("paper_test_decisions.jsonl" if test_mode else "decisions.jsonl")
@@ -591,8 +613,9 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
 
     def available_slots(at: datetime | None = None) -> int:
         moment = at or datetime.now(timezone.utc)
-        return min(int(strategy.risk["max_open_positions"]) - len(account.positions),
-                   int(strategy.risk["max_trades_per_day"]) - _trades_today(account, moment))
+        pending = len(live.pending_entries) if live is not None else 0  # LIVE entries awaiting broker fills
+        return min(int(strategy.risk["max_open_positions"]) - len(account.positions) - pending,
+                   int(strategy.risk["max_trades_per_day"]) - _trades_today(account, moment) - pending)
 
     arbiter = _EntryArbiter(available_slots, ENTRY_ARBITRATION_SECONDS)
     queues: dict[str, asyncio.Queue] = {symbol: asyncio.Queue() for symbol in symbols}
@@ -686,12 +709,14 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
                 report["final_readiness"] = "WARMING_UP_INDICATORS"
             state.persist(cfg.data_dir)
             lifecycle = "kill_switch_active" if (root / "KILL_SWITCH").exists() else "running"
-            _write_heartbeat(heartbeat_path, status=lifecycle, symbol=label,
+            _write_heartbeat(heartbeat_path, status=lifecycle, symbol=label, mode=mode_label,
                              last_bar=bar.timestamp, open_positions=len(account.positions))
             _write_recovery_checkpoint(cfg.data_dir, symbol=symbol,
                 trading_date=bar.timestamp.astimezone(market_tz).date().isoformat(), provider=history_provider.name,
                 timestamp=bar.timestamp)
         bar_now = bar.timestamp + timedelta(minutes=1)
+        if live is not None:
+            await live.refresh()  # broker balances/positions/orders, rate-limited; reconciles before any entry
         # Refresh option marks for this symbol's simulated positions before evaluating a new entry.
         positions_mark_fresh = True
         for position_data in list(account.positions):
@@ -733,13 +758,21 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
             account.unrealized_pnl = _unrealized_pnl(account, executor)
             position = _position_from_record(position_data)
             daily_pnl = _daily_realized(account, bar_now) + account.unrealized_pnl
-            current_equity = max(0.0, account.starting_capital + account.deposits -
-                                account.withdrawals + account.realized_pnl + account.unrealized_pnl)
+            current_equity = (live.equity() if live is not None else
+                              max(0.0, account.starting_capital + account.deposits -
+                                  account.withdrawals + account.realized_pnl + account.unrealized_pnl))
             why = ("end_of_session_close" if flatten_at_close and bar_now >= session_close.astimezone(timezone.utc) - timedelta(minutes=1)
                    else exit_reason(position, underlying=bar.close, option_bid=quote.bid, now=bar_now,
                                     daily_loss_hit=daily_pnl <= -current_equity * float(strategy.risk["max_daily_loss_fraction"]),
                                     enable_time_exit=bool(active_strategy.execution["enable_time_exit"])))
-            if why:
+            if why and live is not None:
+                realized = await live.close_position(record=position_data, reason=why, now=bar_now,
+                                                     requote=lambda record: _option_marks(client, [record])[0],
+                                                     quote_fresh=_fresh_quote)
+                if realized is None:
+                    positions_mark_fresh = False  # exit incomplete: keep managing, block new entries
+                account.unrealized_pnl = _unrealized_pnl(account, executor)
+            elif why:
                 fill = executor.fill(quote, "SELL", position.quantity, why, bar_now)
                 account.ledger[-1].update({"strategy_id": position_data.get("strategy_id"),
                                            "strategy_version": position_data["strategy_version"],
@@ -798,19 +831,24 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
             except Exception as exc:
                 data_issues.append(f"option_chain_request_failed:{type(exc).__name__}")
                 logger.exception("Option chain request failed symbol=%s bar_timestamp=%s", symbol, bar.timestamp.isoformat())
+        cycle_equity = (live.equity() if live is not None else
+                        max(0.0, account.starting_capital + account.deposits - account.withdrawals +
+                            account.realized_pnl + account.unrealized_pnl))
+        cycle_strategy = active_strategy if profile is None else profile.cycle_strategy(active_strategy, cycle_equity, account)
         risk_state = RiskState(
-            equity=max(0.0, account.starting_capital + account.deposits - account.withdrawals +
-                       account.realized_pnl + account.unrealized_pnl),
+            equity=cycle_equity,
             daily_pnl=_daily_realized(account, bar_now) + account.unrealized_pnl,
             weekly_pnl=_weekly_realized(account, bar_now) + account.unrealized_pnl,
             consecutive_losses=_consecutive_losses(account), trades_today=_trades_today(account, bar_now),
             open_positions=len(account.positions),
             open_underlyings=tuple(str(position["underlying"]) for position in account.positions))
-        records = decision_cycle(strategy=replace(active_strategy, universe=(symbol,)), strategy_path=root / "strategy.txt",
+        records = decision_cycle(strategy=replace(cycle_strategy, universe=(symbol,)), strategy_path=root / "strategy.txt",
             manifest_path=root / "active_strategy.json", bars_by_symbol={symbol: list(bars)},
             option_chain_by_symbol=option_chain, risk_state=risk_state, now=bar_now,
-            data_fresh=state.data_valid and quote_fresh, account_certain=positions_mark_fresh,
-            reconciled=True, protection_verified=True, market_open=calendar.is_open(bar_now),
+            data_fresh=state.data_valid and quote_fresh,
+            account_certain=positions_mark_fresh and (live is None or live.account_certain),
+            reconciled=live is None or live.reconciled,
+            protection_verified=live is None or live.protection_verified, market_open=calendar.is_open(bar_now),
             within_entry_window=entry_window, decision_log=decision_log, kill_switch_path=root / "KILL_SWITCH",
             paper_execution=True, paper_test_mode=test_mode,
             opening_range_start=test_start, data_issues=data_issues)
@@ -828,6 +866,12 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
             if available_slots(bar_now) < 1 or has_position(symbol) or (root / "KILL_SWITCH").exists():
                 print(f"NO TRADE {symbol}: position/trade limit reached while ranking", flush=True)
                 continue
+            if profile is not None:
+                within_cap, cap_reason = profile.entry_allowed(account, cycle_equity, decision.diagnostics["modeled_risk_dollars"])
+                if not within_cap:
+                    logger.info("NO TRADE %s: %s profile=%s", symbol, cap_reason, profile.name)
+                    print(f"NO TRADE {symbol}: {cap_reason}", flush=True)
+                    continue
             selected = next((q for q in option_chain[symbol] if q.symbol == decision.diagnostics.get("option_candidate")), None)
             if selected is None:
                 print(f"NO TRADE {symbol}: selected contract quote disappeared", flush=True)
@@ -836,6 +880,25 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
             if signal_now is None:
                 raise RuntimeError(f"{symbol}: signal disappeared during paper entry; stop and review")
             quantity = int(decision.diagnostics["quantity"])
+            if live is not None:
+                # Same position record PAPER books; LIVE fills it with the broker's actual fill.
+                await live.open_position(template={
+                    "trade_id": str(uuid.uuid4()), "symbol": selected.symbol, "underlying": symbol,
+                    "right": selected.right, "entry_underlying": bar.close,
+                    "stop_underlying": signal_now.stop_price, "target_underlying": signal_now.target_price,
+                    "entry_time": bar_now.isoformat(), "max_holding_minutes": int(strategy.rules["max_holding_minutes"]),
+                    "initial_risk_dollars": decision.diagnostics["modeled_risk_dollars"],
+                    "planned_risk_dollars": decision.diagnostics["planned_risk_dollars"],
+                    "modeled_risk_dollars": decision.diagnostics["modeled_risk_dollars"],
+                    "premium_exposure_dollars": decision.diagnostics["premium_exposure_dollars"],
+                    "expected_net_r": decision.diagnostics.get("expected_net_r"),
+                    "strategy_id": strategy.strategy_id,
+                    "strategy_version": strategy.version, "strategy_hash": strategy.sha256,
+                    "mfe": 0.0, "mae": 0.0, "last_bid": selected.bid,
+                }, quote=selected, quantity=quantity, decision_option=decision.diagnostics.get("option_candidate"),
+                    readiness=report, now=datetime.now(timezone.utc), quote_fresh=_fresh_quote)
+                account.unrealized_pnl = _unrealized_pnl(account, executor)
+                continue
             fill = executor.fill(selected, "BUY", quantity, "strategy_entry", bar_now)
             account.ledger[-1].update({"strategy_id": strategy.strategy_id, "strategy_version": strategy.version,
                                        "strategy_hash": strategy.sha256, "underlying": symbol,
@@ -881,6 +944,9 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
               f"rolling {strategy.opening_range_minutes}-minute range from {test_start.isoformat()}; "
               f"entries {active_strategy.entry_window_et['start']}-{active_strategy.entry_window_et['end']} ET; "
               "local simulated orders only, no broker orders. Press Ctrl+C to stop.", flush=True)
+    elif live is not None:
+        print(f"LIVE session started for {label}; REAL broker orders on account {live.startup_report.get('account')}. "
+              "Press Ctrl+C to stop (open positions stay at the broker).", flush=True)
     else:
         print(f"PAPER session started for {label}; local simulated orders only. Press Ctrl+C to stop.", flush=True)
 
@@ -901,11 +967,25 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
             for task in done:
                 task.result()
     except TimeoutError:
-        print("PAPER session ended at the equity close.", flush=True)
+        print(f"{mode_label} session ended at the equity close.", flush=True)
         if account.positions and not flatten_at_close:
             for position_data in account.positions:
                 print(f"CARRYING {position_data['underlying']} {position_data['symbol']} overnight "
                       "(flatten_at_session_close=false); it is unmonitored until the next session starts", flush=True)
+            save_account(account_path, account)
+        elif account.positions and live is not None:
+            for position_data in list(account.positions):
+                realized = await live.close_position(record=position_data, reason="end_of_session_close",
+                                                     now=datetime.now(timezone.utc),
+                                                     requote=lambda record: _option_marks(client, [record])[0],
+                                                     quote_fresh=_fresh_quote)
+                if realized is None:
+                    print(f"REVIEW REQUIRED {position_data['symbol']}: LIVE end-of-session close incomplete; "
+                          "the position may still be open at the broker", flush=True)
+                    record_critical_alert("live_position_unresolved_at_session_close", mode="LIVE",
+                        details={"trade_id": str(position_data["trade_id"]), "option_symbol": position_data["symbol"],
+                                 "underlying": position_data["underlying"]}, data_dir=cfg.data_dir)
+            account.unrealized_pnl = _unrealized_pnl(account, executor)
             save_account(account_path, account)
         elif account.positions:
             marks = _option_marks(client, list(account.positions))
@@ -1016,7 +1096,8 @@ def _position_from_record(record: dict) -> Position:
 
 
 def _closed(account: PaperAccount) -> list[dict]:
-    return [item for item in account.ledger if item.get("type") == "paper_close"]
+    # A LIVE ledger books "live_close" records from broker fills; a paper ledger never contains them.
+    return [item for item in account.ledger if item.get("type") in ("paper_close", "live_close")]
 
 
 def _daily_realized(account: PaperAccount, now: datetime) -> float:

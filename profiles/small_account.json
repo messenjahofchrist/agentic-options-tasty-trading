@@ -1,0 +1,35 @@
+{
+  "ledger_id": "small_account_paper",
+  "mode": "PAPER",
+  "description": "Isolated $1,000 PAPER ledger. Owner-authorized 2026-10-16. Strategy unchanged.",
+  "data_dir": "data/profiles/small_account_paper",
+  "starting_balance": 1000,
+  "original_account_baseline": "docs/profiles/baseline_20261016/original_account_settings.json",
+  "rest_requests_per_second": 10,
+  "transition": {
+    "equity_threshold": 10000,
+    "to": "ORIGINAL_ACCOUNT_PAPER",
+    "one_way": true,
+    "equity_basis": "ledger cash at a session boundary; open positions valued at zero",
+    "checked_at": [
+      "session_start",
+      "session_end"
+    ]
+  },
+  "profiles": {
+    "SMALL_ACCOUNT_PAPER": {
+      "mode": "PAPER",
+      "max_aggregate_allocation_fraction": 0.4,
+      "per_trade_budget": "remaining aggregate allocation (owner choice 2026-10-16)",
+      "universe_file": "profiles/small_account_universe.json",
+      "risk_overrides": {
+        "max_daily_loss_fraction": 0.2
+      },
+      "risk_overrides_note": "Owner-authorized 2026-10-16: daily loss limit 20% of equity for this ledger only (strategy value 2% restored at the $10,000 transition)."
+    },
+    "ORIGINAL_ACCOUNT_PAPER": {
+      "mode": "PAPER",
+      "restore": "original_account_baseline"
+    }
+  }
+}

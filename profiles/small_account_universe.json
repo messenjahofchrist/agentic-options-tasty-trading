@@ -1,0 +1,660 @@
+{
+  "description": "SMALL_ACCOUNT_PAPER scanning universe: the original 14 plus liquid underlyings whose options passed the UNCHANGED strategy contract filters within a $400 budget. Not part of strategy.txt; the strategy hash is unaffected.",
+  "audited_at_utc": "2026-10-16T14:50:11.875908+00:00",
+  "audit_budget_dollars": 400.0,
+  "selection_criteria": [
+    "valid, fresh underlying quote (tastytrade REST)",
+    "complete DXLink 1-minute history for the session so far (no missing or out-of-order candles)",
+    "option chain with quotes and delta/gamma/theta for every quoted near-the-money contract",
+    "usable bid/ask quotes",
+    "at least one contract passing the strategy's own filters (7-21 DTE, |delta| 0.45-0.65, spread <= $0.10 and <= 10%, OI >= 100, volume >= 10) at <= $400 modeled risk"
+  ],
+  "capacity": {
+    "symbols": 47,
+    "rest_requests_per_second": 10,
+    "measured": "47 quote snapshots/minute at 10 req/s with GET-only 429 retry: 47/47 ok for 3 consecutive minutes, slowest 8.0s (quote freshness limit 20s). Without pacing ~1/3 were refused with HTTP 429."
+  },
+  "symbols": [
+    "SPY",
+    "QQQ",
+    "IWM",
+    "DIA",
+    "TLT",
+    "NVDA",
+    "AAPL",
+    "AMZN",
+    "GOOGL",
+    "PLTR",
+    "NFLX",
+    "INTC",
+    "UBER",
+    "BAC",
+    "NIO",
+    "RIVN",
+    "JD",
+    "PFE",
+    "F",
+    "UNG",
+    "XLF",
+    "XLU",
+    "T",
+    "LQD",
+    "AAL",
+    "MARA",
+    "RIOT",
+    "CMCSA",
+    "VZ",
+    "CCL",
+    "SOFI",
+    "SLV",
+    "SQQQ",
+    "EEM",
+    "NKE",
+    "DKNG",
+    "XLE",
+    "PYPL",
+    "PDD",
+    "IBIT",
+    "SMCI",
+    "WMT",
+    "UPST",
+    "TQQQ",
+    "KO",
+    "BABA",
+    "HOOD"
+  ],
+  "evidence": {
+    "SPY": {
+      "spot": 772.47,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 100,
+      "with_greeks": 100,
+      "max_option_quote_age_s": 2.3,
+      "cheapest_strategy_eligible_within_400": 384.44,
+      "sides_within_400": [
+        "PUT"
+      ],
+      "original_universe": true
+    },
+    "QQQ": {
+      "spot": 723.51,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 100,
+      "with_greeks": 100,
+      "max_option_quote_age_s": 2.1,
+      "cheapest_strategy_eligible_within_400": null,
+      "sides_within_400": [],
+      "original_universe": true
+    },
+    "IWM": {
+      "spot": 274.65,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 100,
+      "with_greeks": 100,
+      "max_option_quote_age_s": 1.2,
+      "cheapest_strategy_eligible_within_400": 233.44,
+      "sides_within_400": [
+        "CALL",
+        "PUT"
+      ],
+      "original_universe": true
+    },
+    "DIA": {
+      "spot": 523.32,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 100,
+      "with_greeks": 100,
+      "max_option_quote_age_s": 13.8,
+      "cheapest_strategy_eligible_within_400": null,
+      "sides_within_400": [],
+      "original_universe": true
+    },
+    "TLT": {
+      "spot": 79.94,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 100,
+      "with_greeks": 100,
+      "max_option_quote_age_s": 10.6,
+      "cheapest_strategy_eligible_within_400": 63.44,
+      "sides_within_400": [
+        "CALL",
+        "PUT"
+      ],
+      "original_universe": true
+    },
+    "NVDA": {
+      "spot": 218.15,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 80,
+      "with_greeks": 80,
+      "max_option_quote_age_s": 1.2,
+      "cheapest_strategy_eligible_within_400": null,
+      "sides_within_400": [],
+      "original_universe": true
+    },
+    "AAPL": {
+      "spot": 344.92,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 100,
+      "with_greeks": 100,
+      "max_option_quote_age_s": 3.7,
+      "cheapest_strategy_eligible_within_400": null,
+      "sides_within_400": [],
+      "original_universe": true
+    },
+    "AMZN": {
+      "spot": 254.98,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 98,
+      "with_greeks": 98,
+      "max_option_quote_age_s": 3.9,
+      "cheapest_strategy_eligible_within_400": null,
+      "sides_within_400": [],
+      "original_universe": true
+    },
+    "GOOGL": {
+      "spot": 346.74,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 98,
+      "with_greeks": 98,
+      "max_option_quote_age_s": 13.4,
+      "cheapest_strategy_eligible_within_400": null,
+      "sides_within_400": [],
+      "original_universe": true
+    },
+    "PLTR": {
+      "spot": 196.37,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 48,
+      "with_greeks": 48,
+      "max_option_quote_age_s": 3.6,
+      "cheapest_strategy_eligible_within_400": null,
+      "sides_within_400": [],
+      "original_universe": true
+    },
+    "NFLX": {
+      "spot": 71.28,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 42,
+      "with_greeks": 42,
+      "max_option_quote_age_s": 3.8,
+      "cheapest_strategy_eligible_within_400": 296.44,
+      "sides_within_400": [
+        "CALL"
+      ],
+      "original_universe": true
+    },
+    "INTC": {
+      "spot": 93.02,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 54,
+      "with_greeks": 54,
+      "max_option_quote_age_s": 3.1,
+      "cheapest_strategy_eligible_within_400": 297.44,
+      "sides_within_400": [
+        "CALL",
+        "PUT"
+      ],
+      "original_universe": true
+    },
+    "UBER": {
+      "spot": 71.26,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 42,
+      "with_greeks": 42,
+      "max_option_quote_age_s": 4.6,
+      "cheapest_strategy_eligible_within_400": 113.44,
+      "sides_within_400": [
+        "CALL",
+        "PUT"
+      ],
+      "original_universe": true
+    },
+    "BAC": {
+      "spot": 52.41,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 36,
+      "with_greeks": 36,
+      "max_option_quote_age_s": 2.1,
+      "cheapest_strategy_eligible_within_400": 143.44,
+      "sides_within_400": [
+        "CALL",
+        "PUT"
+      ],
+      "original_universe": true
+    },
+    "SMCI": {
+      "spot": 33.25,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 24,
+      "with_greeks": 24,
+      "max_option_quote_age_s": 6.3,
+      "cheapest_strategy_eligible_within_400": 170.44,
+      "sides_within_400": [
+        "CALL",
+        "PUT"
+      ]
+    },
+    "HOOD": {
+      "spot": 103.5,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 60,
+      "with_greeks": 60,
+      "max_option_quote_age_s": 2.8,
+      "cheapest_strategy_eligible_within_400": 284.44,
+      "sides_within_400": [
+        "CALL",
+        "PUT"
+      ]
+    },
+    "RIOT": {
+      "spot": 14.96,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 10,
+      "with_greeks": 10,
+      "max_option_quote_age_s": 4.8,
+      "cheapest_strategy_eligible_within_400": 75.44,
+      "sides_within_400": [
+        "PUT"
+      ]
+    },
+    "MARA": {
+      "spot": 8.11,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 12,
+      "with_greeks": 12,
+      "max_option_quote_age_s": 43.8,
+      "cheapest_strategy_eligible_within_400": 75.44,
+      "sides_within_400": [
+        "CALL",
+        "PUT"
+      ]
+    },
+    "SOFI": {
+      "spot": 15.21,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 18,
+      "with_greeks": 18,
+      "max_option_quote_age_s": 6.7,
+      "cheapest_strategy_eligible_within_400": 95.44,
+      "sides_within_400": [
+        "CALL",
+        "PUT"
+      ]
+    },
+    "PYPL": {
+      "spot": 57.53,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 36,
+      "with_greeks": 36,
+      "max_option_quote_age_s": 62.0,
+      "cheapest_strategy_eligible_within_400": 131.44,
+      "sides_within_400": [
+        "CALL"
+      ]
+    },
+    "UPST": {
+      "spot": 24.62,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 24,
+      "with_greeks": 24,
+      "max_option_quote_age_s": 21.6,
+      "cheapest_strategy_eligible_within_400": 185.44,
+      "sides_within_400": [
+        "CALL"
+      ]
+    },
+    "DKNG": {
+      "spot": 19.34,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 16,
+      "with_greeks": 16,
+      "max_option_quote_age_s": 10.2,
+      "cheapest_strategy_eligible_within_400": 109.44,
+      "sides_within_400": [
+        "CALL"
+      ]
+    },
+    "NKE": {
+      "spot": 37.47,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 36,
+      "with_greeks": 36,
+      "max_option_quote_age_s": 10.6,
+      "cheapest_strategy_eligible_within_400": 105.44,
+      "sides_within_400": [
+        "CALL",
+        "PUT"
+      ]
+    },
+    "WMT": {
+      "spot": 118.5,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 72,
+      "with_greeks": 72,
+      "max_option_quote_age_s": 21.0,
+      "cheapest_strategy_eligible_within_400": 171.44,
+      "sides_within_400": [
+        "PUT"
+      ]
+    },
+    "KO": {
+      "spot": 93.16,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 54,
+      "with_greeks": 54,
+      "max_option_quote_age_s": 22.0,
+      "cheapest_strategy_eligible_within_400": 207.44,
+      "sides_within_400": [
+        "CALL"
+      ]
+    },
+    "PFE": {
+      "spot": 29.48,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 30,
+      "with_greeks": 30,
+      "max_option_quote_age_s": 31.8,
+      "cheapest_strategy_eligible_within_400": 59.44,
+      "sides_within_400": [
+        "CALL"
+      ]
+    },
+    "F": {
+      "spot": 12.73,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 12,
+      "with_greeks": 12,
+      "max_option_quote_age_s": 14.2,
+      "cheapest_strategy_eligible_within_400": 60.44,
+      "sides_within_400": [
+        "CALL",
+        "PUT"
+      ]
+    },
+    "RIVN": {
+      "spot": 12.89,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 18,
+      "with_greeks": 18,
+      "max_option_quote_age_s": 7.8,
+      "cheapest_strategy_eligible_within_400": 42.44,
+      "sides_within_400": [
+        "CALL",
+        "PUT"
+      ]
+    },
+    "NIO": {
+      "spot": 3.5,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 6,
+      "with_greeks": 6,
+      "max_option_quote_age_s": 28.3,
+      "cheapest_strategy_eligible_within_400": 18.44,
+      "sides_within_400": [
+        "CALL"
+      ]
+    },
+    "BABA": {
+      "spot": 110.63,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 66,
+      "with_greeks": 66,
+      "max_option_quote_age_s": 2.8,
+      "cheapest_strategy_eligible_within_400": 255.44,
+      "sides_within_400": [
+        "CALL"
+      ]
+    },
+    "JD": {
+      "spot": 27.06,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 26,
+      "with_greeks": 26,
+      "max_option_quote_age_s": 54.8,
+      "cheapest_strategy_eligible_within_400": 46.44,
+      "sides_within_400": [
+        "CALL"
+      ]
+    },
+    "PDD": {
+      "spot": 81.86,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 48,
+      "with_greeks": 48,
+      "max_option_quote_age_s": 57.2,
+      "cheapest_strategy_eligible_within_400": 143.44,
+      "sides_within_400": [
+        "CALL"
+      ]
+    },
+    "AAL": {
+      "spot": 12.34,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 12,
+      "with_greeks": 12,
+      "max_option_quote_age_s": 23.6,
+      "cheapest_strategy_eligible_within_400": 71.44,
+      "sides_within_400": [
+        "CALL"
+      ]
+    },
+    "CCL": {
+      "spot": 26.81,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 30,
+      "with_greeks": 30,
+      "max_option_quote_age_s": 26.8,
+      "cheapest_strategy_eligible_within_400": 94.44,
+      "sides_within_400": [
+        "CALL",
+        "PUT"
+      ]
+    },
+    "T": {
+      "spot": 23.66,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 30,
+      "with_greeks": 30,
+      "max_option_quote_age_s": 35.8,
+      "cheapest_strategy_eligible_within_400": 67.44,
+      "sides_within_400": [
+        "CALL",
+        "PUT"
+      ]
+    },
+    "VZ": {
+      "spot": 44.75,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 40,
+      "with_greeks": 40,
+      "max_option_quote_age_s": 12.0,
+      "cheapest_strategy_eligible_within_400": 87.44,
+      "sides_within_400": [
+        "CALL"
+      ]
+    },
+    "CMCSA": {
+      "spot": 22.18,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 20,
+      "with_greeks": 20,
+      "max_option_quote_age_s": 4.5,
+      "cheapest_strategy_eligible_within_400": 78.44,
+      "sides_within_400": [
+        "CALL",
+        "PUT"
+      ]
+    },
+    "XLF": {
+      "spot": 55.8,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 100,
+      "with_greeks": 100,
+      "max_option_quote_age_s": 61.7,
+      "cheapest_strategy_eligible_within_400": 62.44,
+      "sides_within_400": [
+        "CALL"
+      ]
+    },
+    "XLE": {
+      "spot": 67.35,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 100,
+      "with_greeks": 100,
+      "max_option_quote_age_s": 62.4,
+      "cheapest_strategy_eligible_within_400": 119.44,
+      "sides_within_400": [
+        "CALL"
+      ]
+    },
+    "XLU": {
+      "spot": 42.06,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 54,
+      "with_greeks": 54,
+      "max_option_quote_age_s": 68.8,
+      "cheapest_strategy_eligible_within_400": 64.44,
+      "sides_within_400": [
+        "CALL"
+      ]
+    },
+    "TQQQ": {
+      "spot": 71.72,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 100,
+      "with_greeks": 100,
+      "max_option_quote_age_s": 10.2,
+      "cheapest_strategy_eligible_within_400": 204.44,
+      "sides_within_400": [
+        "CALL"
+      ]
+    },
+    "SQQQ": {
+      "spot": 37.2,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 48,
+      "with_greeks": 48,
+      "max_option_quote_age_s": 27.0,
+      "cheapest_strategy_eligible_within_400": 102.44,
+      "sides_within_400": [
+        "PUT"
+      ]
+    },
+    "SLV": {
+      "spot": 52.14,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 96,
+      "with_greeks": 96,
+      "max_option_quote_age_s": 5.2,
+      "cheapest_strategy_eligible_within_400": 100.44,
+      "sides_within_400": [
+        "CALL",
+        "PUT"
+      ]
+    },
+    "UNG": {
+      "spot": 10.62,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 16,
+      "with_greeks": 16,
+      "max_option_quote_age_s": 25.8,
+      "cheapest_strategy_eligible_within_400": 60.44,
+      "sides_within_400": [
+        "CALL",
+        "PUT"
+      ]
+    },
+    "EEM": {
+      "spot": 63.5,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 72,
+      "with_greeks": 72,
+      "max_option_quote_age_s": 8.6,
+      "cheapest_strategy_eligible_within_400": 105.44,
+      "sides_within_400": [
+        "PUT"
+      ]
+    },
+    "LQD": {
+      "spot": 103.55,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 100,
+      "with_greeks": 100,
+      "max_option_quote_age_s": 26.7,
+      "cheapest_strategy_eligible_within_400": 70.44,
+      "sides_within_400": [
+        "CALL"
+      ]
+    },
+    "IBIT": {
+      "spot": 46.41,
+      "complete_history_bars": "80/80",
+      "contracts_quoted": 100,
+      "with_greeks": 100,
+      "max_option_quote_age_s": 1.8,
+      "cheapest_strategy_eligible_within_400": 149.44,
+      "sides_within_400": [
+        "CALL",
+        "PUT"
+      ]
+    }
+  },
+  "excluded_candidates": {
+    "AMD": "no contract passing the unchanged strategy filters fits $400",
+    "MU": "no contract passing the unchanged strategy filters fits $400",
+    "TSLA": "no contract passing the unchanged strategy filters fits $400",
+    "META": "no contract passing the unchanged strategy filters fits $400",
+    "MSFT": "no contract passing the unchanged strategy filters fits $400",
+    "AVGO": "market data / history check failed: RuntimeError: DXLink candle snapshot is out of order at 2026-10-16T14:51:00+00:00",
+    "MRVL": "no contract passing the unchanged strategy filters fits $400",
+    "ARM": "no contract passing the unchanged strategy filters fits $400",
+    "QCOM": "no contract passing the unchanged strategy filters fits $400",
+    "ORCL": "market data / history check failed: RuntimeError: DXLink candle snapshot is out of order at 2026-10-16T14:52:00+00:00",
+    "CSCO": "no contract passing the unchanged strategy filters fits $400",
+    "COIN": "no contract passing the unchanged strategy filters fits $400",
+    "MSTR": "no contract passing the unchanged strategy filters fits $400",
+    "XYZ": "market data / history check failed: RuntimeError: Historical candle bootstrap incomplete; blocking entries. Expected 80 one-minute bars from 2026-",
+    "AFRM": "no contract passing the unchanged strategy filters fits $400",
+    "SHOP": "no contract passing the unchanged strategy filters fits $400",
+    "RBLX": "market data / history check failed: RuntimeError: Historical candle bootstrap incomplete; blocking entries. Expected 80 one-minute bars from 2026-",
+    "SNAP": "market data / history check failed: RuntimeError: Historical candle bootstrap incomplete; blocking entries. Expected 80 one-minute bars from 2026-",
+    "PINS": "no contract passing the unchanged strategy filters fits $400",
+    "ROKU": "market data / history check failed: RuntimeError: Historical candle bootstrap incomplete; blocking entries. Expected 80 one-minute bars from 2026-",
+    "ABNB": "no contract passing the unchanged strategy filters fits $400",
+    "LYFT": "no contract passing the unchanged strategy filters fits $400",
+    "DIS": "no contract passing the unchanged strategy filters fits $400",
+    "SBUX": "no contract passing the unchanged strategy filters fits $400",
+    "TGT": "no contract passing the unchanged strategy filters fits $400",
+    "MRNA": "no contract passing the unchanged strategy filters fits $400",
+    "CVS": "no contract passing the unchanged strategy filters fits $400",
+    "GM": "no contract passing the unchanged strategy filters fits $400",
+    "LCID": "no contract passing the unchanged strategy filters fits $400",
+    "C": "market data / history check failed: RuntimeError: Historical candle bootstrap incomplete; blocking entries. Expected 80 one-minute bars from 2026-",
+    "WFC": "no contract passing the unchanged strategy filters fits $400",
+    "JPM": "market data / history check failed: RuntimeError: DXLink candle snapshot is out of order at 2026-10-16T14:54:00+00:00",
+    "SCHW": "no contract passing the unchanged strategy filters fits $400",
+    "XOM": "no contract passing the unchanged strategy filters fits $400",
+    "OXY": "no contract passing the unchanged strategy filters fits $400",
+    "CVX": "no contract passing the unchanged strategy filters fits $400",
+    "DAL": "no contract passing the unchanged strategy filters fits $400",
+    "UAL": "no contract passing the unchanged strategy filters fits $400",
+    "WBD": "market data / history check failed: RuntimeError: DXLink returned no candles for WBD in the requested date range",
+    "PARA": "market data / history check failed: RuntimeError: Historical candle bootstrap incomplete; blocking entries. Expected 80 one-minute bars from 2026-",
+    "BA": "no contract passing the unchanged strategy filters fits $400",
+    "XLK": "no contract passing the unchanged strategy filters fits $400",
+    "XLV": "no contract passing the unchanged strategy filters fits $400",
+    "XLI": "no contract passing the unchanged strategy filters fits $400",
+    "KRE": "no contract passing the unchanged strategy filters fits $400",
+    "SMH": "no contract passing the unchanged strategy filters fits $400",
+    "SOXL": "no contract passing the unchanged strategy filters fits $400",
+    "TNA": "no contract passing the unchanged strategy filters fits $400",
+    "ARKK": "no contract passing the unchanged strategy filters fits $400",
+    "GLD": "no contract passing the unchanged strategy filters fits $400",
+    "GDX": "no contract passing the unchanged strategy filters fits $400",
+    "USO": "no contract passing the unchanged strategy filters fits $400",
+    "EWZ": "no contract passing the unchanged strategy filters fits $400",
+    "FXI": "market data / history check failed: RuntimeError: Historical candle bootstrap incomplete; blocking entries. Expected 80 one-minute bars from 2026-",
+    "HYG": "no contract passing the unchanged strategy filters fits $400"
+  }
+}

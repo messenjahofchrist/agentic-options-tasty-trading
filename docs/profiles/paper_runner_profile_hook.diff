@@ -1,0 +1,96 @@
+--- a/trader/paper_runner.py (baseline 2026-10-16T14:49Z)
++++ b/trader/paper_runner.py
+@@ -259,7 +259,7 @@
+ 
+ 
+ def run_paper_session(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple[str, ...] | None = None,
+-                      max_restarts: int = MAX_ENGINE_RESTARTS) -> None:
++                      max_restarts: int = MAX_ENGINE_RESTARTS, profile=None) -> None:
+     """Run the session, restarting it after feed/network failures while the market is open.
+ 
+     A restart re-runs the full startup path: manifest check, clock check, full-session history
+@@ -271,7 +271,7 @@
+     restarts = 0
+     while True:
+         try:
+-            _run_paper_session_once(root=root, cfg=cfg, strategy=strategy, symbols=symbols)
++            _run_paper_session_once(root=root, cfg=cfg, strategy=strategy, symbols=symbols, profile=profile)
+             return
+         except Exception as exc:
+             now = datetime.now(timezone.utc)
+@@ -291,7 +291,8 @@
+             time.sleep(delay)
+ 
+ 
+-def _run_paper_session_once(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple[str, ...]) -> None:
++def _run_paper_session_once(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple[str, ...],
++                            profile=None) -> None:
+     logger = _session_logger(cfg.data_dir)
+     heartbeat = cfg.data_dir / "engine_heartbeat.json"
+     label = ",".join(symbols)
+@@ -304,7 +305,7 @@
+         verify_manifest(root / "strategy.txt", root / "active_strategy.json")
+         _set_engine_expected(cfg.data_dir, expected=True, state="STARTING", symbol=label)
+         _write_heartbeat(heartbeat, status="starting", symbol=label)
+-        asyncio.run(_run(root=root, cfg=cfg, strategy=strategy, symbols=symbols))
++        asyncio.run(_run(root=root, cfg=cfg, strategy=strategy, symbols=symbols, profile=profile))
+     except KeyboardInterrupt:
+         logger.info("Paper session stopped by operator symbols=%s", label)
+         _set_engine_expected(cfg.data_dir, expected=False, state="STOPPED", symbol=label)
+@@ -412,14 +413,19 @@
+ 
+ 
+ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple[str, ...],
+-               test_mode: bool = False, test_capital: float = 100_000, live=None) -> None:
++               test_mode: bool = False, test_capital: float = 100_000, live=None, profile=None) -> None:
+     """The one strategy loop for PAPER and LIVE.
+ 
+     `live` is None for PAPER (simulated fills, unchanged). For LIVE it is a `live_execution.LiveTrader`
+     that executes the same entry/exit decisions on the broker at the points PAPER calls PaperExecutor.
++    `profile` is None for the original account. For an account profile (`account_profiles.AccountProfile`,
++    PAPER only) it sets the per-trade sizing budget to the remaining aggregate allocation and re-checks the
++    aggregate cap at the fill; the strategy's analysis and decisions are otherwise identical.
+     """
+     if live is not None and test_mode:
+         raise RuntimeError("paper-test-session cannot run with LIVE execution")
++    if profile is not None and (live is not None or test_mode):
++        raise RuntimeError("account profiles run only in a normal PAPER session")
+     mode_label = "LIVE" if live is not None else "PAPER"
+     logger = _session_logger(cfg.data_dir, test_mode=test_mode)
+     label = ",".join(symbols)
+@@ -825,16 +831,18 @@
+             except Exception as exc:
+                 data_issues.append(f"option_chain_request_failed:{type(exc).__name__}")
+                 logger.exception("Option chain request failed symbol=%s bar_timestamp=%s", symbol, bar.timestamp.isoformat())
++        cycle_equity = (live.equity() if live is not None else
++                        max(0.0, account.starting_capital + account.deposits - account.withdrawals +
++                            account.realized_pnl + account.unrealized_pnl))
++        cycle_strategy = active_strategy if profile is None else profile.cycle_strategy(active_strategy, cycle_equity, account)
+         risk_state = RiskState(
+-            equity=(live.equity() if live is not None else
+-                    max(0.0, account.starting_capital + account.deposits - account.withdrawals +
+-                        account.realized_pnl + account.unrealized_pnl)),
++            equity=cycle_equity,
+             daily_pnl=_daily_realized(account, bar_now) + account.unrealized_pnl,
+             weekly_pnl=_weekly_realized(account, bar_now) + account.unrealized_pnl,
+             consecutive_losses=_consecutive_losses(account), trades_today=_trades_today(account, bar_now),
+             open_positions=len(account.positions),
+             open_underlyings=tuple(str(position["underlying"]) for position in account.positions))
+-        records = decision_cycle(strategy=replace(active_strategy, universe=(symbol,)), strategy_path=root / "strategy.txt",
++        records = decision_cycle(strategy=replace(cycle_strategy, universe=(symbol,)), strategy_path=root / "strategy.txt",
+             manifest_path=root / "active_strategy.json", bars_by_symbol={symbol: list(bars)},
+             option_chain_by_symbol=option_chain, risk_state=risk_state, now=bar_now,
+             data_fresh=state.data_valid and quote_fresh,
+@@ -858,6 +866,12 @@
+             if available_slots(bar_now) < 1 or has_position(symbol) or (root / "KILL_SWITCH").exists():
+                 print(f"NO TRADE {symbol}: position/trade limit reached while ranking", flush=True)
+                 continue
++            if profile is not None:
++                within_cap, cap_reason = profile.entry_allowed(account, cycle_equity, decision.diagnostics["modeled_risk_dollars"])
++                if not within_cap:
++                    logger.info("NO TRADE %s: %s profile=%s", symbol, cap_reason, profile.name)
++                    print(f"NO TRADE {symbol}: {cap_reason}", flush=True)
++                    continue
+             selected = next((q for q in option_chain[symbol] if q.symbol == decision.diagnostics.get("option_candidate")), None)
+             if selected is None:
+                 print(f"NO TRADE {symbol}: selected contract quote disappeared", flush=True)

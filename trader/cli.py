@@ -29,6 +29,11 @@ def main(argv: list[str] | None = None) -> int:
     for command in (paper, paper_test):
         command.add_argument("--symbol", action="append", type=str.upper, dest="symbols",
                              help="Limit the session to this underlying (repeatable). Default: the whole strategy universe.")
+    paper.add_argument("--account-profile", choices=("small",), default=None,
+                       help="Run on an isolated account-profile PAPER ledger (small: $1,000, 40%% aggregate cap, "
+                            "expanded universe; restores the original settings at $10,000). Default: the original ledger.")
+    profile_status = sub.add_parser("profile-status", help="Show an account-profile PAPER ledger (read-only)")
+    profile_status.add_argument("--account-profile", choices=("small",), default="small")
     paper_test.add_argument("--test-capital", type=float, default=100_000,
                             help="Fake capital for the isolated paper test ledger (default: 100000)")
     back = sub.add_parser("backtest")
@@ -46,6 +51,20 @@ def main(argv: list[str] | None = None) -> int:
     activate.add_argument("--approve", action="store_true",
                           help="Owner approval: activate if the backtest passes. Without it, only report.")
     activate.add_argument("--note", default="", help="Why this change is being made (stored in the manifest)")
+    live = sub.add_parser("live-session",
+                          help="REAL-MONEY: run the active strategy through the configured tastytrade account")
+    live_check = sub.add_parser("live-check",
+                                help="Read-only LIVE readiness report (account, permissions, data); never places orders")
+    for command in (live, live_check):
+        command.add_argument("--symbol", action="append", type=str.upper, dest="symbols",
+                             help="Limit to this underlying (repeatable). Default: the whole strategy universe.")
+    live_check.add_argument("--skip-market-data", action="store_true", help="Only check account/authorization")
+    authorize = sub.add_parser("authorize-live",
+                               help="Owner action: authorize LIVE for the exact active strategy hash and account")
+    authorize.add_argument("--strategy-hash", required=True, help="Full configuration hash shown by validate-strategy")
+    authorize.add_argument("--account-suffix", required=True, help="Last 4 characters of TASTYTRADE_ACCOUNT_NUMBER")
+    authorize.add_argument("--statement", required=True, help='Exactly: "I AUTHORIZE LIVE EXECUTION OF THIS EXACT STRATEGY HASH"')
+    authorize.add_argument("--note", default="")
     dash = sub.add_parser("dashboard"); dash.add_argument("--host", default="127.0.0.1"); dash.add_argument("--port", type=int, default=8765)
     sub.add_parser("status")
     args = parser.parse_args(argv)
@@ -64,8 +83,20 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "paper-session":
             from .paper_runner import run_paper_session
             strategy = parse_strategy(root / "strategy.txt")
-            run_paper_session(root=root, cfg=cfg, strategy=strategy,
-                              symbols=tuple(args.symbols) if args.symbols else None)
+            if args.account_profile:
+                from .account_profiles import run_profile_paper_session
+                run_profile_paper_session(root=root, cfg=cfg, strategy=strategy, profile_name=args.account_profile,
+                                          symbols=tuple(args.symbols) if args.symbols else None)
+            else:
+                run_paper_session(root=root, cfg=cfg, strategy=strategy,
+                                  symbols=tuple(args.symbols) if args.symbols else None)
+        elif args.command == "profile-status":
+            from .account_profiles import ProfileConfig, ProfileLedger
+            strategy = parse_strategy(root / "strategy.txt")
+            ledger = ProfileLedger(ProfileConfig.load(root, args.account_profile), original_data_dir=cfg.data_dir)
+            status = ledger.status(strategy)
+            status.pop("universe", None)
+            print(json.dumps(status, indent=2))
         elif args.command == "paper-test-session":
             from .paper_runner import run_paper_test_session
             if cfg.mode is Mode.LIVE:
@@ -79,6 +110,22 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(_backtest(args, cfg, strategy), indent=2, allow_nan=False))
         elif args.command == "activate-strategy":
             return _activate_strategy(args, cfg, root)
+        elif args.command == "live-session":
+            from .live_session import run_live_session
+            run_live_session(root=root, cfg=cfg, symbols=tuple(args.symbols) if args.symbols else None)
+        elif args.command == "live-check":
+            from .live_session import live_readiness, write_readiness_report
+            report = live_readiness(root=root, cfg=cfg, symbols=tuple(args.symbols) if args.symbols else None,
+                                    market_data=not args.skip_market_data)
+            path = write_readiness_report(cfg, report)
+            print(json.dumps({"overall": report["overall"], "blockers": report["blockers"],
+                              "warnings": report["warnings"], "report": str(path)}, indent=2, default=str))
+            return 0 if report["overall"] == "READY" else 3
+        elif args.command == "authorize-live":
+            from .live_session import authorize_live
+            path = authorize_live(root=root, cfg=cfg, strategy_hash=args.strategy_hash,
+                                  account_suffix=args.account_suffix, statement=args.statement, note=args.note)
+            print(json.dumps({"authorized": True, "file": str(path)}, indent=2))
         elif args.command == "dashboard":
             import uvicorn
             uvicorn.run(create_app(cfg.data_dir, root), host=args.host, port=args.port)

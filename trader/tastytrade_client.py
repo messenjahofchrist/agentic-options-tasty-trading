@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import gzip
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -42,6 +43,35 @@ def _decode_content(body: bytes, content_encoding: str) -> bytes:
     return body
 
 
+class _RequestPacer:
+    """Process-wide spacing between REST request starts. tastytrade answers HTTP 429 when ~30 requests arrive
+    at once (measured 2026-10-16 with 47 concurrent quote snapshots). Off unless set_request_rate_limit() is
+    called, so the original engine's request timing is unchanged."""
+
+    def __init__(self, per_second: float, *, get_retries: int = 3, backoff_seconds: float = 1.0):
+        self.interval = 1.0 / per_second
+        self.get_retries, self.backoff_seconds = get_retries, backoff_seconds
+        self._next = 0.0
+        self._lock = threading.Lock()
+
+    def wait(self) -> None:
+        with self._lock:
+            now = time.monotonic()
+            start = max(now, self._next)
+            self._next = start + self.interval
+        if start > now:
+            time.sleep(start - now)
+
+
+_PACER: _RequestPacer | None = None
+
+
+def set_request_rate_limit(per_second: float | None) -> None:
+    """Limit this process's tastytrade REST request rate (None disables)."""
+    global _PACER
+    _PACER = _RequestPacer(per_second) if per_second else None
+
+
 class TastytradeClient:
     """Small OAuth REST client. It never submits an order except via submit_order()."""
     def __init__(self, client_id: str, client_secret: str, refresh_token: str, *, base_url: str,
@@ -64,16 +94,26 @@ class TastytradeClient:
             headers["Content-Type"] = "application/json"
             payload = json.dumps(body).encode("utf-8")
         req = urllib.request.Request(self.base_url + path, data=payload, headers=headers, method=method)
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                content = _decode_content(response.read(), response.headers.get("Content-Encoding", ""))
-                return json.loads(content.decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            content = _decode_content(exc.read(), exc.headers.get("Content-Encoding", ""))
-            detail = content.decode("utf-8", errors="replace")[:1000]
-            raise BrokerError(f"tastytrade HTTP {exc.code} for {method} {path}: {detail} (status={exc.code})") from exc
-        except (urllib.error.URLError, TimeoutError) as exc:
-            raise TransportError(f"tastytrade request failed: {exc}") from exc
+        # With pacing on, a read-only GET refused with 429 is retried after a short backoff. Never a POST,
+        # PUT or DELETE: order submission and cancellation are not repeated by this layer.
+        attempts = _PACER.get_retries + 1 if _PACER is not None and method == "GET" else 1
+        for attempt in range(attempts):
+            if _PACER is not None:
+                _PACER.wait()
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                    content = _decode_content(response.read(), response.headers.get("Content-Encoding", ""))
+                    return json.loads(content.decode("utf-8"))
+            except urllib.error.HTTPError as exc:
+                content = _decode_content(exc.read(), exc.headers.get("Content-Encoding", ""))
+                detail = content.decode("utf-8", errors="replace")[:1000]
+                if exc.code == 429 and attempt + 1 < attempts:
+                    time.sleep(_PACER.backoff_seconds * (attempt + 1))
+                    continue
+                raise BrokerError(f"tastytrade HTTP {exc.code} for {method} {path}: {detail} (status={exc.code})") from exc
+            except (urllib.error.URLError, TimeoutError) as exc:
+                raise TransportError(f"tastytrade request failed: {exc}") from exc
+        raise AssertionError("unreachable")
 
     def clock_offset_seconds(self, samples: int = 3) -> float:
         """Estimate (tastytrade server clock - local clock) from the HTTP Date header.
@@ -130,6 +170,21 @@ class TastytradeClient:
     def orders(self, account: str) -> Any:
         return self.get(f"/accounts/{urllib.parse.quote(account, safe='')}/orders")
 
+    def trading_status(self, account: str) -> Any:
+        return self.get(f"/accounts/{urllib.parse.quote(account, safe='')}/trading-status")
+
+    def live_orders(self, account: str) -> Any:
+        """Orders still working at the broker plus those that reached a terminal state today."""
+        return self.get(f"/accounts/{urllib.parse.quote(account, safe='')}/orders/live")
+
+    def order(self, account: str, order_id: str | int) -> Any:
+        return self.get(f"/accounts/{urllib.parse.quote(account, safe='')}/orders/{urllib.parse.quote(str(order_id), safe='')}")
+
+    def cancel_order(self, account: str, order_id: str | int) -> Any:
+        """Request cancellation. The response is a request only; poll order() until it reports Cancelled."""
+        path = f"/accounts/{urllib.parse.quote(account, safe='')}/orders/{urllib.parse.quote(str(order_id), safe='')}"
+        return self._request("DELETE", path)
+
     def quotes(self, query: str) -> Any:
         return self.get("/market-data/by-type?" + query)
 
@@ -178,6 +233,10 @@ class TastytradeClient:
             raise
 
     def find_order_by_external_id(self, account: str, external_id: str) -> dict | None:
-        response = self.orders(account)
-        items = response.get("data", {}).get("items", [])
-        return next((item for item in items if item.get("external-identifier") == external_id), None)
+        # /orders/live covers every order touched today; /orders is the paginated history fallback.
+        for response in (self.live_orders(account), self.orders(account)):
+            items = response.get("data", {}).get("items", [])
+            found = next((item for item in items if item.get("external-identifier") == external_id), None)
+            if found is not None:
+                return found
+        return None

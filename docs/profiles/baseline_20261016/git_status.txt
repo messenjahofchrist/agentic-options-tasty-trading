@@ -1,0 +1,14 @@
+# git status --short at 2026-10-16T14:49:41Z (HEAD 8a65e53f9bedc0142064b31ded3dba3532458582)
+ M .env.example
+ M .gitignore
+ M README.md
+ M docs/operations.md
+ M trader/cli.py
+ M trader/live_execution.py
+ M trader/paper_runner.py
+ M trader/tastytrade_client.py
+?? docs/live/
+?? docs/live_trading.md
+?? docs/profiles/
+?? tests/test_live.py
+?? trader/live_session.py

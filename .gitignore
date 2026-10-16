@@ -213,6 +213,8 @@ tempCodeRunnerFile.py
 data/
 KILL_SWITCH
 *.jsonl
+# Owner LIVE authorization (binds the strategy hash to an account fingerprint); local only
+live_authorization.json
 
 # PyPI configuration file
 .pypirc
