@@ -86,6 +86,27 @@ Task state and recent outcomes:
 
 The supervisor lock prevents overlapping reviews and removes only locks whose recorded process is no longer running. A reviewer gets one bounded retry. A failed reviewer makes the consolidated review incomplete. A failed email is recorded locally; it is not treated as successful delivery.
 
+## Crash alerts (phone)
+
+Added 2026-10-16 after a one-minute PDD feed gap stopped the small-account session at 13:45 CT and left three
+paper positions unmanaged through the close.
+
+- **Feed gaps no longer stop the session.**
+  - The runner retries a missed minute's backfill 3 times, at 5 s and then 10 s.
+  - If it still fails on a symbol that holds a PAPER position, that position is sold at a fresh bid (`data_failure_protective_exit`) and only that symbol is switched off.
+  - Without a fresh quote, the position stays open and the session fails closed, as before.
+  - LIVE behaviour is unchanged.
+- **The watchdog checks every engine.** It covers the original one and each `profiles/*.json` profile.
+  - Profile engines never write or clear the shared `KILL_SWITCH`.
+  - A failed or stale engine sends one email and one phone push per failure. The push is `urgent` when positions are open.
+- **Phone push (ntfy).**
+  - Set `NTFY_URL=https://ntfy.sh/<long random topic>` in `.env` and subscribe to that topic in the ntfy app.
+  - Pushes go out for engine down, protective exit and positions unresolved at the close. Other alerts stay email-only.
+- **Dead-man's switch.**
+  - Set `HEALTHCHECK_URL` to an external check, for example healthchecks.io.
+  - Each watchdog run pings it, or pings `/fail` when an engine is critical.
+  - Give the check a schedule that matches the Watchdog task (weekdays 08:25–15:25 CT, every minute) and a few minutes' grace. The service then alerts you when the pings stop, which is the one failure no local monitor can report: the PC asleep, offline or off.
+
 ## Required before LIVE
 
 The LIVE workflow (`live-check`, `authorize-live`, `live-session`), its readiness reports and the open blockers are documented in [`live_trading.md`](live_trading.md).

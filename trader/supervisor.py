@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 from .config import load_dotenv
 from .logging_utils import append_jsonl
 from .metrics import calculate_performance
-from .notifications import email_configured as _email_configured, send_email
+from .notifications import email_configured as _email_configured, ping_dead_man, push_configured, send_email, send_push
 from .strategy_loader import verify_manifest
 from .watchdog import KillSwitch
 
@@ -618,8 +618,12 @@ def status(root: Path = ROOT, data_dir: Path = DATA) -> dict[str, Any]:
 
 def watchdog_check(*, root: Path = ROOT, data_dir: Path = DATA, now: datetime | None = None,
                    max_heartbeat_age_seconds: int = 100,
-                   startup_grace_seconds: int = 300) -> dict[str, Any]:
-    """Fail closed during market hours; never restart or flatten an uncertain paper position."""
+                   startup_grace_seconds: int = 300, engine_label: str = "PAPER engine",
+                   manage_kill_switch: bool = True) -> dict[str, Any]:
+    """Fail closed during market hours; never restart or flatten an uncertain paper position.
+
+    manage_kill_switch=False (account-profile engines) alerts without writing or clearing the shared
+    KILL_SWITCH, so one engine's health can neither block nor unblock another engine's entries."""
     load_dotenv(root / ".env")
     check_time = now or datetime.now(timezone.utc)
     from .calendar import MarketCalendar
@@ -670,12 +674,14 @@ def watchdog_check(*, root: Path = ROOT, data_dir: Path = DATA, now: datetime | 
     switch = KillSwitch(root / "KILL_SWITCH")
     switch_active = switch.entries_blocked()
     healthy_state = state == "RUNNING" or (state == "KILL_SWITCH_ACTIVE" and switch_active)
+    if not manage_kill_switch and state == "KILL_SWITCH_ACTIVE":
+        healthy_state = True  # alive with entries blocked; the shared switch is the original engine's to manage
     # Allow a small negative age: the engine and watchdog write/read the heartbeat concurrently, and a
     # 0.28s "future" heartbeat falsely tripped the kill switch on 2026-10-13.
     healthy = bool(healthy_state and age is not None and -HEARTBEAT_FUTURE_TOLERANCE_SECONDS <= age <= max_heartbeat_age_seconds)
     if healthy:
         status = "kill_switch_active" if state == "KILL_SWITCH_ACTIVE" else "healthy"
-        if switch_active and switch.source() == "watchdog":
+        if manage_kill_switch and switch_active and switch.source() == "watchdog":
             # The engine is alive and writing fresh heartbeats again, so the condition this watchdog
             # blocked entries for has cleared. Kill switches written by hand are left alone.
             switch.reset()
@@ -693,36 +699,73 @@ def watchdog_check(*, root: Path = ROOT, data_dir: Path = DATA, now: datetime | 
         return result
     account = _safe_json(data_dir / "paper_account.json", {})
     open_positions = len(account.get("positions", []))
-    reason = f"engine expected state failed health validation (state={state}, age_seconds={age})"
-    if not switch_active:
+    reason = f"{engine_label} expected state failed health validation (state={state}, age_seconds={age})"
+    if manage_kill_switch and not switch_active:
         # Never overwrite an existing (possibly hand-made) switch, which would make it auto-clearable.
         switch.block_entries(reason, source="watchdog")
     fingerprint = f"{heartbeat.get('updated_at_utc') if isinstance(heartbeat, dict) else 'missing'}:{heartbeat.get('status') if isinstance(heartbeat, dict) else 'missing'}:{open_positions}"
     alert_file = data_dir / "watchdog_alert_state.json"
     prior = _safe_json(alert_file, {})
-    alert_sent = bool(prior.get("fingerprint") == fingerprint and prior.get("email_sent"))
-    email_error = None
-    if not alert_sent:
-        if _email_configured():
-            try:
-                send_email("CRITICAL: OptioBot PAPER engine heartbeat failure",
-                           f"UTC: {now.isoformat()}\nMode: PAPER\nIssue: {reason}\nHeartbeat age seconds: {age}\nOpen simulated positions: {open_positions}\nNew entries were blocked using KILL_SWITCH. The engine restarts itself after connection failures, and the watchdog clears this switch automatically once the engine's heartbeat is healthy again. No position close was attempted.")
-                alert_sent = True
-            except (OSError, RuntimeError, ValueError, smtplib.SMTPException) as exc:
-                email_error = f"{type(exc).__name__}: {exc}"
+    same = prior.get("fingerprint") == fingerprint
+    alert_sent = bool(same and prior.get("email_sent"))
+    push_sent = bool(same and prior.get("push_sent"))
+    email_error = push_error = None
+    switch_note = ("New entries were blocked using KILL_SWITCH. The engine restarts itself after connection failures, "
+                   "and the watchdog clears this switch automatically once the engine's heartbeat is healthy again."
+                   if manage_kill_switch else "This engine's watchdog does not use the shared KILL_SWITCH.")
+    if not alert_sent and _email_configured():
+        try:
+            send_email(f"CRITICAL: OptioBot {engine_label} heartbeat failure",
+                       f"UTC: {now.isoformat()}\nMode: PAPER\nIssue: {reason}\nHeartbeat age seconds: {age}\nOpen simulated positions: {open_positions}\n{switch_note} No position close was attempted.")
+            alert_sent = True
+        except (OSError, RuntimeError, ValueError, smtplib.SMTPException) as exc:
+            email_error = f"{type(exc).__name__}: {exc}"
+    if not push_sent and push_configured():
+        try:
+            age_text = "no heartbeat" if age is None else f"no heartbeat for {int(age // 60)} min"
+            send_push(f"OptioBot {engine_label} DOWN" + (f" - {open_positions} OPEN" if open_positions else ""),
+                      f"State {state}, {age_text}. Open simulated positions: {open_positions}. "
+                      "Check the engine window and the report.",
+                      priority="urgent" if open_positions else "high", tags="rotating_light")
+            push_sent = True
+        except (OSError, RuntimeError, ValueError) as exc:
+            push_error = f"{type(exc).__name__}: {exc}"
+    if not same or email_error or push_error:
         alert = {"timestamp_utc": now.isoformat(), "severity": "critical", "fingerprint": fingerprint,
                  "reason": reason, "heartbeat_age_seconds": age, "open_positions": open_positions,
-                 "kill_switch_written": True, "email_sent": alert_sent, "email_error": email_error}
+                 "kill_switch_written": manage_kill_switch, "email_sent": alert_sent, "email_error": email_error,
+                 "push_sent": push_sent, "push_error": push_error}
         append_jsonl(data_dir / "critical_alerts.jsonl", alert)
-        alert_file.parent.mkdir(parents=True, exist_ok=True)
-        alert_file.write_text(json.dumps({"fingerprint": fingerprint, "email_sent": alert_sent}, indent=2) + "\n", encoding="utf-8")
+    alert_file.parent.mkdir(parents=True, exist_ok=True)
+    alert_file.write_text(json.dumps({"fingerprint": fingerprint, "email_sent": alert_sent, "push_sent": push_sent},
+                                     indent=2) + "\n", encoding="utf-8")
     result = {"status": "critical", "checked_at_utc": now.isoformat(), "heartbeat_age_seconds": age,
-              "open_positions": open_positions, "kill_switch_written": True,
-              "email_sent": alert_sent, "email_error": email_error}
+              "open_positions": open_positions, "kill_switch_written": manage_kill_switch,
+              "email_sent": alert_sent, "email_error": email_error, "push_sent": push_sent, "push_error": push_error}
     append_jsonl(data_dir / "watchdog.jsonl", result)
     _save_status({"watchdog_at_utc": now.isoformat(), "watchdog_status": "critical",
                   "watchdog_email_sent": alert_sent, "watchdog_error": email_error}, data_dir)
     return result
+
+
+def watchdog_all(*, root: Path = ROOT, data_dir: Path = DATA, now: datetime | None = None) -> dict[str, Any]:
+    """Check the original engine and every account-profile engine, then ping the dead-man's switch: a plain
+    ping when nothing is critical, a /fail ping otherwise. The external service alerts if pings stop."""
+    results = {"original": watchdog_check(root=root, data_dir=data_dir, now=now)}
+    for config_path in sorted((root / "profiles").glob("*.json")):
+        config = _safe_json(config_path, {})
+        if not isinstance(config, dict) or "ledger_id" not in config or "data_dir" not in config:
+            continue  # e.g. the universe file
+        profile_dir = (root / config["data_dir"]).resolve()
+        if profile_dir == data_dir.resolve():
+            continue
+        results[config["ledger_id"]] = watchdog_check(root=root, data_dir=profile_dir, now=now,
+                                                      engine_label=f"{config['ledger_id']} engine",
+                                                      manage_kill_switch=False)
+    critical = sorted(name for name, result in results.items() if result["status"] == "critical")
+    detail = "; ".join(f"{name}: {result['status']}" for name, result in results.items())
+    return {"status": "critical" if critical else "ok", "critical": critical, "engines": results,
+            "dead_man_ping": ping_dead_man(failed=bool(critical), detail=detail)}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -744,7 +787,7 @@ def main(argv: list[str] | None = None) -> int:
             result = run_email_test()
             return 0 if result["status"] == "sent" else 2
         elif args.command == "watchdog":
-            result = watchdog_check()
+            result = watchdog_all()
             print(json.dumps(result, indent=2))
             return 2 if result["status"] == "critical" else 0
         else:

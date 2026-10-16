@@ -1,0 +1,172 @@
+diff --git a/trader/paper_runner.py b/trader/paper_runner.py
+index 6f07fdc..ec742af 100644
+--- a/trader/paper_runner.py
++++ b/trader/paper_runner.py
+@@ -34,6 +34,9 @@ MAX_ENGINE_RESTARTS = 20
+ # How long the first symbol to qualify in a minute waits for other symbols' bars before ranking.
+ ENTRY_ARBITRATION_SECONDS = 3.0
+ MAX_CLOCK_OFFSET_SECONDS = 2.0
++# A one-minute live-feed gap is backfilled from history; the provider can lag a few seconds behind.
++GAP_RECOVERY_ATTEMPTS = 3
++GAP_RECOVERY_RETRY_SECONDS = 5.0
+ MAX_QUOTE_FUTURE_SECONDS = 2.5
+ 
+ 
+@@ -94,6 +97,15 @@ def _write_heartbeat(path: Path, *, status: str, symbol: str, mode: str = "PAPER
+     atomic_replace(temporary, path)
+ 
+ 
++def _ledger_position_count(data_dir: Path) -> int:
++    """Open positions in the paper ledger, for heartbeats written outside the session loop (a failed or
++    stopped session must not report 0 while positions are still open)."""
++    try:
++        return len(json.loads((data_dir / "paper_account.json").read_text(encoding="utf-8")).get("positions", []))
++    except (OSError, ValueError, AttributeError):
++        return 0
++
++
+ def _write_recovery_checkpoint(data_dir: Path, *, symbol: str, trading_date: str,
+                                provider: str, timestamp: datetime) -> Path:
+     """Persist validated progress, while still revalidating the full session on restart."""
+@@ -309,13 +321,14 @@ def _run_paper_session_once(*, root: Path, cfg: AppConfig, strategy: Strategy, s
+     except KeyboardInterrupt:
+         logger.info("Paper session stopped by operator symbols=%s", label)
+         _set_engine_expected(cfg.data_dir, expected=False, state="STOPPED", symbol=label)
+-        _write_heartbeat(heartbeat, status="stopped", symbol=label)
++        _write_heartbeat(heartbeat, status="stopped", symbol=label, open_positions=_ledger_position_count(cfg.data_dir))
+         raise
+     except Exception as exc:
+         logger.exception("Paper session failed symbols=%s error_type=%s", label, type(exc).__name__)
+         try:
+             _set_engine_expected(cfg.data_dir, expected=True, state="FAILED", symbol=label)
+-            _write_heartbeat(heartbeat, status="failed", symbol=label, error=type(exc).__name__)
++            _write_heartbeat(heartbeat, status="failed", symbol=label, error=type(exc).__name__,
++                             open_positions=_ledger_position_count(cfg.data_dir))
+             record_critical_alert("paper_engine_runtime_failure", mode="PAPER",
+                                   details={"symbols": list(symbols), "error_type": type(exc).__name__,
+                                            "error": str(exc)}, data_dir=cfg.data_dir)
+@@ -325,7 +338,7 @@ def _run_paper_session_once(*, root: Path, cfg: AppConfig, strategy: Strategy, s
+     else:
+         logger.info("Paper session ended normally symbols=%s", label)
+         _set_engine_expected(cfg.data_dir, expected=False, state="STOPPED", symbol=label)
+-        _write_heartbeat(heartbeat, status="stopped", symbol=label)
++        _write_heartbeat(heartbeat, status="stopped", symbol=label, open_positions=_ledger_position_count(cfg.data_dir))
+     finally:
+         _close_session_log_file(logger)
+ 
+@@ -617,6 +630,50 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+         return min(int(strategy.risk["max_open_positions"]) - len(account.positions) - pending,
+                    int(strategy.risk["max_trades_per_day"]) - _trades_today(account, moment) - pending)
+ 
++    def book_paper_exit(position_data: dict, quote: OptionQuote, why: str, when: datetime) -> float:
++        """Sell a simulated position at the quote's bid and book the paper_close record."""
++        position = _position_from_record(position_data)
++        fill = executor.fill(quote, "SELL", position.quantity, why, when)
++        account.ledger[-1].update({"strategy_id": position_data.get("strategy_id"),
++                                   "strategy_version": position_data["strategy_version"],
++                                   "strategy_hash": position_data["strategy_hash"]})
++        realized = realized_option_pnl(entry_fill_price=position.entry_price, exit_fill_price=fill.fill_price,
++            quantity=position.quantity, entry_fees=float(position_data["entry_fees"]), exit_fees=fill.fees)
++        account.realized_pnl += realized
++        account.ledger.append({"type": "paper_close", "trade_id": position.trade_id,
++                               "realized_pnl": realized, "actual_realized_pnl": realized,
++                               "planned_risk_dollars": position_data.get("planned_risk_dollars"),
++                               "modeled_risk_dollars": position_data.get("modeled_risk_dollars"),
++                               "premium_exposure_dollars": position_data.get("premium_exposure_dollars"),
++                               "actual_r_multiple": realized / max(float(position_data.get("modeled_risk_dollars", 0)), 1e-9),
++                               "strategy_id": position_data.get("strategy_id"),
++                               "strategy_version": position_data["strategy_version"],
++                               "strategy_hash": position_data["strategy_hash"],
++                               "underlying": position_data["underlying"], "reason": why, "timestamp": when.isoformat()})
++        account.positions.remove(position_data)
++        account.unrealized_pnl = _unrealized_pnl(account, executor)
++        print(f"PAPER EXIT {position_data['underlying']} {position.symbol} {why}; net=${realized:.2f}", flush=True)
++        return realized
++
++    async def protective_exit(symbol: str, exc: Exception) -> None:
++        """PAPER: a symbol whose data failed can no longer be managed by the strategy's exit rules. Rather than
++        stop the whole session (leaving every position unmanaged), sell that symbol's positions at a fresh bid.
++        A position without a fresh quote stays open, and disable() then fails the session as before."""
++        for position_data in [p for p in account.positions if p["underlying"] == symbol]:
++            try:
++                quote = (await asyncio.to_thread(_option_marks, client, [position_data]))[0]
++            except Exception:
++                logger.exception("Protective exit quote failed symbol=%s option=%s", symbol, position_data["symbol"])
++                continue
++            if position_data not in account.positions or not _fresh_quote(quote, datetime.now(timezone.utc)):
++                continue
++            realized = book_paper_exit(position_data, quote, "data_failure_protective_exit", datetime.now(timezone.utc))
++            save_account(account_path, account)
++            record_critical_alert("paper_position_protective_exit", mode="PAPER",
++                details={"trade_id": str(position_data["trade_id"]), "option_symbol": position_data["symbol"],
++                         "underlying": symbol, "realized_pnl": round(realized, 2),
++                         "error_type": type(exc).__name__, "error": str(exc)}, data_dir=cfg.data_dir)
++
+     arbiter = _EntryArbiter(available_slots, ENTRY_ARBITRATION_SECONDS)
+     queues: dict[str, asyncio.Queue] = {symbol: asyncio.Queue() for symbol in symbols}
+ 
+@@ -666,10 +723,21 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+                 # Fetch up to the live bar (exclusive end would equal gap_start for a single-minute
+                 # gap, which the provider rejects as start==end); _validated_session_history trims the
+                 # result back to [gap_start, gap_end], so the extra trailing minute is dropped.
+-                recovered_batch = await history_provider.fetch(symbol=symbol, start=gap_start, end=bar.timestamp)
+-                gap_audit.update(recovered_batch.audit)
+-                recovered = _validated_session_history(list(recovered_batch.candles), session_open=gap_start,
+-                                                       last_completed_bar=gap_end, audit=gap_audit)
++                # The provider often publishes a just-missed minute a few seconds later, so retry briefly.
++                for attempt in range(1, GAP_RECOVERY_ATTEMPTS + 1):
++                    try:
++                        gap_audit = {"gap_recovery_attempts": attempt}
++                        recovered_batch = await history_provider.fetch(symbol=symbol, start=gap_start, end=bar.timestamp)
++                        gap_audit.update(recovered_batch.audit)
++                        recovered = _validated_session_history(list(recovered_batch.candles), session_open=gap_start,
++                                                               last_completed_bar=gap_end, audit=gap_audit)
++                        break
++                    except Exception:
++                        if attempt == GAP_RECOVERY_ATTEMPTS:
++                            raise
++                        logger.warning("%s: live-feed gap recovery attempt %d/%d failed; retrying",
++                                       symbol, attempt, GAP_RECOVERY_ATTEMPTS)
++                        await asyncio.sleep(GAP_RECOVERY_RETRY_SECONDS * attempt)
+                 bars.extend(recovered)
+                 if recovered:
+                     _write_recovery_checkpoint(cfg.data_dir, symbol=symbol,
+@@ -773,26 +841,7 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+                     positions_mark_fresh = False  # exit incomplete: keep managing, block new entries
+                 account.unrealized_pnl = _unrealized_pnl(account, executor)
+             elif why:
+-                fill = executor.fill(quote, "SELL", position.quantity, why, bar_now)
+-                account.ledger[-1].update({"strategy_id": position_data.get("strategy_id"),
+-                                           "strategy_version": position_data["strategy_version"],
+-                                           "strategy_hash": position_data["strategy_hash"]})
+-                realized = realized_option_pnl(entry_fill_price=position.entry_price, exit_fill_price=fill.fill_price,
+-                    quantity=position.quantity, entry_fees=float(position_data["entry_fees"]), exit_fees=fill.fees)
+-                account.realized_pnl += realized
+-                account.ledger.append({"type": "paper_close", "trade_id": position.trade_id,
+-                                       "realized_pnl": realized, "actual_realized_pnl": realized,
+-                                       "planned_risk_dollars": position_data.get("planned_risk_dollars"),
+-                                       "modeled_risk_dollars": position_data.get("modeled_risk_dollars"),
+-                                       "premium_exposure_dollars": position_data.get("premium_exposure_dollars"),
+-                                       "actual_r_multiple": realized / max(float(position_data.get("modeled_risk_dollars", 0)), 1e-9),
+-                                       "strategy_id": position_data.get("strategy_id"),
+-                                       "strategy_version": position_data["strategy_version"],
+-                                       "strategy_hash": position_data["strategy_hash"],
+-                                       "underlying": symbol, "reason": why, "timestamp": bar_now.isoformat()})
+-                account.positions.remove(position_data)
+-                account.unrealized_pnl = _unrealized_pnl(account, executor)
+-                print(f"PAPER EXIT {symbol} {position.symbol} {why}; net=${realized:.2f}", flush=True)
++                book_paper_exit(position_data, quote, why, bar_now)
+             else:
+                 position_data["mfe"] = position.mfe
+                 position_data["mae"] = position.mae
+@@ -936,7 +985,9 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+             try:
+                 await process_bar(state, item)
+             except Exception as exc:
+-                disable(state, exc)  # re-raises if the symbol holds a position or the feed failed
++                if live is None and has_position(state.symbol) and not _is_connection_failure(exc):
++                    await protective_exit(state.symbol, exc)
++                disable(state, exc)  # re-raises if the symbol still holds a position or the feed failed
+                 return
+ 
+     if test_mode:
