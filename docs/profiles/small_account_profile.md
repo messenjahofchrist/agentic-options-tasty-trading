@@ -19,7 +19,10 @@ Everything else is the strategy's own and identical in both profiles: candles, i
 python -m trader.cli paper-session --account-profile small   # PAPER only; refuses TRADING_MODE=LIVE
 python -m trader.cli profile-status                          # read-only JSON summary
 python -m trader.cli dashboard                               # "PROFILE: …" panel above the original account
+python -m trader.cli profile-report                          # writes data/profiles/small_account_paper/report.html
 ```
+
+`report.html` is self-contained: open it from disk; it reloads itself every 60 s. The scheduled task `\OptioBot\SmallAccountReport` regenerates it every 2 minutes (hidden, read-only: it reads the ledger files and writes only `report.html` and `report.json`).
 
 It is a separate process from the scheduled original engine. Both share the same `KILL_SWITCH`. The watchdog, scheduled task and original heartbeat (`data/engine_heartbeat.json`) are untouched. The profile writes its own heartbeat, logs, decisions and alerts under `data/profiles/small_account_paper/`, and **the watchdog does not monitor it**.
 

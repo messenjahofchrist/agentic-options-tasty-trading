@@ -34,6 +34,9 @@ def main(argv: list[str] | None = None) -> int:
                             "expanded universe; restores the original settings at $10,000). Default: the original ledger.")
     profile_status = sub.add_parser("profile-status", help="Show an account-profile PAPER ledger (read-only)")
     profile_status.add_argument("--account-profile", choices=("small",), default="small")
+    profile_report = sub.add_parser("profile-report",
+                                    help="Write a self-updating HTML report of an account-profile PAPER ledger (read-only)")
+    profile_report.add_argument("--account-profile", choices=("small",), default="small")
     paper_test.add_argument("--test-capital", type=float, default=100_000,
                             help="Fake capital for the isolated paper test ledger (default: 100000)")
     back = sub.add_parser("backtest")
@@ -97,6 +100,9 @@ def main(argv: list[str] | None = None) -> int:
             status = ledger.status(strategy)
             status.pop("universe", None)
             print(json.dumps(status, indent=2))
+        elif args.command == "profile-report":
+            from .profile_report import write_report
+            print(write_report(root, cfg.data_dir, args.account_profile))
         elif args.command == "paper-test-session":
             from .paper_runner import run_paper_test_session
             if cfg.mode is Mode.LIVE:

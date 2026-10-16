@@ -273,15 +273,15 @@ class ProfileLedger:
         today = datetime.now(timezone.utc).date().isoformat()
         signals = affordable = 0
         rejections: dict[str, int] = {}
-        decisions_path = self.data_dir / "decisions.jsonl"
-        if decisions_path.exists():
-            prefix = '{"timestamp": "' + today  # Decision.to_dict() writes timestamp first
+        for decisions_path in today_decision_logs(self.data_dir, today):
             for line in decisions_path.read_text(encoding="utf-8").splitlines():
-                if not line.startswith(prefix):
+                if today not in line:
                     continue
                 try:
                     row = json.loads(line)
                 except json.JSONDecodeError:
+                    continue
+                if not str(row.get("timestamp", "")).startswith(today):
                     continue
                 diag = row.get("diagnostics", {})
                 if not diag.get("underlying_signal"):
@@ -307,6 +307,15 @@ class ProfileLedger:
                 "progress_to_threshold": round(min(1.0, self.verified_equity(account) / self.config.transition_equity), 4),
                 "transitions": state.get("transitions", []),
                 "strategy_hash": strategy.sha256 if strategy else self.config.baseline.get("configuration_hash")}
+
+
+def today_decision_logs(data_dir: Path, today: str) -> list[Path]:
+    """decisions.jsonl plus the archives append_jsonl rotated out of it today (it rotates at 10 MB, which a
+    47-symbol session reaches about hourly). Lines are written with sorted keys, so filter by parsed timestamp."""
+    stamp = today.replace("-", "")
+    archives = sorted(p for p in data_dir.glob("decisions.jsonl.*.archive") if p.name.split(".")[2].startswith(stamp))
+    current = data_dir / "decisions.jsonl"
+    return archives + ([current] if current.is_file() else [])
 
 
 def run_profile_paper_session(*, root: Path, cfg, strategy: Strategy, profile_name: str = "small",
