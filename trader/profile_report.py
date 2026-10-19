@@ -118,7 +118,8 @@ def build_report(root: Path, original_data_dir: Path, profile_name: str = "small
             if match and match.group(1) == today:
                 reason = match.group(3)
                 reason = "candle history out of order" if "out of order" in reason else \
-                         "live-feed gap could not be recovered" if "gap" in reason else reason[:120]
+                         "live-feed gap could not be recovered" if "gap" in reason else \
+                         "startup history missing a minute" if "bootstrap incomplete" in reason else reason[:120]
                 disabled.append({"symbol": match.group(2), "reason": reason})
 
     heartbeat = _read_json(data_dir / "engine_heartbeat.json", {})

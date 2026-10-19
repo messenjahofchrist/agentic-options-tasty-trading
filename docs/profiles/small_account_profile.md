@@ -129,3 +129,7 @@ All of these are verified by `tests/test_profiles.py` or a live read-only check:
 - **Weekly limit:** 40% (~$400 at $1,000) by owner decision on 2026-10-19, after the strategy's 5% (~$48) blocked entries following a single stopped trade. It counts realized P/L since Monday plus open positions' marks. Only `max_daily_loss_fraction` and `max_weekly_loss_fraction` can be overridden; the loader rejects anything else.
 - **Weekly limit:** still the strategy's 5% ($50 at $1,000), along with 3 consecutive losses. The weekly limit will usually bind before the daily one.
 - **No LIVE:** this profile is PAPER-only. Nothing here sends broker orders or changes LIVE behavior.
+
+## End-of-day summary
+
+`python -m trader.cli profile-eod --account-profile small` (scheduled task `\OptioBot\SmallAccountEndOfDay`, weekdays 3:20 PM CT) lists every contract bought that day with its exit and P/L, plus the day's opening cash (reconstructed from the day's fills), closing cash, day/week/total P/L and fees. It writes `eod/eod-YYYY-MM-DD.html` and `.json` in the profile data directory, emails the text version and pushes a one-line result to the phone. A position still open at that time breaks the no-overnight rule (`flatten_at_session_close` closes everything ~1 minute before the close), so the push is urgent and says `N OPEN OVERNIGHT`. `--no-notify` writes the files only.
