@@ -258,7 +258,7 @@ class ProfileLedger:
         return (replace(strategy, universe=self.config.small_universe, risk=risk),
                 AccountProfile(SMALL, self.config.small_allocation_fraction))
 
-    def status(self, strategy: Strategy | None = None) -> dict[str, Any]:
+    def status(self, strategy: Strategy | None = None, now: datetime | None = None) -> dict[str, Any]:
         """Dashboard / CLI summary of the profile ledger and today's scanning outcome."""
         state = self.state()
         if not state:
@@ -270,7 +270,7 @@ class ProfileLedger:
         cap = policy.allocation_cap(equity)
         exposure = policy.open_exposure(account)
         universe = self.config.small_universe if active == SMALL else tuple(self.config.baseline["universe"])
-        today = datetime.now(timezone.utc).date().isoformat()
+        today = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).date().isoformat()
         signals = affordable = 0
         rejections: dict[str, int] = {}
         for decisions_path in today_decision_logs(self.data_dir, today):

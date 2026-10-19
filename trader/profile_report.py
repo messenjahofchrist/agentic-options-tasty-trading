@@ -53,7 +53,7 @@ def build_report(root: Path, original_data_dir: Path, profile_name: str = "small
     now = now or datetime.now(timezone.utc)
     config = ProfileConfig.load(root, profile_name)
     ledger = ProfileLedger(config, original_data_dir=original_data_dir)
-    status = ledger.status()
+    status = ledger.status(now=now)
     status.pop("universe", None)
     data_dir = config.data_dir
     account = _read_json(data_dir / "paper_account.json", {})
