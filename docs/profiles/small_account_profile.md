@@ -10,6 +10,7 @@ Only three things differ from the original account:
 | Allocation | Combined maximum loss of open positions ≤ **40% of equity** ($400 at $1,000). One trade may use what is left of that pool (owner's choice). | strategy's own: ≤ 10% of equity per trade, no extra cap |
 | Universe | 47 symbols: the original 14 plus 33 audited additions (`profiles/small_account_universe.json`) | the original 14, from `strategy.txt` |
 | Daily loss limit | **20% of equity** ($200 at $1,000). Owner-authorized 2026-10-16 as `risk_overrides` in `profiles/small_account.json` | strategy's own 2% |
+| Weekly loss limit | **40% of equity** (~$400 at $1,000). Owner-authorized 2026-10-19 as `risk_overrides` in `profiles/small_account.json` | strategy's own 5% |
 
 Everything else is the strategy's own and identical in both profiles: candles, indicators, opening range, signals, filters, contract selection, exits, the 1-contract limit, 4 open positions, 6 trades a day, and the weekly and consecutive-loss limits.
 
@@ -124,6 +125,7 @@ All of these are verified by `tests/test_profiles.py` or a live read-only check:
 
 ## Things to know
 
-- **Daily limit:** 20% ($200 at $1,000) by owner decision on 2026-10-16. It feeds the strategy's daily-loss entry block and its daily-loss exit, just as the strategy's own 2% would. Only `max_daily_loss_fraction` can be overridden; the loader rejects anything else.
+- **Daily limit:** 20% ($200 at $1,000) by owner decision on 2026-10-16. It feeds the strategy's daily-loss entry block and its daily-loss exit, just as the strategy's own 2% would. 
+- **Weekly limit:** 40% (~$400 at $1,000) by owner decision on 2026-10-19, after the strategy's 5% (~$48) blocked entries following a single stopped trade. It counts realized P/L since Monday plus open positions' marks. Only `max_daily_loss_fraction` and `max_weekly_loss_fraction` can be overridden; the loader rejects anything else.
 - **Weekly limit:** still the strategy's 5% ($50 at $1,000), along with 3 consecutive losses. The weekly limit will usually bind before the daily one.
 - **No LIVE:** this profile is PAPER-only. Nothing here sends broker orders or changes LIVE behavior.

@@ -42,7 +42,7 @@ def make_root(tmp: Path, *, universe=EXPANDED) -> Path:
         "starting_balance": 1000, "original_account_baseline": "baseline/original.json",
         "transition": {"equity_threshold": 10000, "to": ORIGINAL, "one_way": True},
         "profiles": {SMALL: {"mode": "PAPER", "max_aggregate_allocation_fraction": 0.40, "universe_file": "profiles/universe.json",
-                             "risk_overrides": {"max_daily_loss_fraction": 0.20}},
+                             "risk_overrides": {"max_daily_loss_fraction": 0.20, "max_weekly_loss_fraction": 0.40}},
                      ORIGINAL: {"mode": "PAPER", "restore": "original_account_baseline"}}}))
     return tmp
 
@@ -109,8 +109,10 @@ class ProfileUnitTests(unittest.TestCase):
         run, policy = self.ledger.runtime(self.strategy)
         self.assertEqual((list(run.universe), policy.name, policy.allocation_fraction), (EXPANDED, SMALL, 0.40))
         self.assertEqual((run.rules, run.sha256, run.execution), (self.strategy.rules, self.strategy.sha256, self.strategy.execution))
-        self.assertEqual({k for k in self.strategy.risk if run.risk[k] != self.strategy.risk[k]}, {"max_daily_loss_fraction"})
+        self.assertEqual({k for k in self.strategy.risk if run.risk[k] != self.strategy.risk[k]},
+                         {"max_daily_loss_fraction", "max_weekly_loss_fraction"})
         self.assertEqual((run.risk["max_daily_loss_fraction"], self.strategy.risk["max_daily_loss_fraction"]), (0.20, 0.02))
+        self.assertEqual((run.risk["max_weekly_loss_fraction"], self.strategy.risk["max_weekly_loss_fraction"]), (0.40, 0.05))
         self.assertEqual(parse_strategy(self.root / "strategy.txt").universe, self.strategy.universe)
 
     def test_transition_at_10000_restores_original_exactly_and_never_reverts(self):
@@ -354,7 +356,7 @@ class ProfileLoopTests(unittest.TestCase):
 
 
 class DailyLimitOverrideTests(unittest.TestCase):
-    def test_only_the_daily_loss_fraction_can_be_overridden(self):
+    def test_only_the_daily_and_weekly_loss_fractions_can_be_overridden(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_root(Path(tmp))
             path = root / "profiles" / "small_account.json"
@@ -364,9 +366,10 @@ class DailyLimitOverrideTests(unittest.TestCase):
             with self.assertRaises(ProfileError):
                 ProfileConfig.load(root, "profiles/small_account.json")
 
-    def test_repository_small_profile_uses_a_20_percent_daily_limit(self):
+    def test_repository_small_profile_uses_20_percent_daily_and_40_percent_weekly_limits(self):
         config = ProfileConfig.load(ROOT, "small")
-        self.assertEqual(dict(config.small_risk_overrides), {"max_daily_loss_fraction": 0.20})
+        self.assertEqual(dict(config.small_risk_overrides),
+                         {"max_daily_loss_fraction": 0.20, "max_weekly_loss_fraction": 0.40})
 
 
 class RequestPacingTests(unittest.TestCase):

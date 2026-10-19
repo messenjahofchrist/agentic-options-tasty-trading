@@ -7,8 +7,9 @@ ORIGINAL_ACCOUNT_PAPER  the exact original account settings recorded before the 
                         (docs/profiles/baseline_20261016/original_account_settings.json): the strategy's own
                         universe and per-trade sizing, no extra cap.
 
-SMALL_ACCOUNT_PAPER also uses an owner-authorized daily loss limit (risk_overrides in the profile file, 20%
-since 2026-10-16) in place of the strategy's 2%; ORIGINAL restores the strategy's own value.
+SMALL_ACCOUNT_PAPER also uses owner-authorized loss limits (risk_overrides in the profile file): daily 20%
+since 2026-10-16 in place of the strategy's 2%, weekly 40% since 2026-10-19 in place of its 5%; ORIGINAL
+restores the strategy's own values.
 
 The profile never edits the strategy. Per decision cycle it hands the unchanged strategy a per-trade sizing
 budget equal to the remaining aggregate allocation (owner choice, 2026-10-16: one trade may use what is left
@@ -65,8 +66,8 @@ class ProfileConfig:
         if not universe or any(not isinstance(s, str) or not _TICKER.fullmatch(s) for s in universe):
             raise ProfileError("expanded universe must be a non-empty list of uppercase tickers")
         overrides = {str(k): float(v) for k, v in (small.get("risk_overrides") or {}).items()}
-        if set(overrides) - {"max_daily_loss_fraction"}:
-            raise ProfileError("only max_daily_loss_fraction may be overridden by an account profile")
+        if set(overrides) - {"max_daily_loss_fraction", "max_weekly_loss_fraction"}:
+            raise ProfileError("only max_daily_loss_fraction and max_weekly_loss_fraction may be overridden by an account profile")
         if any(not 0 < v <= 1 for v in overrides.values()):
             raise ProfileError("risk override fractions must be in (0, 1]")
         fraction = float(small["max_aggregate_allocation_fraction"])
@@ -252,8 +253,8 @@ class ProfileLedger:
         verify_original_baseline(strategy, self.config.baseline)
         if self.active_profile == ORIGINAL:
             return strategy, AccountProfile(ORIGINAL, None)
-        # Owner-authorized account rule (2026-10-16): the daily loss limit for this ledger. It feeds both the
-        # strategy's entry block and its daily-loss exit exactly as the strategy's own value would.
+        # Owner-authorized account rules: the daily (2026-10-16) and weekly (2026-10-19) loss limits for this
+        # ledger. They feed the strategy's entry blocks and daily-loss exit exactly as its own values would.
         risk = {**strategy.risk, **dict(self.config.small_risk_overrides)}
         return (replace(strategy, universe=self.config.small_universe, risk=risk),
                 AccountProfile(SMALL, self.config.small_allocation_fraction))
