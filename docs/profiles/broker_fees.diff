@@ -1,0 +1,43 @@
+diff --git a/trader/paper_execution.py b/trader/paper_execution.py
+index 0d45a41..fed1e25 100644
+--- a/trader/paper_execution.py
++++ b/trader/paper_execution.py
+@@ -38,9 +38,11 @@ class PaperExecutor:
+         base = (quote.ask if self.buy_price == "ask" else quote.mid) if side == "BUY" else (quote.bid if self.sell_price == "bid" else quote.mid)
+         adverse = self.slippage_per_contract / 100
+         fill_price = base + adverse if side == "BUY" else max(0.0, base - adverse)
+-        fees = self.fees.estimate(quantity)
+-        slippage = self.slippage_per_contract * quantity
+         gross_cash = fill_price * 100 * quantity
++        # A side-aware broker schedule (trader/broker_fees.py) prices each fill; FeeSchedule charges a flat rate.
++        fees = (self.fees.fill_fees(side, quantity, gross_cash, when) if hasattr(self.fees, "fill_fees")
++                else self.fees.estimate(quantity))
++        slippage = self.slippage_per_contract * quantity
+         if side == "BUY":
+             if gross_cash + fees > self.account.cash:
+                 raise ValueError("Insufficient paper cash")
+diff --git a/trader/paper_runner.py b/trader/paper_runner.py
+index ec742af..7e38110 100644
+--- a/trader/paper_runner.py
++++ b/trader/paper_runner.py
+@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
+ from .calendar import MarketCalendar
+ from .config import AppConfig, Mode
+ from .engine import decision_cycle
+-from .fees import FeeSchedule
++from .broker_fees import TastytradeOptionFees
+ from .history_providers import create_history_provider
+ from .logging_utils import atomic_replace
+ from .market_data import CachedQuote, ProductionMarketData, fetch_option_quotes, live_minute_bars
+@@ -616,8 +616,9 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+ 
+     decision_log = cfg.data_dir / ("paper_test_decisions.jsonl" if test_mode else "decisions.jsonl")
+     quotes = ProductionMarketData(client)
+-    fee_schedule = FeeSchedule(float(strategy.execution["commission_per_contract"]),
+-                               float(strategy.execution["exchange_fee_per_contract"]))
++    # Booked fills pay tastytrade's published option fees; the strategy's own fee values keep driving its
++    # sizing and economic gate (owner request 2026-10-20).
++    fee_schedule = TastytradeOptionFees()
+     executor = PaperExecutor(account, buy_price=strategy.execution["paper_buy_price"],
+                              sell_price=strategy.execution["paper_sell_price"],
+                              slippage_per_contract=float(strategy.execution["slippage_per_contract"]),

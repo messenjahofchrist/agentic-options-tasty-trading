@@ -134,3 +134,19 @@ All of these are verified by `tests/test_profiles.py` or a live read-only check:
 ## End-of-day summary
 
 `python -m trader.cli profile-eod --account-profile small` (scheduled task `\OptioBot\SmallAccountEndOfDay`, weekdays 3:20 PM CT) lists every contract bought that day with its exit and P/L, plus the day's opening cash (reconstructed from the day's fills), closing cash, day/week/total P/L and fees. It writes `eod/eod-YYYY-MM-DD.html` and `.json` in the profile data directory, emails the text version and pushes a one-line result to the phone. A position still open at that time breaks the no-overnight rule (`flatten_at_session_close` closes everything ~1 minute before the close), so the push is urgent and says `N OPEN OVERNIGHT`. `--no-notify` writes the files only.
+
+## Fees on paper fills
+
+Since 2026-10-20 (owner request), booked PAPER fills pay tastytrade's published stock/ETF option fees
+(`trader/broker_fees.py`; "Commissions & Fees", last updated 2026-07-30) instead of the strategy's flat
+$0.70 per contract per side:
+
+| Fill | Fees per contract |
+|---|---|
+| Buy to open | $1.00 commission (capped at $10 per leg) + $0.10 clearing + $0.02 Options Regulatory Fee = **$1.12** |
+| Sell to close | $0 commission + $0.10 clearing + $0.02 ORF + SEC fee ($20.60 per $1M of proceeds, rounded up to the cent) + FINRA TAF ($0.00329, not assessed 2026-10-01 through 2026-12-31) = **about $0.13** |
+
+A one-contract round trip costs about $1.25 (was $1.40). The strategy's own fee values in `strategy.txt` still
+drive its sizing and economic gate, so the strategy and its hash are unchanged; the change is limited to the
+ledger booking (`trader/paper_execution.py`, `trader/paper_runner.py`; diff in `docs/profiles/broker_fees.diff`).
+Fills booked before 2026-10-20 keep the fees they were booked with.

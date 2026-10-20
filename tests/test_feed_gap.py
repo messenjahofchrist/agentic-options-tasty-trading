@@ -126,7 +126,8 @@ class FeedGapTests(unittest.TestCase):
         self.assertEqual(account.positions, [])
         [close] = [r for r in account.ledger if r.get("type") == "paper_close"]
         self.assertEqual(close["reason"], "data_failure_protective_exit")
-        self.assertAlmostEqual(close["realized_pnl"], (1.20 - .0002 - 1.00) * 100 - 0.70 - 0.70, places=2)
+        # carried entry fee 0.70; exit at tastytrade's closing fees: clearing 0.10 + ORF 0.02 + SEC fee 0.01
+        self.assertAlmostEqual(close["realized_pnl"], (1.20 - .0002 - 1.00) * 100 - 0.70 - 0.13, places=2)
         events = [a["event"] for a in alerts]
         self.assertIn("paper_position_protective_exit", events)
         self.assertIn("paper_symbol_disabled", events)

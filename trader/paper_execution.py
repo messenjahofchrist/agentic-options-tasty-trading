@@ -38,9 +38,11 @@ class PaperExecutor:
         base = (quote.ask if self.buy_price == "ask" else quote.mid) if side == "BUY" else (quote.bid if self.sell_price == "bid" else quote.mid)
         adverse = self.slippage_per_contract / 100
         fill_price = base + adverse if side == "BUY" else max(0.0, base - adverse)
-        fees = self.fees.estimate(quantity)
-        slippage = self.slippage_per_contract * quantity
         gross_cash = fill_price * 100 * quantity
+        # A side-aware broker schedule (trader/broker_fees.py) prices each fill; FeeSchedule charges a flat rate.
+        fees = (self.fees.fill_fees(side, quantity, gross_cash, when) if hasattr(self.fees, "fill_fees")
+                else self.fees.estimate(quantity))
+        slippage = self.slippage_per_contract * quantity
         if side == "BUY":
             if gross_cash + fees > self.account.cash:
                 raise ValueError("Insufficient paper cash")

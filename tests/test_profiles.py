@@ -467,7 +467,9 @@ class RealProfileConfigTests(unittest.TestCase):
 class StrategyIntegrityTests(unittest.TestCase):
     def test_strategy_files_match_the_recorded_baseline(self):
         baseline = ROOT / "docs/profiles/baseline_20261016/strategy_sha256.txt"
-        frozen = {"trader/paper_runner.py"}  # the shared loop: profile hook added (reported separately)
+        # Owner-authorized changes, each recorded as a diff in docs/profiles: the shared loop (profile hook,
+        # feed-gap fix, broker fees) and the paper fill's side-aware fee call (2026-10-20).
+        frozen = {"trader/paper_runner.py", "trader/paper_execution.py"}
         for line in baseline.read_text().splitlines():
             if line.startswith("#") or not line.strip():
                 continue

@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 from .calendar import MarketCalendar
 from .config import AppConfig, Mode
 from .engine import decision_cycle
-from .fees import FeeSchedule
+from .broker_fees import TastytradeOptionFees
 from .history_providers import create_history_provider
 from .logging_utils import atomic_replace
 from .market_data import CachedQuote, ProductionMarketData, fetch_option_quotes, live_minute_bars
@@ -616,8 +616,9 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
 
     decision_log = cfg.data_dir / ("paper_test_decisions.jsonl" if test_mode else "decisions.jsonl")
     quotes = ProductionMarketData(client)
-    fee_schedule = FeeSchedule(float(strategy.execution["commission_per_contract"]),
-                               float(strategy.execution["exchange_fee_per_contract"]))
+    # Booked fills pay tastytrade's published option fees; the strategy's own fee values keep driving its
+    # sizing and economic gate (owner request 2026-10-20).
+    fee_schedule = TastytradeOptionFees()
     executor = PaperExecutor(account, buy_price=strategy.execution["paper_buy_price"],
                              sell_price=strategy.execution["paper_sell_price"],
                              slippage_per_contract=float(strategy.execution["slippage_per_contract"]),
