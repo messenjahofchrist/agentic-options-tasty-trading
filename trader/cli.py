@@ -38,7 +38,8 @@ def main(argv: list[str] | None = None) -> int:
                                     help="Write a self-updating HTML report of an account-profile PAPER ledger (read-only)")
     profile_report.add_argument("--account-profile", choices=("small",), default="small")
     profile_eod = sub.add_parser("profile-eod", help="End-of-day summary of a profile ledger: every contract bought and the day's ledger")
-    profile_eod.add_argument("--account-profile", choices=("small",), default="small")
+    profile_eod.add_argument("--account-profile", choices=("small", "original"), default="small",
+                             help="small: the account-profile ledger; original: the original PAPER ledger")
     profile_eod.add_argument("--no-notify", action="store_true", help="Write the files only; no email or push")
     paper_test.add_argument("--test-capital", type=float, default=100_000,
                             help="Fake capital for the isolated paper test ledger (default: 100000)")
@@ -105,10 +106,13 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(status, indent=2))
         elif args.command == "profile-eod":
             from .profile_eod import run_eod
-            print(json.dumps(run_eod(root, args.account_profile, notify=not args.no_notify), indent=2))
+            print(json.dumps(run_eod(root, args.account_profile, notify=not args.no_notify,
+                                     original_data_dir=cfg.data_dir), indent=2))
         elif args.command == "profile-report":
+            from .compare_report import write_comparison
             from .profile_report import write_report
             print(write_report(root, cfg.data_dir, args.account_profile))
+            print(write_comparison(root, cfg.data_dir, args.account_profile))
         elif args.command == "paper-test-session":
             from .paper_runner import run_paper_test_session
             if cfg.mode is Mode.LIVE:

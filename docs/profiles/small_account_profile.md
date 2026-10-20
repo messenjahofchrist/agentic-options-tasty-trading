@@ -164,3 +164,24 @@ Each review writes to its own ledger's `reviews/` folder and `supervisor_reviews
 names the ledger. The snapshot includes the profile's rules (allocation, per-trade cap, loss limits) so
 reviewers judge the small ledger against them. Advisory only: reviewers have no tools, credentials, or
 authority to change anything.
+
+## Running the $10K and $1K ledgers side by side (from 2026-10-21)
+
+Owner request 2026-10-20: both PAPER ledgers trade the same strategy on the same days, starting fresh at
+$10,000 (original ledger, `data/`) and $1,000 (`small_account_paper`). Previous runs were archived, not deleted.
+
+- `PaperEngine` is enabled again, now at 08:20 CT, five minutes after `SmallAccountEngine`, so the two
+  startup history downloads don't hit tastytrade together. Its `--symbol SPY` was removed, so it trades the
+  strategy's 14-symbol universe, as the hand-started 10/14–10/15 sessions did. It wakes the PC and runs on
+  battery, like the small engine.
+- The hourly supervisor review covers both ledgers (one review and email each), because both engine tasks
+  are enabled. See "Supervisor review" above.
+- `OriginalEndOfDay` (weekdays 3:22 PM) sends the $10K account's day summary
+  (`profile-eod --account-profile original`), two minutes after the small account's.
+- `profile-report` (every 2 minutes) also writes `data/compare.html`: both accounts side by side, with return
+  in percent (the fair comparison across sizes), realized P/L by day, win rate, average win and loss, fees,
+  and each account's open positions and recent trades.
+- Shared pieces to know about: both engines use the same tastytrade login and request budget (the small engine
+  paces its requests; the original engine doesn't, unchanged). The `KILL_SWITCH` file is shared: when the
+  watchdog writes it for the original engine, it blocks new entries on both. The small engine's health never
+  writes or clears it.

@@ -48,14 +48,9 @@ def _option_label(symbol: str) -> str:
     return f"{expiry} ${strike:,.2f} {'call' if match.group(2) == 'C' else 'put'}"
 
 
-def build_report(root: Path, original_data_dir: Path, profile_name: str = "small",
-                 now: datetime | None = None) -> dict[str, Any]:
-    now = now or datetime.now(timezone.utc)
-    config = ProfileConfig.load(root, profile_name)
-    ledger = ProfileLedger(config, original_data_dir=original_data_dir)
-    status = ledger.status(now=now)
-    status.pop("universe", None)
-    data_dir = config.data_dir
+def ledger_view(data_dir: Path, now: datetime) -> dict[str, Any]:
+    """Positions, closed trades, today's alerts and switched-off symbols, and engine state of one PAPER ledger.
+    Any ledger directory works: an account profile's or the original ledger's."""
     account = _read_json(data_dir / "paper_account.json", {})
     entries = {f["trade_id"]: f for f in account.get("ledger", [])
                if f.get("type") == "fill" and f.get("side") == "BUY"}
@@ -131,12 +126,7 @@ def build_report(root: Path, original_data_dir: Path, profile_name: str = "small
         engine = "NOT RESPONDING"
     else:
         engine = str(heartbeat.get("status") or "never started").upper()
-
-    original = _read_json(original_data_dir / "paper_account.json", {})
-    original_expect = _read_json(original_data_dir / "engine_expectation.json", {})
     return {
-        "generated_at_utc": now.isoformat(),
-        "profile": status,
         "engine": {"state": engine, "heartbeat_utc": updated,
                    "heartbeat_age_seconds": None if age is None else round(age),
                    "last_bar_utc": heartbeat.get("last_bar_at_utc"), "error": heartbeat.get("error")},
@@ -145,6 +135,22 @@ def build_report(root: Path, original_data_dir: Path, profile_name: str = "small
         "alerts_today": alerts,
         "alerts_today_total": len(alert_rows),
         "disabled_today": disabled,
+    }
+
+
+def build_report(root: Path, original_data_dir: Path, profile_name: str = "small",
+                 now: datetime | None = None) -> dict[str, Any]:
+    now = now or datetime.now(timezone.utc)
+    config = ProfileConfig.load(root, profile_name)
+    ledger = ProfileLedger(config, original_data_dir=original_data_dir)
+    status = ledger.status(now=now)
+    status.pop("universe", None)
+    original = _read_json(original_data_dir / "paper_account.json", {})
+    original_expect = _read_json(original_data_dir / "engine_expectation.json", {})
+    return {
+        "generated_at_utc": now.isoformat(),
+        "profile": status,
+        **ledger_view(config.data_dir, now),
         "original_ledger": {"cash": original.get("cash"), "realized_pnl": original.get("realized_pnl"),
                             "open_positions": len(original.get("positions", [])),
                             "closed_trades": sum(1 for f in original.get("ledger", []) if f.get("type") == "paper_close"),
@@ -327,7 +333,7 @@ footer {{ margin-top:16px; }}
 <table><thead><tr><th>Closed</th><th>Trade</th><th class="num">Entry → exit</th><th class="num">P/L</th><th class="num">R</th><th>Reason</th></tr></thead>
 <tbody>{closed_rows}</tbody></table></div>
 
-<div class="card"><h2>Original $10K ledger</h2>
+<div class="card"><h2>Original $10K ledger · <a href="../../compare.html">side-by-side comparison</a></h2>
   <div>{e(str(orig.get('state') or 'unknown'))} · cash {_money(orig.get('cash'))} · realized {_money(orig.get('realized_pnl'), True)}
   · {orig.get('closed_trades')} closed · {orig.get('open_positions')} open</div></div>
 

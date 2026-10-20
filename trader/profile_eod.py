@@ -35,12 +35,23 @@ def _cash_flow(fill: dict[str, Any]) -> float:
     return -(gross + fees) if fill.get("side") == "BUY" else gross - fees
 
 
+ORIGINAL = "original"
+
+
+def _source(root: Path, profile_name: str, original_data_dir: Path | None) -> tuple[str, str, Path, float]:
+    """(ledger_id, label, data directory, starting balance) of an account profile or the original ledger."""
+    if profile_name == ORIGINAL:
+        return "original_paper", "$10K account", Path(original_data_dir or root / "data"), 10_000.0
+    config = ProfileConfig.load(root, profile_name)
+    return config.ledger_id, "small account", config.data_dir, config.starting_balance
+
+
 def build_eod(root: Path, profile_name: str = "small", day: date | None = None,
-              now: datetime | None = None) -> dict[str, Any]:
+              now: datetime | None = None, original_data_dir: Path | None = None) -> dict[str, Any]:
     now = now or datetime.now(timezone.utc)
     day = day or now.astimezone(MARKET_TZ).date()
-    config = ProfileConfig.load(root, profile_name)
-    account = _read_json(config.data_dir / "paper_account.json", {})
+    ledger_id, label, data_dir, starting_balance = _source(root, profile_name, original_data_dir)
+    account = _read_json(data_dir / "paper_account.json", {})
     ledger = account.get("ledger", [])
     fills_today = [f for f in ledger if f.get("type") == "fill" and _trading_day(f["timestamp"]) == day]
     closes = {c["trade_id"]: c for c in ledger if c.get("type") == "paper_close"}
@@ -76,9 +87,9 @@ def build_eod(root: Path, profile_name: str = "small", day: date | None = None,
                       for p in account.get("positions", [])]
     wins = sum(1 for c in closed_today if float(c["realized_pnl"]) > 0)
     return {
-        "generated_at_utc": now.isoformat(), "trading_day": day.isoformat(), "ledger_id": config.ledger_id, "mode": "PAPER",
+        "generated_at_utc": now.isoformat(), "trading_day": day.isoformat(), "ledger_id": ledger_id, "label": label, "mode": "PAPER",
         "contracts": contracts,
-        "ledger": {"starting_balance": float(account.get("starting_capital", config.starting_balance)),
+        "ledger": {"starting_balance": float(account.get("starting_capital", starting_balance)),
                    "day_start_cash": round(cash_start, 2), "day_end_cash": round(cash_end, 2),
                    "day_realized_pnl": round(realized_today, 2), "week_realized_pnl": round(realized_week, 2),
                    "total_realized_pnl": round(float(account.get("realized_pnl", 0)), 2),
@@ -95,7 +106,7 @@ def _reason(text: str | None) -> str:
 
 def render_eod_text(eod: dict[str, Any]) -> str:
     led = eod["ledger"]
-    lines = [f"OptioBot small account (PAPER) - {eod['trading_day']}", ""]
+    lines = [f"OptioBot {eod['label']} (PAPER) - {eod['trading_day']}", ""]
     if eod["overnight_violation"]:
         lines += [f"*** {len(eod['open_positions'])} POSITION(S) STILL OPEN AFTER THE CLOSE - nothing should carry overnight ***",
                   *[f"    {p['underlying']} {p['contract']} bought {_local(p['entry_time'])}" for p in eod["open_positions"]], ""]
@@ -144,7 +155,7 @@ table{{border-collapse:collapse;width:100%}} td,th{{text-align:left;padding:6px 
 .pos{{color:var(--pos)}} .neg{{color:var(--neg)}} .warn{{background:var(--warn);padding:12px;border-radius:8px;font-weight:600}}
 .grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}} .grid b{{display:block;font-size:20px}}
 </style></head><body><main>
-<h1>Day summary · {esc(eod['trading_day'])}</h1><div class="muted">Small account · PAPER · generated {esc(_local(eod['generated_at_utc']))}</div>
+<h1>Day summary · {esc(eod['trading_day'])}</h1><div class="muted">{esc(eod['label'])} · PAPER · generated {esc(_local(eod['generated_at_utc']))}</div>
 {warning}
 <div class="card grid">
 <div>Day start cash<b>{_money(led['day_start_cash'])}</b></div><div>Day end cash<b>{_money(led['day_end_cash'])}</b></div>
@@ -167,9 +178,9 @@ def _write(path: Path, text: str) -> None:
 
 
 def run_eod(root: Path, profile_name: str = "small", *, notify: bool = True,
-            now: datetime | None = None) -> dict[str, Any]:
-    eod = build_eod(root, profile_name, now=now)
-    out = ProfileConfig.load(root, profile_name).data_dir / "eod"
+            now: datetime | None = None, original_data_dir: Path | None = None) -> dict[str, Any]:
+    eod = build_eod(root, profile_name, now=now, original_data_dir=original_data_dir)
+    out = _source(root, profile_name, original_data_dir)[2] / "eod"
     _write(out / f"eod-{eod['trading_day']}.json", json.dumps(eod, indent=2) + "\n")
     _write(out / f"eod-{eod['trading_day']}.html", render_eod_html(eod))
     result = {"trading_day": eod["trading_day"], "html": str(out / f"eod-{eod['trading_day']}.html"),
@@ -181,13 +192,13 @@ def run_eod(root: Path, profile_name: str = "small", *, notify: bool = True,
                     f"cash {_money(led['day_end_cash'])}")
         if email_configured():
             try:
-                send_email(f"OptioBot small account {eod['trading_day']}: {headline}", render_eod_text(eod))
+                send_email(f"OptioBot {eod['label']} {eod['trading_day']}: {headline}", render_eod_text(eod))
                 result["email"] = "sent"
             except Exception as exc:  # best effort; the files are the record
                 result["email"] = f"failed: {type(exc).__name__}"
         if push_configured():
             try:
-                send_push(f"OptioBot day summary {eod['trading_day']}", headline,
+                send_push(f"OptioBot {eod['label']} {eod['trading_day']}", headline,
                           priority="urgent" if eod["overnight_violation"] else "default",
                           tags="rotating_light" if eod["overnight_violation"] else "bar_chart")
                 result["push"] = "sent"
