@@ -150,3 +150,17 @@ A one-contract round trip costs about $1.25 (was $1.40). The strategy's own fee 
 drive its sizing and economic gate, so the strategy and its hash are unchanged; the change is limited to the
 ledger booking (`trader/paper_execution.py`, `trader/paper_runner.py`; diff in `docs/profiles/broker_fees.diff`).
 Fills booked before 2026-10-20 keep the fees they were booked with.
+
+## Supervisor review (Claude and Codex)
+
+Since 2026-10-20 the hourly review (`HourlyReview`, `python -m trader.supervisor review`) and the 5:15 PM daily
+report review the ledger whose engine is scheduled to run: every `\OptioBot\` task running `paper-session` that
+is not disabled. `paper-session --account-profile small` maps to `small_account_paper`; a plain `paper-session`
+(`PaperEngine`) maps to the original ledger in `data/`. If both engines are enabled, both ledgers are reviewed
+separately. If neither is, nothing is reviewed. If the schedule can't be read, the review fails and sends the
+failure email instead of picking a ledger. `--ledger small` or `--ledger original` names one explicitly.
+
+Each review writes to its own ledger's `reviews/` folder and `supervisor_reviews.jsonl`, and the email subject
+names the ledger. The snapshot includes the profile's rules (allocation, per-trade cap, loss limits) so
+reviewers judge the small ledger against them. Advisory only: reviewers have no tools, credentials, or
+authority to change anything.

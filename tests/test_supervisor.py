@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -9,8 +10,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from trader.supervisor import (ReviewLock, _call_reviewer, _email_configured, _parse_report, _prompt,
-                                _reviewer_environment, blocker_summary, capture_snapshot, run_email_test, run_review,
-                                send_email, watchdog_check)
+                                _reviewer_environment, blocker_summary, capture_snapshot, review_targets,
+                                run_email_test, run_review, run_reviews, scheduled_engine_ledgers, send_email,
+                                watchdog_check)
 from trader.logging_utils import append_jsonl
 
 
@@ -170,6 +172,20 @@ class SupervisorTests(unittest.TestCase):
             self.assertEqual(summary["signal_filter_outcomes"]["volume_filter_failed"], 2)
             self.assertIn("blocker_summary_by_session", _prompt({}, "Claude"))
 
+    def test_blocker_summary_includes_entries_already_rotated_into_archives(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "decisions.jsonl"
+            now = datetime.now(timezone.utc).replace(microsecond=0)
+            stamp = now.strftime("%Y%m%dT%H%M%S000000Z")
+            append_jsonl(log.with_name(f"decisions.jsonl.{stamp}.abc123.archive"),
+                         {"timestamp": now.isoformat(), "decision": "PAPER_ENTRY"})
+            append_jsonl(log.with_name("decisions.jsonl.20200101T000000000000Z.old000.archive"),
+                         {"timestamp": "2020-01-02T15:00:00+00:00", "decision": "PAPER_ENTRY"})
+            append_jsonl(log, {"timestamp": now.isoformat(), "decision": "NO_TRADE", "reason": "breakout_not_triggered"})
+            summary = blocker_summary(log)
+            self.assertEqual(list(summary), [max(summary)])  # the 2020 archive is too old to read
+            self.assertEqual((summary[max(summary)]["paper_entries"], summary[max(summary)]["decisions"]), (1, 2))
+
     def test_email_failure_is_explicit_and_does_not_attempt_without_configuration(self):
         with patch.dict(os.environ, {}, clear=True):
             self.assertFalse(_email_configured())
@@ -243,6 +259,77 @@ class SupervisorTests(unittest.TestCase):
             self.assertEqual(result["unresolved"], ["Claude reviewer failed"])
             self.assertEqual(result["disagreements"], [])
             self.assertEqual(set(result["reviewer_report_files"]), {"Claude", "Codex"})
+
+
+class ReviewTargetTests(unittest.TestCase):
+    """The review follows whichever engine is scheduled: the small profile's ledger while only it runs, the
+    original ledger once its engine is turned back on, and never a substitute when the schedule is unknown."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        (self.root / "strategy.txt").write_text("{}", encoding="utf-8")
+        (self.root / "active_strategy.json").write_text("{}", encoding="utf-8")
+        (self.root / "profiles").mkdir()
+        (self.root / "profiles" / "small_account.json").write_text(json.dumps({
+            "ledger_id": "small_account_paper", "data_dir": "data/profiles/small_account_paper", "starting_balance": 1000,
+            "profiles": {"SMALL_ACCOUNT_PAPER": {"max_per_trade_dollars": 150}}}), encoding="utf-8")
+        self.data = self.root / "data"
+        self.small = self.data / "profiles" / "small_account_paper"
+        self.small.mkdir(parents=True)
+        (self.data / "paper_account.json").write_text(json.dumps({"cash": 2000, "positions": [], "ledger": []}))
+        (self.small / "paper_account.json").write_text(json.dumps({"cash": 902, "positions": [], "ledger": []}))
+        (self.small / "profile_state.json").write_text(json.dumps({"active_profile": "SMALL_ACCOUNT_PAPER"}))
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def review(self, **kwargs):
+        prompts = {}
+
+        def reviewer(name, prompt, *_args, **_kwargs):
+            prompts.setdefault(name, []).append(prompt)
+            return {"reviewer": name, "overall_severity": "low", "findings": []}
+
+        with patch("trader.supervisor._call_reviewer", side_effect=reviewer), \
+                patch("trader.supervisor._email_configured", return_value=False):
+            return run_reviews(root=self.root, data_dir=self.data, **kwargs), prompts
+
+    def test_only_the_scheduled_small_engine_is_reviewed_with_its_profile_rules(self):
+        result, prompts = self.review(scheduled={"small"})
+        self.assertEqual((result["status"], result["ledgers"]), ("complete", ["small_account_paper"]))
+        [prompt] = prompts["Claude"]
+        self.assertIn('"cash": 902', prompt)
+        self.assertIn('"max_per_trade_dollars": 150', prompt)
+        self.assertIn("SMALL_ACCOUNT_PAPER", prompt)
+        self.assertTrue(any((self.small / "reviews").glob("*-report.json")))
+        self.assertFalse((self.data / "reviews").exists())
+
+    def test_turning_the_original_engine_on_reviews_its_ledger(self):
+        result, prompts = self.review(scheduled={"original"})
+        self.assertEqual(result["ledgers"], ["original_paper"])
+        self.assertIn('"cash": 2000', prompts["Codex"][0])
+        result, _ = self.review(scheduled={"original", "small"})
+        self.assertEqual(result["ledgers"], ["original_paper", "small_account_paper"])
+
+    def test_no_scheduled_engine_reviews_nothing_and_an_unreadable_schedule_refuses(self):
+        result, prompts = self.review(scheduled=set())
+        self.assertEqual((result["status"], prompts), ("no_scheduled_ledger", {}))
+        with patch("trader.supervisor.scheduled_engine_ledgers", return_value=None), \
+                self.assertRaisesRegex(RuntimeError, "no ledger was reviewed"):
+            review_targets(self.root, self.data)
+
+    def test_engine_tasks_map_to_ledgers_and_disabled_tasks_do_not_count(self):
+        tasks = [{"State": "Disabled", "Args": "/d /c \"python -u -m trader.cli paper-session --symbol SPY >> log\""},
+                 {"State": "Running", "Args": "/d /c \"python -u -m trader.cli paper-session --account-profile small\""},
+                 {"State": "Ready", "Args": "-m trader.supervisor review"}]
+        completed = subprocess.CompletedProcess([], 0, stdout=json.dumps(tasks), stderr="")
+        with patch("trader.supervisor.subprocess.run", return_value=completed):
+            self.assertEqual(scheduled_engine_ledgers(), {"small"})
+        tasks[0]["State"] = "Ready"
+        completed.stdout = json.dumps(tasks)
+        with patch("trader.supervisor.subprocess.run", return_value=completed):
+            self.assertEqual(scheduled_engine_ledgers(), {"original", "small"})
 
 
 if __name__ == "__main__":

@@ -236,8 +236,15 @@ def blocker_summary(decisions_path: Path, sessions: int = 5) -> dict[str, Any]:
     reviewers can see which single gate is binding instead of inferring it from a short tail.
     """
     per_session: dict[str, dict[str, Any]] = {}
-    if decisions_path.is_file():
-        with decisions_path.open(encoding="utf-8") as stream:
+    # The log rotates during a session (decisions.jsonl.<UTC stamp>.<id>.archive), so read the recent archives
+    # too; otherwise a session's early entries vanish from its totals.
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=sessions * 2 + 4)).strftime("%Y%m%d")
+    archives = sorted(path for path in decisions_path.parent.glob(f"{decisions_path.name}.*.archive")
+                      if path.name.split(".")[2][:8] >= cutoff)
+    for log_path in [*archives, decisions_path]:
+        if not log_path.is_file():
+            continue
+        with log_path.open(encoding="utf-8") as stream:
             for line in stream:
                 try:
                     row = json.loads(line)
@@ -272,7 +279,61 @@ def blocker_summary(decisions_path: Path, sessions: int = 5) -> dict[str, Any]:
     return out
 
 
-def capture_snapshot(root: Path = ROOT, data_dir: Path = DATA) -> dict[str, Any]:
+ORIGINAL_LEDGER = "original"
+_ENGINE_TASK_PROFILE = re.compile(r"\bpaper-session\b(?:.*?--account-profile\s+(\w+))?")
+
+
+def scheduled_engine_ledgers() -> set[str] | None:
+    """Ledgers whose engine has an enabled \\OptioBot\\ scheduled task: 'original' for a plain paper-session,
+    else the --account-profile name. None when the schedule cannot be read, so callers never guess."""
+    command = ("Get-ScheduledTask -TaskPath '\\OptioBot\\' | ForEach-Object { [pscustomobject]@{State=[string]$_.State; "
+               "Args=(($_.Actions | ForEach-Object { $_.Arguments }) -join ' ')} } | ConvertTo-Json -Compress")
+    try:
+        result = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", command],
+                                capture_output=True, text=True, timeout=60, check=False)
+        tasks = json.loads(result.stdout) if result.returncode == 0 and result.stdout.strip() else None
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+        return None
+    if tasks is None:
+        return None
+    ledgers = set()
+    for task in tasks if isinstance(tasks, list) else [tasks]:
+        match = _ENGINE_TASK_PROFILE.search(str(task.get("Args") or ""))
+        if match and task.get("State") != "Disabled":
+            ledgers.add(match.group(1) or ORIGINAL_LEDGER)
+    return ledgers
+
+
+def review_targets(root: Path = ROOT, data_dir: Path = DATA, *, only: str | None = None,
+                   scheduled: set[str] | None = None) -> list[dict[str, Any]]:
+    """The ledgers to review: the one named by `only`, else every ledger whose engine is scheduled to run.
+    Raises when the schedule is unreadable instead of falling back to some other ledger."""
+    if only is None:
+        if scheduled is None:
+            scheduled = scheduled_engine_ledgers()
+        if scheduled is None:
+            raise RuntimeError("Could not read the \\OptioBot\\ engine schedule; no ledger was reviewed. "
+                               "Name one explicitly with --ledger.")
+    names = [only] if only else sorted(scheduled, key=lambda name: (name != ORIGINAL_LEDGER, name))
+    targets = []
+    for name in names:
+        if name == ORIGINAL_LEDGER:
+            targets.append({"name": name, "ledger_id": "original_paper", "data_dir": data_dir, "profile": None})
+            continue
+        from .account_profiles import PROFILE_FILES
+        if name not in PROFILE_FILES:
+            raise RuntimeError(f"Unknown ledger {name!r}; expected one of {[ORIGINAL_LEDGER, *PROFILE_FILES]}")
+        config = _safe_json(root / PROFILE_FILES[name], None)
+        if not isinstance(config, dict) or "data_dir" not in config:
+            raise RuntimeError(f"Account profile {PROFILE_FILES[name]} is unreadable; {name} ledger was not reviewed")
+        profile_dir = Path(config["data_dir"])
+        targets.append({"name": name, "ledger_id": config.get("ledger_id", name),
+                        "data_dir": profile_dir if profile_dir.is_absolute() else root / profile_dir,
+                        "profile": {key: config.get(key) for key in ("description", "starting_balance", "transition", "profiles")}})
+    return targets
+
+
+def capture_snapshot(root: Path = ROOT, data_dir: Path = DATA, ledger: dict[str, Any] | None = None) -> dict[str, Any]:
     """Capture only strategy, paper ledger, decision records, and bounded local health evidence."""
     strategy = _safe_json(root / "active_strategy.json", {})
     account = _safe_json(data_dir / "paper_account.json", {})
@@ -287,6 +348,11 @@ def capture_snapshot(root: Path = ROOT, data_dir: Path = DATA) -> dict[str, Any]
     snapshot = {
         "captured_at_utc": utc_now(),
         "mode": "PAPER",
+        # Which paper ledger this is. An account profile runs the same strategy under the extra rules listed here.
+        "ledger": {"name": (ledger or {}).get("name", ORIGINAL_LEDGER),
+                   "ledger_id": (ledger or {}).get("ledger_id", "original_paper"),
+                   "account_profile_rules": (ledger or {}).get("profile"),
+                   "account_profile_state": _safe_json(data_dir / "profile_state.json", None) if (ledger or {}).get("profile") else None},
         "strategy": {key: strategy.get(key) for key in ("strategy_id", "version", "status", "configuration_hash", "configuration")},
         "paper_account": {
             "starting_capital": account.get("starting_capital"),
@@ -302,7 +368,7 @@ def capture_snapshot(root: Path = ROOT, data_dir: Path = DATA) -> dict[str, Any]
         "recent_test_decisions": test_decisions,
         "health": {
             "engine_heartbeat": _safe_json(data_dir / "engine_heartbeat.json", None),
-            "supervisor_status": _safe_json(STATUS, {}),
+            "supervisor_status": _safe_json(data_dir / "supervisor_status.json", {}),
             "active_strategy_manifest_validity": manifest_check,
         },
         "review_limits": [
@@ -329,6 +395,9 @@ def _prompt(snapshot: dict[str, Any], reviewer: str) -> str:
         "overall_severity (info|low|medium|high|critical), evidence (array of strings), findings (array of objects with "
         "severity, kind (fact|hypothesis), finding, evidence, recommendation, confidence from 0 to 1), missing_data (array), "
         "recommendations (array). Any recommendation must require owner review and cannot authorize strategy changes.\n"
+        "The snapshot's ledger section names the paper ledger under review. When it lists account_profile_rules, that "
+        "ledger runs the same strategy under those extra limits (allocation, per-trade cap, loss limits); judge its trades "
+        "and blockers against them and name the ledger_id in your findings.\n"
         "Start from blocker_summary_by_session: name the binding_constraint for the latest session, say whether it is "
         "operational (data, kill switch, engine health) or a strategy/risk gate, and propose at most one concrete "
         "parameter change aimed at it, with the exact strategy.txt key, current and proposed value, and the effect you "
@@ -430,12 +499,14 @@ def _save_status(update: dict[str, Any], data_dir: Path = DATA) -> None:
             temp.unlink(missing_ok=True)
 
 
-def run_review(*, root: Path = ROOT, data_dir: Path = DATA, timeout: int = 240) -> dict[str, Any]:
+def run_review(*, root: Path = ROOT, data_dir: Path = DATA, timeout: int = 240,
+               ledger: dict[str, Any] | None = None) -> dict[str, Any]:
     started = time.monotonic()
     review_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:8]
     load_dotenv(root / ".env")
     with ReviewLock(data_dir / "supervisor_review.lock"):
-        snapshot = capture_snapshot(root, data_dir)
+        snapshot = capture_snapshot(root, data_dir, ledger)
+        ledger_id = snapshot["ledger"]["ledger_id"]
         snapshot_path = data_dir / "reviews" / f"{review_id}-snapshot.json"
         snapshot_path.parent.mkdir(parents=True, exist_ok=True)
         snapshot_path.write_text(json.dumps(snapshot, indent=2, default=str) + "\n", encoding="utf-8")
@@ -469,6 +540,7 @@ def run_review(*, root: Path = ROOT, data_dir: Path = DATA, timeout: int = 240) 
                     disagreements.append(f"{name} raised findings the other reviewer did not: " + "; ".join(unique))
         consolidated = {
             "review_id": review_id,
+            "ledger_id": ledger_id,
             "created_at_utc": utc_now(),
             "status": "complete" if valid_both else "incomplete",
             "snapshot_file": snapshot_path.name,
@@ -489,7 +561,7 @@ def run_review(*, root: Path = ROOT, data_dir: Path = DATA, timeout: int = 240) 
             reviewer_path.write_text(json.dumps(report, indent=2, default=str) + "\n", encoding="utf-8")
             consolidated["reviewer_report_files"][name] = reviewer_path.name
         path.write_text(json.dumps(consolidated, indent=2, default=str) + "\n", encoding="utf-8")
-        append_jsonl(data_dir / "supervisor_reviews.jsonl", {"review_id": review_id, "status": consolidated["status"],
+        append_jsonl(data_dir / "supervisor_reviews.jsonl", {"review_id": review_id, "ledger_id": ledger_id, "status": consolidated["status"],
                      "duration_seconds": consolidated["duration_seconds"], "report": path.name})
         email_failure = None
         if _email_configured():
@@ -497,7 +569,8 @@ def run_review(*, root: Path = ROOT, data_dir: Path = DATA, timeout: int = 240) 
                 summary = _decision_email_summary(snapshot.get("recent_decisions", []))
                 body = (f"{summary}\n\n{_review_email_summary(consolidated)}\n\n"
                         "This is a paper-trading research report. No live order was placed and no strategy change was made.")
-                send_email(f"OptioBot review summary ({consolidated['status']})", body)
+                send_email(f"OptioBot review summary - {ledger_id} ({consolidated['status']})",
+                           f"Ledger reviewed: {ledger_id}\n\n{body}")
                 consolidated["email_status"] = "sent"
                 path.write_text(json.dumps(consolidated, indent=2, default=str) + "\n", encoding="utf-8")
             except Exception as exc:
@@ -517,9 +590,28 @@ def run_review(*, root: Path = ROOT, data_dir: Path = DATA, timeout: int = 240) 
         return consolidated
 
 
-def run_daily_report(*, root: Path = ROOT, data_dir: Path = DATA) -> dict[str, Any]:
+def run_reviews(*, root: Path = ROOT, data_dir: Path = DATA, only: str | None = None,
+                scheduled: set[str] | None = None, timeout: int = 240) -> dict[str, Any]:
+    """Review each ledger whose engine is scheduled (or the one named by `only`), each in its own data
+    directory. Nothing scheduled means nothing is reviewed; no other ledger is substituted."""
     load_dotenv(root / ".env")
-    snapshot = capture_snapshot(root, data_dir)
+    targets = review_targets(root, data_dir, only=only, scheduled=scheduled)
+    reviews = {target["ledger_id"]: run_review(root=root, data_dir=target["data_dir"], timeout=timeout, ledger=target)
+               for target in targets}
+    status = ("no_scheduled_ledger" if not reviews else
+              "complete" if all(review["status"] == "complete" for review in reviews.values()) else "incomplete")
+    update = {"last_review_attempt_at_utc": utc_now(), "last_review_status": status, "last_review_ledgers": sorted(reviews),
+              "last_review_ids": {ledger_id: review["review_id"] for ledger_id, review in reviews.items()}}
+    if status in {"complete", "no_scheduled_ledger"}:
+        update["last_successful_review_at_utc"] = utc_now()
+    _save_status(update, data_dir)
+    return {"status": status, "ledgers": sorted(reviews), "reviews": reviews}
+
+
+def run_daily_report(*, root: Path = ROOT, data_dir: Path = DATA, ledger: dict[str, Any] | None = None) -> dict[str, Any]:
+    load_dotenv(root / ".env")
+    snapshot = capture_snapshot(root, data_dir, ledger)
+    ledger_id = snapshot["ledger"]["ledger_id"]
     account = snapshot.get("paper_account", {})
     trades = account.get("recent_trades", [])
     perf = calculate_performance(trades)
@@ -528,7 +620,7 @@ def run_daily_report(*, root: Path = ROOT, data_dir: Path = DATA) -> dict[str, A
     review_summary = (_review_email_summary(latest_review) if latest_review else
                       "Claude and Codex review: No completed review report is available yet.")
     report = {
-        "created_at_utc": utc_now(), "mode": "PAPER", "strategy": snapshot["strategy"],
+        "created_at_utc": utc_now(), "mode": "PAPER", "ledger_id": ledger_id, "strategy": snapshot["strategy"],
         "realized_pnl_usd": account.get("realized_pnl"), "unrealized_pnl_usd": account.get("unrealized_pnl"),
         "open_positions": account.get("open_positions", []), "closed_trade_metrics": perf.__dict__,
         "recent_decisions": snapshot.get("recent_decisions", [])[-100:],
@@ -546,12 +638,12 @@ def run_daily_report(*, root: Path = ROOT, data_dir: Path = DATA) -> dict[str, A
                 review_summary,
                 "This is a paper-trading research report. No live order was placed and no strategy change was made.",
             ))
-            send_email("OptioBot daily paper summary", body)
+            send_email(f"OptioBot daily paper summary - {ledger_id}", f"Ledger: {ledger_id}\n\n{body}")
             email_status = "sent"
         except Exception as exc:
             email_status, error = "failed", f"{type(exc).__name__}: {exc}"
     _save_status({"last_daily_report_at_utc": utc_now(), "last_daily_report": path.name,
-                  "last_daily_email_status": email_status, "last_daily_error": error})
+                  "last_daily_email_status": email_status, "last_daily_error": error}, data_dir)
     print(json.dumps({"report": path.name, "email_status": email_status, "error": error}, indent=2))
     return report
 
@@ -771,18 +863,25 @@ def watchdog_all(*, root: Path = ROOT, data_dir: Path = DATA, now: datetime | No
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="optio-supervisor")
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("review")
-    sub.add_parser("daily-report")
+    ledger_help = ("Which paper ledger to review: original or an account profile (small). "
+                   "Default: every ledger whose engine has an enabled OptioBot scheduled task.")
+    sub.add_parser("review").add_argument("--ledger", default=None, help=ledger_help)
+    sub.add_parser("daily-report").add_argument("--ledger", default=None, help=ledger_help)
     sub.add_parser("test-email")
     sub.add_parser("status")
     sub.add_parser("watchdog")
     args = parser.parse_args(argv)
     try:
         if args.command == "review":
-            report = run_review()
-            return 0 if report["status"] == "complete" else 2
+            result = run_reviews(only=args.ledger)
+            print(json.dumps({"status": result["status"], "ledgers": result["ledgers"]}, indent=2))
+            return 0 if result["status"] in {"complete", "no_scheduled_ledger"} else 2
         if args.command == "daily-report":
-            run_daily_report()
+            targets = review_targets(ROOT, DATA, only=args.ledger)
+            for target in targets:
+                run_daily_report(data_dir=target["data_dir"], ledger=target)
+            if not targets:
+                print(json.dumps({"status": "no_scheduled_ledger"}))
         elif args.command == "test-email":
             result = run_email_test()
             return 0 if result["status"] == "sent" else 2
