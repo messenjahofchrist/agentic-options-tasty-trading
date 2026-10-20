@@ -95,6 +95,23 @@ class ProfileUnitTests(unittest.TestCase):
         self.assertEqual(policy.entry_allowed(account, 1000, 199.30)[0], True)
         self.assertEqual(policy.entry_allowed(account, 1000, 199.31)[0], False)
 
+    def test_per_trade_dollar_cap_limits_the_budget_and_the_original_profile_has_none(self):
+        capped = AccountProfile(SMALL, 0.40, 150.0)
+        account = PaperAccount(starting_capital=1000, cash=1000)
+        self.assertAlmostEqual(1000 * capped.cycle_strategy(self.strategy, 1000, account).risk["max_risk_per_trade_fraction"], 150.0)
+        account.positions.append(position(price=2.9))  # $290.70 open: $109.30 of the pool left, below the cap
+        self.assertAlmostEqual(1000 * capped.cycle_strategy(self.strategy, 1000, account).risk["max_risk_per_trade_fraction"], 109.30)
+        self.ledger.initialize()
+        self.assertIsNone(self.ledger.runtime(self.strategy)[1].per_trade_cap_dollars)  # fixture profile sets none
+        path = self.root / "profiles" / "small_account.json"
+        data = json.loads(path.read_text())
+        data["profiles"][SMALL]["max_per_trade_dollars"] = 150
+        path.write_text(json.dumps(data))
+        ledger = ProfileLedger(ProfileConfig.load(self.root, "profiles/small_account.json"), original_data_dir=self.root / "data")
+        self.assertEqual(ledger.runtime(self.strategy)[1].per_trade_cap_dollars, 150.0)
+        self.assertEqual(ledger.status()["per_trade_cap"], 150.0)
+        self.assertIsNone(AccountProfile(ORIGINAL, None).per_trade_cap_dollars)
+
     def test_only_sizing_keys_differ_from_the_strategy(self):
         sized = AccountProfile(SMALL, 0.40).cycle_strategy(self.strategy, 1000, PaperAccount(1000, 1000))
         for field in ("strategy_id", "version", "sha256", "universe", "rules", "execution", "entry_window_et",
@@ -368,6 +385,7 @@ class DailyLimitOverrideTests(unittest.TestCase):
 
     def test_repository_small_profile_uses_20_percent_daily_and_40_percent_weekly_limits(self):
         config = ProfileConfig.load(ROOT, "small")
+        self.assertEqual(config.small_per_trade_cap_dollars, 150.0)
         self.assertEqual(dict(config.small_risk_overrides),
                          {"max_daily_loss_fraction": 0.20, "max_weekly_loss_fraction": 0.40})
 

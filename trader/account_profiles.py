@@ -13,7 +13,8 @@ restores the strategy's own values.
 
 The profile never edits the strategy. Per decision cycle it hands the unchanged strategy a per-trade sizing
 budget equal to the remaining aggregate allocation (owner choice, 2026-10-16: one trade may use what is left
-of the 40% pool). Signals, filters, contract selection, exits and loss limits are the strategy's own.
+of the 40% pool), capped since 2026-10-19 at max_per_trade_dollars ($150 of modeled maximum loss: premium plus
+modeled round-trip costs). Signals, filters, contract selection, exits and loss limits are the strategy's own.
 """
 from __future__ import annotations
 
@@ -52,6 +53,7 @@ class ProfileConfig:
     config_path: Path
     rest_requests_per_second: float | None = None
     small_risk_overrides: tuple[tuple[str, float], ...] = ()
+    small_per_trade_cap_dollars: float | None = None
 
     @classmethod
     def load(cls, root: Path, name_or_path: str) -> "ProfileConfig":
@@ -70,6 +72,9 @@ class ProfileConfig:
             raise ProfileError("only max_daily_loss_fraction and max_weekly_loss_fraction may be overridden by an account profile")
         if any(not 0 < v <= 1 for v in overrides.values()):
             raise ProfileError("risk override fractions must be in (0, 1]")
+        per_trade_cap = small.get("max_per_trade_dollars")
+        if per_trade_cap is not None and not float(per_trade_cap) > 0:
+            raise ProfileError("max_per_trade_dollars must be positive")
         fraction = float(small["max_aggregate_allocation_fraction"])
         if not 0 < fraction <= 1:
             raise ProfileError("max_aggregate_allocation_fraction must be in (0, 1]")
@@ -84,7 +89,8 @@ class ProfileConfig:
                    small_universe=universe, transition_equity=float(data["transition"]["equity_threshold"]),
                    baseline=baseline, config_path=path,
                    rest_requests_per_second=float(data["rest_requests_per_second"]) if data.get("rest_requests_per_second") else None,
-                   small_risk_overrides=tuple(sorted(overrides.items())))
+                   small_risk_overrides=tuple(sorted(overrides.items())),
+                   small_per_trade_cap_dollars=None if per_trade_cap is None else float(per_trade_cap))
 
 
 def verify_original_baseline(strategy: Strategy, baseline: dict[str, Any]) -> None:
@@ -104,9 +110,10 @@ class AccountProfile:
     """Runtime allocation policy handed to the shared loop. Exposure = maximum potential loss of each open long
     option: full premium x 100 x quantity plus modeled round-trip costs (the strategy's modeled_risk_dollars)."""
 
-    def __init__(self, name: str, allocation_fraction: float | None):
+    def __init__(self, name: str, allocation_fraction: float | None, per_trade_cap_dollars: float | None = None):
         self.name = name
         self.allocation_fraction = allocation_fraction
+        self.per_trade_cap_dollars = per_trade_cap_dollars
 
     @staticmethod
     def position_max_loss(position: dict) -> float:
@@ -126,10 +133,13 @@ class AccountProfile:
         return None if cap is None else max(0.0, cap - self.open_exposure(account))
 
     def cycle_strategy(self, strategy: Strategy, equity: float, account: PaperAccount) -> Strategy:
-        """The unchanged strategy, with its per-trade sizing budget set to the remaining aggregate allocation."""
+        """The unchanged strategy, with its per-trade sizing budget set to the remaining aggregate allocation,
+        no more than the per-trade dollar cap."""
         remaining = self.remaining(equity, account)
         if remaining is None:
             return strategy
+        if self.per_trade_cap_dollars is not None:
+            remaining = min(remaining, self.per_trade_cap_dollars)
         fraction = remaining / equity if equity > 0 else 0.0
         return replace(strategy, risk={**strategy.risk, "max_risk_per_trade_fraction": fraction,
                                        "hard_max_risk_per_trade_fraction": fraction})
@@ -257,7 +267,7 @@ class ProfileLedger:
         # ledger. They feed the strategy's entry blocks and daily-loss exit exactly as its own values would.
         risk = {**strategy.risk, **dict(self.config.small_risk_overrides)}
         return (replace(strategy, universe=self.config.small_universe, risk=risk),
-                AccountProfile(SMALL, self.config.small_allocation_fraction))
+                AccountProfile(SMALL, self.config.small_allocation_fraction, self.config.small_per_trade_cap_dollars))
 
     def status(self, strategy: Strategy | None = None, now: datetime | None = None) -> dict[str, Any]:
         """Dashboard / CLI summary of the profile ledger and today's scanning outcome."""
@@ -266,7 +276,8 @@ class ProfileLedger:
             return {"initialized": False, "ledger_id": self.config.ledger_id}
         account = self.account()
         active = state.get("active_profile", SMALL)
-        policy = AccountProfile(active, self.config.small_allocation_fraction if active == SMALL else None)
+        policy = (AccountProfile(SMALL, self.config.small_allocation_fraction, self.config.small_per_trade_cap_dollars)
+                  if active == SMALL else AccountProfile(active, None))
         equity = account.equity
         cap = policy.allocation_cap(equity)
         exposure = policy.open_exposure(account)
@@ -300,6 +311,7 @@ class ProfileLedger:
                 "max_aggregate_allocation": None if cap is None else round(cap, 2),
                 "allocation_fraction": policy.allocation_fraction,
                 "remaining_risk_budget": None if cap is None else round(max(0.0, cap - exposure), 2),
+                "per_trade_cap": policy.per_trade_cap_dollars,
                 "symbols_scanned": len(universe), "universe": list(universe),
                 "signals_today": signals, "affordable_candidates_today": affordable,
                 "rejected_today": sum(rejections.values()), "rejection_reasons_today": rejections,

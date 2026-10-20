@@ -11,6 +11,7 @@ Only three things differ from the original account:
 | Universe | 47 symbols: the original 14 plus 33 audited additions (`profiles/small_account_universe.json`) | the original 14, from `strategy.txt` |
 | Daily loss limit | **20% of equity** ($200 at $1,000). Owner-authorized 2026-10-16 as `risk_overrides` in `profiles/small_account.json` | strategy's own 2% |
 | Weekly loss limit | **40% of equity** (~$400 at $1,000). Owner-authorized 2026-10-19 as `risk_overrides` in `profiles/small_account.json` | strategy's own 5% |
+| Per-trade cap | **$150** of modeled maximum loss (premium x 100 plus modeled round-trip costs). Owner-authorized 2026-10-19 as `max_per_trade_dollars` in `profiles/small_account.json`; the budget is the remaining 40% pool or $150, whichever is smaller | none (strategy's own sizing) |
 
 Everything else is the strategy's own and identical in both profiles: candles, indicators, opening range, signals, filters, contract selection, exits, the 1-contract limit, 4 open positions, 6 trades a day, and the weekly and consecutive-loss limits.
 
