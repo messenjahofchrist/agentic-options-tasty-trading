@@ -1,0 +1,10 @@
+captured_at_utc: 2026-10-23T17:55:28Z
+branch: live-trading-and-small-account-profile
+head: 2d4967dd13f77e92379df3cff063ce7bea178c01
+--- git status --porcelain
+ M trader/fees.py
+?? docs/v2/
+--- git diff --stat (working tree vs HEAD)
+--- unpushed commits
+2d4967d Side-by-side $10K vs $1K paper comparison
+7156290 Supervisor review follows the scheduled engine's ledger

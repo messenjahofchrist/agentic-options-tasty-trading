@@ -332,7 +332,7 @@ def today_decision_logs(data_dir: Path, today: str) -> list[Path]:
 
 
 def run_profile_paper_session(*, root: Path, cfg, strategy: Strategy, profile_name: str = "small",
-                              symbols: tuple[str, ...] | None = None) -> dict[str, Any]:
+                              symbols: tuple[str, ...] | None = None, v2=None) -> dict[str, Any]:
     """Run the shared PAPER loop on the profile's isolated ledger. Transitions are checked only at the
     session boundaries (before the session starts and after it ends), never mid-session."""
     from .config import Mode
@@ -361,7 +361,7 @@ def run_profile_paper_session(*, root: Path, cfg, strategy: Strategy, profile_na
     try:
         # ORIGINAL runs with profile=None: byte-for-byte the original account behaviour, on this ledger.
         run_paper_session(root=root, cfg=profile_cfg, strategy=run_strategy, symbols=symbols,
-                          profile=policy if policy.allocation_fraction is not None else None)
+                          profile=policy if policy.allocation_fraction is not None else None, v2=v2)
     finally:
         ledger.check_transition(boundary="session_end")
         ledger._audit("session_end", active_profile=ledger.active_profile)

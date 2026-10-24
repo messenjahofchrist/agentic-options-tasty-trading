@@ -1,0 +1,52 @@
+{
+  "description": "Scheduled U.S. economic events for PROFESSIONAL_STRATEGY_V2, copied from the publishing agency's own schedule page. Dates and times are America/New_York. 'time_verified' is false when the page lists the date but not the release time; the time shown is then the agency's customary time and is treated as unverified.",
+  "verified_at_utc": "2026-10-23T18:05:00Z",
+  "verified_by": "Claude (lead engineer), read from the official pages listed under sources",
+  "sources": {
+    "FOMC": {"url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+             "note": "Dates as published; 'each meeting date is tentative until confirmed at the meeting immediately preceding it'. The page gives meeting dates, not times: the 14:00 ET statement and 14:30 ET press conference are the customary times (time_verified false).",
+             "covers_through": "2027-12-08"},
+    "CPI": {"url": "https://www.bls.gov/schedule/news_release/cpi.htm", "covers_through": "2027-12-10"},
+    "EMPLOYMENT_SITUATION": {"url": "https://www.bls.gov/schedule/news_release/empsit.htm", "covers_through": "2027-12-03"},
+    "PPI": {"url": "https://www.bls.gov/schedule/news_release/ppi.htm", "covers_through": "2027-12-15"},
+    "BEA": {"url": "https://www.bea.gov/news/schedule", "note": "GDP and Personal Income and Outlays (PCE).", "covers_through": "2026-12-23"}
+  },
+  "calendar_valid_through": "2026-12-23",
+  "events": [
+    {"date": "2026-10-28", "time_et": "14:00", "time_verified": false, "type": "FOMC_RATE_DECISION", "name": "FOMC statement (meeting Oct 27-28); press conference customarily 14:30", "source": "FOMC"},
+    {"date": "2026-12-09", "time_et": "14:00", "time_verified": false, "type": "FOMC_RATE_DECISION", "name": "FOMC statement (meeting Dec 8-9, SEP); press conference customarily 14:30", "source": "FOMC"},
+    {"date": "2027-01-27", "time_et": "14:00", "time_verified": false, "type": "FOMC_RATE_DECISION", "name": "FOMC statement (meeting Jan 26-27)", "source": "FOMC"},
+    {"date": "2027-03-17", "time_et": "14:00", "time_verified": false, "type": "FOMC_RATE_DECISION", "name": "FOMC statement (meeting Mar 16-17, SEP)", "source": "FOMC"},
+    {"date": "2027-04-28", "time_et": "14:00", "time_verified": false, "type": "FOMC_RATE_DECISION", "name": "FOMC statement (meeting Apr 27-28)", "source": "FOMC"},
+    {"date": "2027-06-09", "time_et": "14:00", "time_verified": false, "type": "FOMC_RATE_DECISION", "name": "FOMC statement (meeting Jun 8-9, SEP)", "source": "FOMC"},
+    {"date": "2027-07-28", "time_et": "14:00", "time_verified": false, "type": "FOMC_RATE_DECISION", "name": "FOMC statement (meeting Jul 27-28)", "source": "FOMC"},
+    {"date": "2027-09-15", "time_et": "14:00", "time_verified": false, "type": "FOMC_RATE_DECISION", "name": "FOMC statement (meeting Sep 14-15, SEP)", "source": "FOMC"},
+    {"date": "2027-10-27", "time_et": "14:00", "time_verified": false, "type": "FOMC_RATE_DECISION", "name": "FOMC statement (meeting Oct 26-27)", "source": "FOMC"},
+    {"date": "2027-12-08", "time_et": "14:00", "time_verified": false, "type": "FOMC_RATE_DECISION", "name": "FOMC statement (meeting Dec 7-8, SEP)", "source": "FOMC"},
+
+    {"date": "2026-10-29", "time_et": "08:30", "time_verified": true, "type": "GDP", "name": "GDP (Advance Estimate), 3rd Quarter 2026", "source": "BEA"},
+    {"date": "2026-10-29", "time_et": "08:30", "time_verified": true, "type": "PCE", "name": "Personal Income and Outlays, September 2026", "source": "BEA"},
+    {"date": "2026-11-25", "time_et": "08:30", "time_verified": true, "type": "GDP", "name": "GDP (Second Estimate) and Corporate Profits, 3rd Quarter 2026", "source": "BEA"},
+    {"date": "2026-11-25", "time_et": "08:30", "time_verified": true, "type": "PCE", "name": "Personal Income and Outlays, October 2026", "source": "BEA"},
+    {"date": "2026-12-23", "time_et": "08:30", "time_verified": true, "type": "GDP", "name": "GDP (Third Estimate), 3rd Quarter 2026", "source": "BEA"},
+    {"date": "2026-12-23", "time_et": "08:30", "time_verified": true, "type": "PCE", "name": "Personal Income and Outlays, November 2026", "source": "BEA"},
+
+    {"date": "2026-11-06", "time_et": "08:30", "time_verified": true, "type": "EMPLOYMENT_SITUATION", "name": "Employment Situation (nonfarm payrolls), October 2026", "source": "EMPLOYMENT_SITUATION"},
+    {"date": "2026-12-04", "time_et": "08:30", "time_verified": true, "type": "EMPLOYMENT_SITUATION", "name": "Employment Situation (nonfarm payrolls), November 2026", "source": "EMPLOYMENT_SITUATION"},
+    {"date": "2027-01-08", "time_et": "08:30", "time_verified": true, "type": "EMPLOYMENT_SITUATION", "name": "Employment Situation, December 2026", "source": "EMPLOYMENT_SITUATION"},
+    {"date": "2027-02-05", "time_et": "08:30", "time_verified": true, "type": "EMPLOYMENT_SITUATION", "name": "Employment Situation, January 2027", "source": "EMPLOYMENT_SITUATION"},
+    {"date": "2027-03-05", "time_et": "08:30", "time_verified": true, "type": "EMPLOYMENT_SITUATION", "name": "Employment Situation, February 2027", "source": "EMPLOYMENT_SITUATION"},
+
+    {"date": "2026-11-10", "time_et": "08:30", "time_verified": true, "type": "CPI", "name": "Consumer Price Index, October 2026", "source": "CPI"},
+    {"date": "2026-12-10", "time_et": "08:30", "time_verified": true, "type": "CPI", "name": "Consumer Price Index, November 2026", "source": "CPI"},
+    {"date": "2027-01-13", "time_et": "08:30", "time_verified": true, "type": "CPI", "name": "Consumer Price Index, December 2026", "source": "CPI"},
+    {"date": "2027-02-11", "time_et": "08:30", "time_verified": true, "type": "CPI", "name": "Consumer Price Index, January 2027", "source": "CPI"},
+    {"date": "2027-03-10", "time_et": "08:30", "time_verified": true, "type": "CPI", "name": "Consumer Price Index, February 2027", "source": "CPI"},
+
+    {"date": "2026-11-13", "time_et": "08:30", "time_verified": true, "type": "PPI", "name": "Producer Price Index, October 2026", "source": "PPI"},
+    {"date": "2026-12-15", "time_et": "08:30", "time_verified": true, "type": "PPI", "name": "Producer Price Index, November 2026", "source": "PPI"},
+    {"date": "2027-01-14", "time_et": "08:30", "time_verified": true, "type": "PPI", "name": "Producer Price Index, December 2026", "source": "PPI"},
+    {"date": "2027-02-12", "time_et": "08:30", "time_verified": true, "type": "PPI", "name": "Producer Price Index, January 2027", "source": "PPI"},
+    {"date": "2027-03-12", "time_et": "08:30", "time_verified": true, "type": "PPI", "name": "Producer Price Index, February 2027", "source": "PPI"}
+  ]
+}

@@ -333,6 +333,36 @@ def review_targets(root: Path = ROOT, data_dir: Path = DATA, *, only: str | None
     return targets
 
 
+def v2_summary(data_dir: Path, limit: int = 3000) -> dict[str, Any] | None:
+    """PROFESSIONAL_STRATEGY_V2 evidence for this ledger, when an engine ran it: which stage decided each candidate,
+    the latest market context and regime, entries, management events, and the original-strategy shadow benchmark."""
+    status = _safe_json(data_dir / "v2_status.json", None)
+    if status is None:
+        return None
+    rows = _tail_jsonl(data_dir / "v2_decisions.jsonl", limit)
+    candidates = [r for r in rows if r.get("type") == "candidate"]
+    outcomes = Counter(r.get("outcome") for r in candidates)
+    deciding = Counter()
+    for r in candidates:
+        for name, stage in (r.get("stages") or {}).items():
+            if stage.get("status") in ("REJECT", "WAIT", "INSUFFICIENT_DATA"):
+                deciding[f"{name}:{stage.get('status')}"] += 1
+                break
+    context = _safe_json(data_dir / "v2_context_snapshot.json", {})
+    shadow = _safe_json(data_dir / "v2_shadow_original" / "paper_account.json", {})
+    shadow_closed = [x for x in shadow.get("ledger", []) if x.get("type") == "paper_close"]
+    return {"status": status, "candidate_outcomes": dict(outcomes), "first_deciding_stage": dict(deciding.most_common(12)),
+            "latest_regime": (context.get("regime") or {}).get("regime"), "regime_detail": context.get("regime"),
+            "vix": context.get("vix"), "breadth": context.get("breadth"),
+            "recent_candidates": [{"symbol": r.get("symbol"), "side": r.get("side"), "timestamp": r.get("timestamp"),
+                                   "outcome": r.get("outcome"), "reasons": (r.get("reasons") or [])[:3]} for r in candidates[-30:]],
+            "entries": [r for r in rows if r.get("type") == "entry"][-20:],
+            "management_events": [r for r in rows if r.get("type") == "management"][-20:],
+            "original_strategy_shadow": {"cash": shadow.get("cash"), "realized_pnl": shadow.get("realized_pnl"),
+                                         "closed_trades": len(shadow_closed),
+                                         "recent_closes": shadow_closed[-10:]}}
+
+
 def capture_snapshot(root: Path = ROOT, data_dir: Path = DATA, ledger: dict[str, Any] | None = None) -> dict[str, Any]:
     """Capture only strategy, paper ledger, decision records, and bounded local health evidence."""
     strategy = _safe_json(root / "active_strategy.json", {})
@@ -377,6 +407,9 @@ def capture_snapshot(root: Path = ROOT, data_dir: Path = DATA, ledger: dict[str,
             "Missing heartbeat means engine health cannot be established from this snapshot.",
         ],
     }
+    v2 = v2_summary(data_dir)
+    if v2 is not None:
+        snapshot["professional_strategy_v2"] = v2
     # Keep prompts bounded while preserving the latest observations.
     encoded = json.dumps(snapshot, default=str, separators=(",", ":"))
     if len(encoded) > 180_000:
@@ -398,6 +431,11 @@ def _prompt(snapshot: dict[str, Any], reviewer: str) -> str:
         "The snapshot's ledger section names the paper ledger under review. When it lists account_profile_rules, that "
         "ledger runs the same strategy under those extra limits (allocation, per-trade cap, loss limits); judge its trades "
         "and blockers against them and name the ledger_id in your findings.\n"
+        "When professional_strategy_v2 is present, this ledger trades PROFESSIONAL_STRATEGY_V2: the unchanged original "
+        "strategy plus decision stages (confirmation, regime, sector, VWAP, events, correlation, option pricing/volatility, "
+        "sizing). Its decisions are in professional_strategy_v2 (first_deciding_stage says which stage stopped candidates), "
+        "and original_strategy_shadow is the original strategy run on the same data without orders, the benchmark. Compare "
+        "the two and say which V2 stage binds; V2 changes go to strategies/professional_v2.json and need v2-activate.\n"
         "Start from blocker_summary_by_session: name the binding_constraint for the latest session, say whether it is "
         "operational (data, kill switch, engine health) or a strategy/risk gate, and propose at most one concrete "
         "parameter change aimed at it, with the exact strategy.txt key, current and proposed value, and the effect you "

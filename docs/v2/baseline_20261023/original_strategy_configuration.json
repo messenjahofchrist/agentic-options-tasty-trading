@@ -1,0 +1,78 @@
+{
+  "strategy_id": "opening_range_breakout_options",
+  "version": "0.1.6",
+  "configuration_hash": "c597cfe86d7971a7e96b08ed71bc58eff6dca6942fcb0288b24498dedf6e902b",
+  "manifest_verified": true,
+  "configuration": {
+    "strategy_id": "opening_range_breakout_options",
+    "version": "0.1.6",
+    "status": "research_test",
+    "universe": [
+      "SPY",
+      "QQQ",
+      "IWM",
+      "DIA",
+      "TLT",
+      "NVDA",
+      "AAPL",
+      "AMZN",
+      "GOOGL",
+      "PLTR",
+      "NFLX",
+      "INTC",
+      "UBER",
+      "BAC"
+    ],
+    "bar_interval_minutes": 1,
+    "opening_range_minutes": 15,
+    "entry_window_et": {
+      "start": "09:30",
+      "end": "16:00"
+    },
+    "rules": {
+      "trend_ema_fast": 9,
+      "trend_ema_slow": 21,
+      "relative_volume_min": 1.2,
+      "breakout_lookback_bars": 15,
+      "atr_period": 14,
+      "max_atr_fraction": 0.025,
+      "breakout_buffer_atr": 0.05,
+      "min_dte": 7,
+      "max_dte": 21,
+      "min_abs_delta": 0.45,
+      "max_abs_delta": 0.65,
+      "target_abs_delta": 0.55,
+      "max_spread_fraction": 0.1,
+      "max_spread_dollars": 0.1,
+      "min_open_interest": 100,
+      "min_option_volume": 10,
+      "max_contracts": 1,
+      "stop_range_multiple": 0.5,
+      "target_range_multiple": 1.0,
+      "stop_underlying_atr": 1.0,
+      "target_atr_multiple": 2.0,
+      "max_atr_expansion": 2.0,
+      "max_holding_minutes": 180
+    },
+    "risk": {
+      "max_risk_per_trade_fraction": 0.1,
+      "hard_max_risk_per_trade_fraction": 0.1,
+      "max_daily_loss_fraction": 0.02,
+      "max_weekly_loss_fraction": 0.05,
+      "max_consecutive_losses": 3,
+      "max_trades_per_day": 6,
+      "max_open_positions": 4
+    },
+    "execution": {
+      "paper_buy_price": "ask",
+      "paper_sell_price": "bid",
+      "slippage_per_contract": 0.02,
+      "commission_per_contract": 0.65,
+      "exchange_fee_per_contract": 0.05,
+      "min_expected_net_r": 1.0,
+      "mode": "PAPER",
+      "enable_time_exit": false,
+      "flatten_at_session_close": true
+    }
+  }
+}

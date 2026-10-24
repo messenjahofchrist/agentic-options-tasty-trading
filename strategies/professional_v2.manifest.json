@@ -1,0 +1,13 @@
+{
+  "strategy_id": "PROFESSIONAL_STRATEGY_V2",
+  "version": "2.0.0",
+  "status": "research_test",
+  "mode": "PAPER",
+  "live_enabled": false,
+  "configuration_hash": "52c08912dc34ff3b8c28a9e7f157364c1bf30e37dd8feb9a7f3c857c83b809d1",
+  "base_strategy_hash": "c597cfe86d7971a7e96b08ed71bc58eff6dca6942fcb0288b24498dedf6e902b",
+  "base_strategy_version": "0.1.6",
+  "activated_at_utc": "2026-10-23T18:28:47.292247+00:00",
+  "approved_by": "owner (v2-activate --approve)",
+  "note": "Lead-engineer pre-deployment validation under the owner's 2026-10-23 V2 mission (PAPER only). Scheduled engines unchanged until the Monday checklist passes."
+}

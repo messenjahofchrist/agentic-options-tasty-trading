@@ -29,6 +29,9 @@ def main(argv: list[str] | None = None) -> int:
     for command in (paper, paper_test):
         command.add_argument("--symbol", action="append", type=str.upper, dest="symbols",
                              help="Limit the session to this underlying (repeatable). Default: the whole strategy universe.")
+    paper.add_argument("--strategy", choices=("original", "v2"), default="original",
+                       help="original: the active strategy.txt (default). v2: PROFESSIONAL_STRATEGY_V2 decision stages "
+                            "on the same core strategy (PAPER only; needs an activated V2 manifest).")
     paper.add_argument("--account-profile", choices=("small",), default=None,
                        help="Run on an isolated account-profile PAPER ledger (small: $1,000, 40%% aggregate cap, "
                             "expanded universe; restores the original settings at $10,000). Default: the original ledger.")
@@ -72,6 +75,18 @@ def main(argv: list[str] | None = None) -> int:
     authorize.add_argument("--account-suffix", required=True, help="Last 4 characters of TASTYTRADE_ACCOUNT_NUMBER")
     authorize.add_argument("--statement", required=True, help='Exactly: "I AUTHORIZE LIVE EXECUTION OF THIS EXACT STRATEGY HASH"')
     authorize.add_argument("--note", default="")
+    sub.add_parser("v2-validate", help="Validate PROFESSIONAL_STRATEGY_V2 config, sector map and calendar (offline)")
+    v2_activate = sub.add_parser("v2-activate", help="Owner action: activate the current V2 configuration for PAPER")
+    v2_activate.add_argument("--approve", action="store_true", help="Write the V2 manifest. Without it, only validate.")
+    v2_activate.add_argument("--note", default="", help="Why (stored in the manifest)")
+    v2_ready = sub.add_parser("v2-readiness", help="Read-only V2 readiness checks against tastytrade (never orders)")
+    v2_ready.add_argument("--skip-stream", action="store_true", help="Skip the live DXLink trade-stream probe")
+    sub.add_parser("v2-report", help="Write the Professional Strategy dashboard (data/v2_dashboard.html)")
+    v2_replay = sub.add_parser("v2-replay", help="Historical replay: original vs V2 on cached history (underlying proxy)")
+    v2_replay.add_argument("--source", choices=("massive_cache", "tastytrade"), default="massive_cache")
+    v2_replay.add_argument("--in-sample-end", default="2026-08-15")
+    v2_replay.add_argument("--out", default="data/v2_replay")
+    sub.add_parser("v2-compare", help="Original-strategy shadow vs V2 results from the PAPER ledgers (read-only)")
     dash = sub.add_parser("dashboard"); dash.add_argument("--host", default="127.0.0.1"); dash.add_argument("--port", type=int, default=8765)
     sub.add_parser("status")
     args = parser.parse_args(argv)
@@ -90,13 +105,20 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "paper-session":
             from .paper_runner import run_paper_session
             strategy = parse_strategy(root / "strategy.txt")
+            v2 = None
+            if args.strategy == "v2":
+                from .v2.config import load_v2_config, verify_v2_manifest
+                v2 = load_v2_config(root)
+                verify_v2_manifest(root, v2)
+                from .tastytrade_client import set_request_rate_limit
+                set_request_rate_limit(10)  # V2 adds metrics/VIX/chain requests; pace every V2 engine
             if args.account_profile:
                 from .account_profiles import run_profile_paper_session
                 run_profile_paper_session(root=root, cfg=cfg, strategy=strategy, profile_name=args.account_profile,
-                                          symbols=tuple(args.symbols) if args.symbols else None)
+                                          symbols=tuple(args.symbols) if args.symbols else None, v2=v2)
             else:
                 run_paper_session(root=root, cfg=cfg, strategy=strategy,
-                                  symbols=tuple(args.symbols) if args.symbols else None)
+                                  symbols=tuple(args.symbols) if args.symbols else None, v2=v2)
         elif args.command == "profile-status":
             from .account_profiles import ProfileConfig, ProfileLedger
             strategy = parse_strategy(root / "strategy.txt")
@@ -113,6 +135,12 @@ def main(argv: list[str] | None = None) -> int:
             from .profile_report import write_report
             print(write_report(root, cfg.data_dir, args.account_profile))
             print(write_comparison(root, cfg.data_dir, args.account_profile))
+            if (root / "strategies" / "professional_v2.manifest.json").exists():
+                try:  # the V2 dashboard rides the same 2-minute report task; a failure never stops the reports
+                    from .v2.report import write_dashboard
+                    print(write_dashboard(root, cfg.data_dir))
+                except Exception as exc:
+                    print(f"V2 dashboard not written: {type(exc).__name__}: {exc}", file=sys.stderr)
         elif args.command == "paper-test-session":
             from .paper_runner import run_paper_test_session
             if cfg.mode is Mode.LIVE:
@@ -142,6 +170,9 @@ def main(argv: list[str] | None = None) -> int:
             path = authorize_live(root=root, cfg=cfg, strategy_hash=args.strategy_hash,
                                   account_suffix=args.account_suffix, statement=args.statement, note=args.note)
             print(json.dumps({"authorized": True, "file": str(path)}, indent=2))
+        elif args.command in ("v2-validate", "v2-activate", "v2-readiness", "v2-report", "v2-replay", "v2-compare"):
+            from .v2.commands import run_command
+            return run_command(args, cfg, root)
         elif args.command == "dashboard":
             import uvicorn
             uvicorn.run(create_app(cfg.data_dir, root), host=args.host, port=args.port)

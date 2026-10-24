@@ -1,0 +1,452 @@
+diff --git a/trader/paper_runner.py b/trader/paper_runner.py
+index 7e38110..da55c15 100644
+--- a/trader/paper_runner.py
++++ b/trader/paper_runner.py
+@@ -37,6 +37,9 @@ MAX_CLOCK_OFFSET_SECONDS = 2.0
+ # A one-minute live-feed gap is backfilled from history; the provider can lag a few seconds behind.
+ GAP_RECOVERY_ATTEMPTS = 3
+ GAP_RECOVERY_RETRY_SECONDS = 5.0
++# V2 sessions retry a failed startup history request (validation unchanged); the original engine does not.
++BOOTSTRAP_ATTEMPTS = 3
++BOOTSTRAP_RETRY_SECONDS = 4.0
+ MAX_QUOTE_FUTURE_SECONDS = 2.5
+ 
+ 
+@@ -140,8 +143,13 @@ def _write_recovery_report(data_dir: Path, report: dict) -> Path:
+ 
+ 
+ def _validated_session_history(rows: list[dict], *, session_open: datetime,
+-                               last_completed_bar: datetime, audit: dict | None = None) -> list[Bar]:
+-    """Convert and validate a complete, contiguous session history for a late PAPER start."""
++                               last_completed_bar: datetime, audit: dict | None = None,
++                               allow_missing_minutes: bool = False) -> list[Bar]:
++    """Convert and validate a complete, contiguous session history for a late PAPER start.
++
++    allow_missing_minutes is used only for V2 market-context symbols that are never traded (thin sector ETFs can
++    have minutes with no trades, which DXLink reports as no candle). Missing minutes are then counted in the audit
++    instead of refused; nothing is filled in, and every other check (order, conflicts, OHLCV bounds) still applies."""
+     if session_open.tzinfo is None or last_completed_bar.tzinfo is None:
+         raise ValueError("Historical session bounds must be timezone-aware")
+     expected: list[datetime] = []
+@@ -194,7 +202,7 @@ def _validated_session_history(rows: list[dict], *, session_open: datetime,
+                       "duplicate_candle_count": int(audit.get("duplicate_candle_count", 0)) + duplicates,
+                       "out_of_order_count": int(audit.get("out_of_order_count", 0)) + out_of_order,
+                       "missing_timestamps_utc": [stamp.isoformat() for stamp in missing]})
+-    if missing:
++    if missing and not allow_missing_minutes:
+         raise RuntimeError(
+             "Historical candle bootstrap incomplete; blocking entries. "
+             f"Expected {len(expected)} one-minute bars from {expected[0].isoformat()} "
+@@ -203,7 +211,7 @@ def _validated_session_history(rows: list[dict], *, session_open: datetime,
+         )
+     if out_of_order:
+         raise RuntimeError(f"Historical candle bootstrap returned {out_of_order} out-of-order bars")
+-    return [parsed[stamp] for stamp in expected]
++    return [parsed[stamp] for stamp in expected if stamp in parsed]
+ 
+ 
+ def _startup_history_metrics(bars: list[Bar], strategy: Strategy, *, session_open: datetime) -> dict:
+@@ -271,7 +279,7 @@ def _session_symbols(strategy: Strategy, symbols: tuple[str, ...] | None) -> tup
+ 
+ 
+ def run_paper_session(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple[str, ...] | None = None,
+-                      max_restarts: int = MAX_ENGINE_RESTARTS, profile=None) -> None:
++                      max_restarts: int = MAX_ENGINE_RESTARTS, profile=None, v2=None) -> None:
+     """Run the session, restarting it after feed/network failures while the market is open.
+ 
+     A restart re-runs the full startup path: manifest check, clock check, full-session history
+@@ -283,7 +291,7 @@ def run_paper_session(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols
+     restarts = 0
+     while True:
+         try:
+-            _run_paper_session_once(root=root, cfg=cfg, strategy=strategy, symbols=symbols, profile=profile)
++            _run_paper_session_once(root=root, cfg=cfg, strategy=strategy, symbols=symbols, profile=profile, v2=v2)
+             return
+         except Exception as exc:
+             now = datetime.now(timezone.utc)
+@@ -304,20 +312,25 @@ def run_paper_session(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols
+ 
+ 
+ def _run_paper_session_once(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple[str, ...],
+-                            profile=None) -> None:
++                            profile=None, v2=None) -> None:
+     logger = _session_logger(cfg.data_dir)
+     heartbeat = cfg.data_dir / "engine_heartbeat.json"
+     label = ",".join(symbols)
+     logger.info("Paper session launch requested symbols=%s strategy=%s version=%s hash=%s",
+                 label, strategy.strategy_id, strategy.version, strategy.sha256)
++    if v2 is not None:
++        logger.info("PROFESSIONAL_STRATEGY_V2 enabled version=%s hash=%s base_hash=%s", v2.version, v2.sha256, v2.base.sha256)
+     try:
+         if cfg.mode.value != "PAPER":
+             raise RuntimeError("paper-session is only available when TRADING_MODE=PAPER")
+         cfg.require_market_data_credentials()
+         verify_manifest(root / "strategy.txt", root / "active_strategy.json")
++        if v2 is not None:
++            from .v2.config import verify_v2_manifest
++            verify_v2_manifest(root, v2)
+         _set_engine_expected(cfg.data_dir, expected=True, state="STARTING", symbol=label)
+         _write_heartbeat(heartbeat, status="starting", symbol=label)
+-        asyncio.run(_run(root=root, cfg=cfg, strategy=strategy, symbols=symbols, profile=profile))
++        asyncio.run(_run(root=root, cfg=cfg, strategy=strategy, symbols=symbols, profile=profile, v2=v2))
+     except KeyboardInterrupt:
+         logger.info("Paper session stopped by operator symbols=%s", label)
+         _set_engine_expected(cfg.data_dir, expected=False, state="STOPPED", symbol=label)
+@@ -426,7 +439,7 @@ class _EntryArbiter:
+ 
+ 
+ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple[str, ...],
+-               test_mode: bool = False, test_capital: float = 100_000, live=None, profile=None) -> None:
++               test_mode: bool = False, test_capital: float = 100_000, live=None, profile=None, v2=None) -> None:
+     """The one strategy loop for PAPER and LIVE.
+ 
+     `live` is None for PAPER (simulated fills, unchanged). For LIVE it is a `live_execution.LiveTrader`
+@@ -439,6 +452,9 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+         raise RuntimeError("paper-test-session cannot run with LIVE execution")
+     if profile is not None and (live is not None or test_mode):
+         raise RuntimeError("account profiles run only in a normal PAPER session")
++    if v2 is not None and (live is not None or test_mode):
++        # LIVE V2 needs its own production-readiness audit; the shared loop refuses it outright.
++        raise RuntimeError("PROFESSIONAL_STRATEGY_V2 runs only in a normal PAPER session")
+     mode_label = "LIVE" if live is not None else "PAPER"
+     logger = _session_logger(cfg.data_dir, test_mode=test_mode)
+     label = ",".join(symbols)
+@@ -509,6 +525,24 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+     history_provider = create_history_provider(
+         cfg.historical_data_provider, dxlink_url=token_data["dxlink-url"], quote_token=token_data["token"],
+         massive_api_key=cfg.massive_api_key)
++    v2s = None
++    context_symbols: tuple[str, ...] = ()
++    if v2 is not None:
++        from .tastytrade_client import set_request_observer
++        from .v2.runtime import V2Session
++        v2s = V2Session(root=root, data_dir=cfg.data_dir, config=v2, strategy=strategy,
++                        profile_name=profile.name if profile is not None else "ORIGINAL_ACCOUNT_PAPER",
++                        client=client, calendar=calendar, session_open=session_open, session_close=session_close,
++                        logger=logger, starting_cash=account.starting_capital, profile_policy=profile, trade_symbols=symbols,
++                        arbiter_factory=lambda slots: _EntryArbiter(slots, ENTRY_ARBITRATION_SECONDS),
++                        helpers={"daily_realized": _daily_realized, "weekly_realized": _weekly_realized,
++                                 "consecutive_losses": _consecutive_losses, "trades_today": _trades_today,
++                                 "unrealized_pnl": _unrealized_pnl, "position_from_record": _position_from_record,
++                                 "option_marks": _option_marks, "fresh_quote": _fresh_quote})
++        set_request_observer(v2s.request_log)
++        # Market-context symbols ride the same DXLink connection and history recovery; they are never traded.
++        context_symbols = tuple(s for s in v2s.context_only if s not in symbols)
++        logger.info("V2 market-context symbols added to the feed: %s", ",".join(context_symbols))
+ 
+     def new_report(symbol: str) -> dict:
+         return {
+@@ -536,7 +570,7 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+             "paper_ledger_state": "CARRIED_POSITIONS_RESUMED" if account.positions else "CLEAR",
+         }
+ 
+-    states = {symbol: _SymbolState(symbol, new_report(symbol)) for symbol in symbols}
++    states = {symbol: _SymbolState(symbol, new_report(symbol)) for symbol in symbols + context_symbols}
+     for state in states.values():
+         state.persist(cfg.data_dir)
+     disabled: set[str] = set()
+@@ -550,6 +584,15 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+         """Stop trading one symbol after a data problem that is not a shared-feed failure."""
+         if has_position(state.symbol) or _is_connection_failure(exc):
+             raise exc
++        if v2s is not None and v2s.is_context_only(state.symbol):
++            # A context symbol that fails is reported unavailable to V2 (its stages then fail safe); trading continues.
++            disabled.add(state.symbol)
++            v2s.mark_unavailable(state.symbol, f"{type(exc).__name__}: {exc}"[:300])
++            state.report.update({"final_readiness": "CONTEXT_SYMBOL_UNAVAILABLE", "error_type": type(exc).__name__, "error": str(exc)})
++            state.persist(cfg.data_dir)
++            logger.error("V2 context symbol %s unavailable for the rest of the session: %s: %s",
++                         state.symbol, type(exc).__name__, exc)
++            return
+         disabled.add(state.symbol)
+         state.report.update({"final_readiness": "SYMBOL_DISABLED", "error_type": type(exc).__name__, "error": str(exc)})
+         state.persist(cfg.data_dir)
+@@ -558,7 +601,7 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+         record_critical_alert("paper_symbol_disabled", mode="PAPER",
+                               details={"symbol": state.symbol, "error_type": type(exc).__name__, "error": str(exc)},
+                               data_dir=cfg.data_dir)
+-        if len(disabled) == len(states):
++        if len(disabled - set(context_symbols)) == len(states) - len(context_symbols):
+             raise RuntimeError("Every symbol in the session was disabled; see recovery reports") from exc
+ 
+     first_live_bar = asyncio.Event()
+@@ -575,9 +618,24 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+         symbol, report = state.symbol, state.report
+         last_completed_bar = now.replace(second=0, microsecond=0) - timedelta(minutes=1)
+         history_audit: dict = {}
++        context_only = v2s is not None and v2s.is_context_only(symbol)
+         try:
+-            history_batch = await history_provider.fetch(
+-                symbol=symbol, start=session_open.astimezone(timezone.utc), end=last_completed_bar)
++            # V2 sessions only: the original engine keeps its single attempt (its behaviour is the benchmark).
++            attempts = BOOTSTRAP_ATTEMPTS if v2s is not None else 1
++            for attempt in range(1, attempts + 1):
++                try:
++                    history_batch = await history_provider.fetch(
++                        symbol=symbol, start=session_open.astimezone(timezone.utc), end=last_completed_bar)
++                    break
++                except Exception as exc:
++                    # A snapshot requested on a minute rollover can arrive with the in-progress candle out of
++                    # order (2026-10-23: XLE at a restart, NVDA at a start). The validation is unchanged; the
++                    # request is simply made again a few seconds later.
++                    if attempt == attempts or _is_connection_failure(exc) and attempt >= 2:
++                        raise
++                    logger.warning("%s: history bootstrap attempt %d/%d failed (%s); retrying",
++                                   symbol, attempt, attempts, exc)
++                    await asyncio.sleep(BOOTSTRAP_RETRY_SECONDS * attempt)
+             history_audit.update(history_batch.audit)
+             report.update({"provider": history_batch.provider,
+                            "retrieval_method": history_batch.retrieval_method,
+@@ -585,7 +643,8 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+                            "history_requested_start_utc": history_batch.requested_start_utc.isoformat(),
+                            "history_requested_end_utc": history_batch.requested_end_utc.isoformat()})
+             state.bars = _validated_session_history(list(history_batch.candles), session_open=session_open,
+-                                                    last_completed_bar=last_completed_bar, audit=history_audit)
++                                                    last_completed_bar=last_completed_bar, audit=history_audit,
++                                                    allow_missing_minutes=context_only)
+             if state.bars:
+                 _write_recovery_checkpoint(cfg.data_dir, symbol=symbol,
+                     trading_date=now.astimezone(market_tz).date().isoformat(), provider=history_batch.provider,
+@@ -599,7 +658,8 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+             # Indicator warm-up is not required here: the signal engine reports
+             # "indicator_history_warming_up" until enough live bars arrive. Requiring it blocked any
+             # start between the end of the opening range and the first full indicator window.
+-            if now.astimezone(market_tz) >= session_open + timedelta(minutes=strategy.opening_range_minutes) and not opening:
++            if (now.astimezone(market_tz) >= session_open + timedelta(minutes=strategy.opening_range_minutes) and not opening
++                    and not context_only):
+                 raise RuntimeError("Recovered session history does not contain a complete opening range")
+             report["final_readiness"] = "READY_FOR_LIVE_HANDOFF" if opening and len(state.bars) >= required_bars else "WARMING_UP"
+             state.persist(cfg.data_dir)
+@@ -656,6 +716,36 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+         print(f"PAPER EXIT {position_data['underlying']} {position.symbol} {why}; net=${realized:.2f}", flush=True)
+         return realized
+ 
++    def book_paper_partial_exit(position_data: dict, quote: OptionQuote, quantity: int, why: str, when: datetime) -> float:
++        """V2 partial profit: sell part of a simulated position. Reconciles against the ledger first and never sells
++        all or more than the contracts held (a full exit always goes through book_paper_exit)."""
++        held = int(position_data["quantity"])
++        if position_data not in account.positions or not 1 <= quantity < held:
++            raise RuntimeError(f"partial exit of {quantity} from {held} held is not allowed; position {position_data['trade_id']}")
++        fill = executor.fill(quote, "SELL", quantity, why, when)
++        share = quantity / held
++        entry_fees_part = float(position_data["entry_fees"]) * share
++        realized = realized_option_pnl(entry_fill_price=float(position_data["entry_price"]), exit_fill_price=fill.fill_price,
++                                       quantity=quantity, entry_fees=entry_fees_part, exit_fees=fill.fees)
++        account.realized_pnl += realized
++        modeled_part = float(position_data.get("modeled_risk_dollars", 0)) * share
++        account.ledger.append({"type": "paper_close", "trade_id": position_data["trade_id"], "partial": True,
++                               "quantity": quantity, "realized_pnl": realized, "actual_realized_pnl": realized,
++                               "modeled_risk_dollars": modeled_part,
++                               "actual_r_multiple": realized / max(modeled_part, 1e-9),
++                               "strategy_id": position_data.get("strategy_id"),
++                               "strategy_version": position_data["strategy_version"],
++                               "strategy_hash": position_data["strategy_hash"], "underlying": position_data["underlying"],
++                               "reason": why, "timestamp": when.isoformat()})
++        for key in ("modeled_risk_dollars", "initial_risk_dollars", "planned_risk_dollars", "premium_exposure_dollars"):
++            if position_data.get(key) is not None:
++                position_data[key] = float(position_data[key]) * (1 - share)
++        position_data["entry_fees"] = float(position_data["entry_fees"]) - entry_fees_part
++        position_data["quantity"] = held - quantity
++        account.unrealized_pnl = _unrealized_pnl(account, executor)
++        print(f"PAPER PARTIAL EXIT {position_data['underlying']} {position_data['symbol']} x{quantity} {why}; net=${realized:.2f}", flush=True)
++        return realized
++
+     async def protective_exit(symbol: str, exc: Exception) -> None:
+         """PAPER: a symbol whose data failed can no longer be managed by the strategy's exit rules. Rather than
+         stop the whole session (leaving every position unmanaged), sell that symbol's positions at a fresh bid.
+@@ -676,12 +766,13 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+                          "error_type": type(exc).__name__, "error": str(exc)}, data_dir=cfg.data_dir)
+ 
+     arbiter = _EntryArbiter(available_slots, ENTRY_ARBITRATION_SECONDS)
+-    queues: dict[str, asyncio.Queue] = {symbol: asyncio.Queue() for symbol in symbols}
++    queues: dict[str, asyncio.Queue] = {symbol: asyncio.Queue() for symbol in symbols + context_symbols}
+ 
+     async def feed() -> None:
+         """One DXLink connection for every symbol, fanned out to per-symbol queues."""
+         try:
+-            async for event_symbol, bar in live_minute_bars(token_data["dxlink-url"], token_data["token"], list(symbols)):
++            async for event_symbol, bar in live_minute_bars(token_data["dxlink-url"], token_data["token"],
++                                                            list(symbols + context_symbols)):
+                 if event_symbol in queues and event_symbol not in disabled:
+                     queues[event_symbol].put_nowait(bar)
+         except Exception as exc:
+@@ -691,6 +782,7 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+ 
+     async def process_bar(state: _SymbolState, bar: Bar) -> None:
+         symbol, bars, report = state.symbol, state.bars, state.report
++        context_only = v2s is not None and v2s.is_context_only(symbol)
+         if bar.timestamp < test_start:
+             return
+         if state.history_end is not None and bar.timestamp <= state.history_end:
+@@ -731,7 +823,8 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+                         recovered_batch = await history_provider.fetch(symbol=symbol, start=gap_start, end=bar.timestamp)
+                         gap_audit.update(recovered_batch.audit)
+                         recovered = _validated_session_history(list(recovered_batch.candles), session_open=gap_start,
+-                                                               last_completed_bar=gap_end, audit=gap_audit)
++                                                               last_completed_bar=gap_end, audit=gap_audit,
++                                                               allow_missing_minutes=context_only)
+                         break
+                     except Exception:
+                         if attempt == GAP_RECOVERY_ATTEMPTS:
+@@ -751,7 +844,7 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+                                "final_readiness": "BLOCKED", "transition_error": str(exc)})
+                 state.persist(cfg.data_dir)
+                 raise RuntimeError(f"{symbol}: live-feed gap could not be recovered at {gap_start.isoformat()}: {exc}") from exc
+-            if not bars or _classify_live_transition(bars[-1].timestamp, bar.timestamp) != "CONTIGUOUS":
++            if not context_only and (not bars or _classify_live_transition(bars[-1].timestamp, bar.timestamp) != "CONTIGUOUS"):
+                 state.data_valid = False
+                 report.update({"historical_to_live_transition_status": "FAILED",
+                                "final_readiness": "BLOCKED", "transition_error": "recovered history did not join the live bar"})
+@@ -784,6 +877,10 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+                 trading_date=bar.timestamp.astimezone(market_tz).date().isoformat(), provider=history_provider.name,
+                 timestamp=bar.timestamp)
+         bar_now = bar.timestamp + timedelta(minutes=1)
++        if v2s is not None:
++            await v2s.on_bar(symbol, bars, bar_now)  # context, breakout tracker, cached VIX/metrics refresh
++            if v2s.is_context_only(symbol):
++                return
+         if live is not None:
+             await live.refresh()  # broker balances/positions/orders, rate-limited; reconciles before any entry
+         # Refresh option marks for this symbol's simulated positions before evaluating a new entry.
+@@ -834,6 +931,16 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+                    else exit_reason(position, underlying=bar.close, option_bid=quote.bid, now=bar_now,
+                                     daily_loss_hit=daily_pnl <= -current_equity * float(strategy.risk["max_daily_loss_fraction"]),
+                                     enable_time_exit=bool(active_strategy.execution["enable_time_exit"])))
++            if v2s is not None and why not in ("end_of_session_close", "emergency_daily_risk_exit"):
++                # V2 trade management can only exit earlier than the original stop/target; it never widens them.
++                managed = v2s.manage(position_data, bar=bar, option_bid=quote.bid, now=bar_now,
++                                     exit_fees_estimate=executor.fees.estimate(position.quantity))
++                if managed["exit_reason"]:
++                    why = managed["exit_reason"]
++                elif not why and managed["partial_quantity"]:
++                    book_paper_partial_exit(position_data, quote, int(managed["partial_quantity"]), "v2_partial_profit", bar_now)
++                    position_data["v2_management"]["partial_taken"] = True
++                    position = _position_from_record(position_data)
+             if why and live is not None:
+                 realized = await live.close_position(record=position_data, reason=why, now=bar_now,
+                                                      requote=lambda record: _option_marks(client, [record])[0],
+@@ -869,6 +976,12 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+                            latest[0].bid if latest else None, latest[0].ask if latest else None)
+             if not any(issue.startswith("underlying_quote_request_failed") for issue in data_issues):
+                 data_issues.append(f"underlying_quote_rejected:{quote_reason}")
++        if v2s is not None:
++            await v2_entry(state, bar, bar_now, quote_fresh, positions_mark_fresh)
++            await v2s.shadow_bar(client=client, symbol=symbol, bars=bars, bar=bar, bar_now=bar_now,
++                                 session_close=session_close.astimezone(timezone.utc), calendar=calendar,
++                                 quote_fresh=quote_fresh, data_valid=state.data_valid)
++            return
+         option_chain: dict[str, list[OptionQuote]] = {symbol: []}
+         signal = evaluate_underlying(bars, active_strategy, opening_range_start=test_start)
+         entry_window = calendar.entry_window_ok(bar_now, active_strategy.entry_window_et["start"], active_strategy.entry_window_et["end"])
+@@ -975,6 +1088,83 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+             print(f"PAPER ENTRY {symbol} {selected.symbol} x{quantity} @ ask+slippage ${fill.fill_price:.2f} "
+                   f"(net R {score[0]:.2f})", flush=True)
+ 
++    async def v2_entry(state: _SymbolState, bar: Bar, bar_now: datetime, quote_fresh: bool,
++                       positions_mark_fresh: bool) -> None:
++        """PROFESSIONAL_STRATEGY_V2 entry: the candidate report decides; ranking, slot checks and the fill are the
++        same as the original path, with a synchronous portfolio re-check right before the fill."""
++        symbol, bars = state.symbol, state.bars
++        entry_window = calendar.entry_window_ok(bar_now, active_strategy.entry_window_et["start"],
++                                                active_strategy.entry_window_et["end"])
++        cycle_equity = max(0.0, account.starting_capital + account.deposits - account.withdrawals +
++                           account.realized_pnl + account.unrealized_pnl)
++        cycle_strategy = active_strategy if profile is None else profile.cycle_strategy(active_strategy, cycle_equity, account)
++        risk_state = RiskState(
++            equity=cycle_equity,
++            daily_pnl=_daily_realized(account, bar_now) + account.unrealized_pnl,
++            weekly_pnl=_weekly_realized(account, bar_now) + account.unrealized_pnl,
++            consecutive_losses=_consecutive_losses(account), trades_today=_trades_today(account, bar_now),
++            open_positions=len(account.positions),
++            open_underlyings=tuple(str(position["underlying"]) for position in account.positions))
++        blocked = ("kill_switch_active" if (root / "KILL_SWITCH").exists() else
++                   "market_closed_or_outside_entry_window" if not (calendar.is_open(bar_now) and entry_window) else
++                   "open_position_marks_not_fresh" if not positions_mark_fresh else None)
++        report = await v2s.evaluate(symbol=symbol, bars=bars, now=bar_now, account=account, equity=cycle_equity,
++                                    strategy=cycle_strategy, risk_state=risk_state,
++                                    data_fresh=state.data_valid and quote_fresh, entries_blocked=blocked, pending=[])
++        if report is None:
++            return
++        if report.outcome != "APPROVED":
++            if report.outcome != "WAIT_FOR_CONFIRMATION":
++                print(f"V2 NO TRADE {symbol}: {report.outcome}: {'; '.join(report.reasons)[:240]}", flush=True)
++            return
++        entry = report.entry
++        score = (float(entry["expected_net_r"]), float(entry.get("trend_efficiency") or 0.0))
++        if not await arbiter.approve(bar.timestamp, symbol, score):
++            v2s.log_outcome(symbol, bar_now, "OUTRANKED", f"net R {score[0]:.2f}")
++            print(f"V2 NO TRADE {symbol}: outranked by other symbols this minute (net R {score[0]:.2f})", flush=True)
++            return
++        # Re-check synchronously: no await between these checks and the fill below.
++        if available_slots(bar_now) < 1 or has_position(symbol) or (root / "KILL_SWITCH").exists():
++            v2s.log_outcome(symbol, bar_now, "NO_SLOT", "position/trade limit reached while ranking")
++            return
++        if profile is not None:
++            within_cap, cap_reason = profile.entry_allowed(account, cycle_equity, entry["modeled_risk_dollars"])
++            if not within_cap:
++                v2s.log_outcome(symbol, bar_now, "PROFILE_CAP", cap_reason)
++                return
++        ok, why_not = v2s.portfolio_recheck(report, account, cycle_equity, cycle_strategy, [])
++        if not ok:
++            v2s.log_outcome(symbol, bar_now, "PORTFOLIO_RECHECK", why_not)
++            print(f"V2 NO TRADE {symbol}: {why_not}", flush=True)
++            return
++        selected, quantity = entry["option"], int(entry["quantity"])
++        try:
++            fill = executor.fill(selected, "BUY", quantity, "v2_strategy_entry", bar_now)
++        except ValueError as exc:
++            v2s.log_outcome(symbol, bar_now, "FILL_REFUSED", str(exc))
++            return
++        extra = v2s.entry_record_fields(report, bar_now)
++        account.ledger[-1].update({"strategy_id": extra["strategy_id"], "strategy_version": extra["strategy_version"],
++                                   "strategy_hash": extra["strategy_hash"], "underlying": symbol,
++                                   "planned_risk_dollars": entry["planned_risk_dollars"],
++                                   "modeled_risk_dollars": entry["modeled_risk_dollars"],
++                                   "premium_exposure_dollars": entry["premium_exposure_dollars"]})
++        record = {
++            "trade_id": fill.trade_id, "symbol": selected.symbol, "underlying": symbol, "right": selected.right,
++            "quantity": quantity, "entry_price": fill.fill_price, "entry_fees": fill.fees,
++            "entry_underlying": entry["entry_underlying"], "stop_underlying": entry["stop_underlying"],
++            "target_underlying": entry["target_underlying"], "entry_time": bar_now.isoformat(),
++            "max_holding_minutes": int(strategy.rules["max_holding_minutes"]),
++            "initial_risk_dollars": entry["modeled_risk_dollars"], "planned_risk_dollars": entry["planned_risk_dollars"],
++            "modeled_risk_dollars": entry["modeled_risk_dollars"], "premium_exposure_dollars": entry["premium_exposure_dollars"],
++            "expected_net_r": entry["expected_net_r"], "mfe": 0.0, "mae": 0.0, "last_bid": selected.bid, **extra}
++        account.positions.append(record)
++        account.unrealized_pnl = _unrealized_pnl(account, executor)
++        save_account(account_path, account)
++        v2s.record_entry(report, record)
++        print(f"V2 PAPER ENTRY {symbol} {selected.symbol} x{quantity} @ ask+slippage ${fill.fill_price:.2f} "
++              f"({extra['v2_entry']['setup_type']}, {extra['v2_entry']['regime']}, net R {score[0]:.2f})", flush=True)
++
+     async def run_symbol(state: _SymbolState) -> None:
+         queue = queues[state.symbol]
+         while True:
+@@ -1007,12 +1197,18 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+     try:
+         remaining = max(1.0, (session_close.astimezone(timezone.utc) - now).total_seconds())
+         async with asyncio.timeout(remaining):
++            if v2s is not None:
++                await v2s.startup(token_data, datetime.now(timezone.utc))
+             if not test_mode and now >= session_open.astimezone(timezone.utc) + timedelta(minutes=1):
+                 for state in states.values():
+                     try:
+                         await bootstrap(state)
+                     except Exception as exc:
+                         disable(state, exc)
++            if v2s is not None:
++                for symbol, state in states.items():
++                    if symbol not in disabled:
++                        v2s.on_history(symbol, state.bars)  # context + replay the confirmation tracker (no entries)
+             tasks = [asyncio.create_task(feed())] + [asyncio.create_task(run_symbol(state))
+                                                        for symbol, state in states.items() if symbol not in disabled]
+             done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
+@@ -1074,6 +1270,8 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
+                 print(f"PAPER EXIT {position_data['underlying']} {position_data['symbol']} end_of_session_close; net=${realized:.2f}", flush=True)
+             account.unrealized_pnl = _unrealized_pnl(account, executor)
+             save_account(account_path, account)
++        if v2s is not None:
++            v2s.session_end({symbol: state.bars for symbol, state in states.items()}, datetime.now(timezone.utc))
+     finally:
+         first_live_bar.set()
+         for task in tasks + ([heartbeat_task] if heartbeat_task else []):

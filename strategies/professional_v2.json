@@ -1,0 +1,158 @@
+// PROFESSIONAL_STRATEGY_V2: decision stages layered on the UNCHANGED original strategy (strategy.txt, hash pinned
+// below). The core opening-range breakout signal, its indicators, contract selection rules, exits and loss limits
+// come from strategy.txt and are never modified here. Every stage below is independently enabled, configured,
+// tested and logged. Machine-readable JSON with // comments; unknown keys and missing values fail closed.
+// Plain-English companion: docs/v2/professional_strategy_v2.md.
+{
+  "strategy_id": "PROFESSIONAL_STRATEGY_V2",
+  "version": "2.0.0",
+  "status": "research_test",
+  "mode": "PAPER",
+  "base_strategy": {
+    "filename": "strategy.txt",
+    "strategy_id": "opening_range_breakout_options",
+    "version": "0.1.6",
+    "configuration_hash": "c597cfe86d7971a7e96b08ed71bc58eff6dca6942fcb0288b24498dedf6e902b"
+  },
+  "sector_map_file": "strategies/v2_sector_map.json",
+  "economic_calendar_file": "strategies/v2_economic_calendar.json",
+
+  // Market-context symbols streamed on the engine's one DXLink connection (deduplicated against the trading
+  // universe). VIX is an index with no trade volume; it is read from tastytrade REST quotes (one shared, cached
+  // request per minute).
+  "context": {
+    "broad_symbols": ["SPY", "QQQ", "IWM"],
+    "sector_etfs": ["XLK", "XLF", "XLE", "XLV", "XLY", "XLI", "XLC", "XLP", "XLU", "XLB", "XLRE"],
+    "volatility_index": "VIX",
+    "max_bar_age_seconds": 150,
+    "vix_max_age_seconds": 180,
+    "daily_history_sessions": 60,
+    "premarket_start_et": "04:00"
+  },
+
+  // Regime from measurable inputs only (docs/v2: rules R1-R6). Per index bias in [-3, 3]:
+  // +1/-1 price vs session VWAP, +1/-1 EMA fast vs slow (the strategy's own 9/21 periods), +1/-1 vs the open.
+  "regime": {
+    "enabled": true,
+    "vix_disorderly_level": 30.0,
+    "vix_disorderly_change_fraction": 0.15,
+    "spy_disorderly_atr_fraction": 0.0025,
+    "strong_min_index_bias": 2,
+    "strong_min_spy_efficiency": 0.30,
+    "strong_min_breadth": 0.60,
+    "weak_min_market_score": 3,
+    "weak_min_spy_bias": 1,
+    "efficiency_window_bars": 30,
+    "allowed_directions": {
+      "STRONG_BULLISH": ["CALL"],
+      "WEAK_BULLISH": ["CALL"],
+      "STRONG_BEARISH": ["PUT"],
+      "WEAK_BEARISH": ["PUT"],
+      "RANGE_BOUND": [],
+      "HIGH_VOLATILITY": [],
+      "UNCLEAR": []
+    }
+  },
+
+  "sector": {
+    "enabled": true,
+    // A single stock's direction must not be contradicted by its sector ETF's bias (same three inputs as the
+    // regime). 1 = the sector must lean the trade's way; 0 = a neutral sector is acceptable.
+    "min_sector_bias": 1
+  },
+
+  // V2 computes a real session VWAP (sum of typical price x volume from the open). Live tastytrade bars carry no
+  // VWAP, so the strategy's own VWAP check never runs live (see docs/v2); this V2 stage supplies it separately.
+  "vwap_alignment": {"enabled": true},
+
+  "confirmation": {
+    "enabled": true,
+    // The breakout bar itself is the strategy's qualified signal (a completed close beyond the breakout level).
+    // Confirmation then needs this many consecutive completed closes beyond the level (including that bar),
+    // the latest at least min_distance_atr x ATR beyond it, within max_wait_bars.
+    "confirm_closes": 2,
+    "min_distance_atr": 0.25,
+    "max_wait_bars": 5,
+    "pullback": {
+      "enabled": true,
+      // A later bar whose low (calls) / high (puts) comes back within retest_tolerance_atr x ATR of the level
+      // without closing back inside the opening range, then a completed close beyond the prior bar's high/low.
+      "retest_tolerance_atr": 0.25,
+      "max_wait_bars": 15
+    }
+  },
+
+  "correlation": {
+    "enabled": true,
+    // Pearson correlation of daily close-to-close log returns over the last lookback_sessions completed sessions
+    // (tastytrade DXLink daily candles). Two positions are one bet when corr x direction_a x direction_b >= threshold.
+    "lookback_sessions": 60,
+    "min_observations": 40,
+    "threshold": 0.60,
+    // Without enough data: same sector ETF, same group for broad indexes, or the same tracked index are grouped.
+    "fallback": "sector_and_index_groups"
+  },
+
+  "portfolio": {
+    "enabled": true,
+    // Owner-authorized 2026-10-23. Aggregate open maximum loss (premium x 100 x qty + modeled round-trip costs)
+    // as a fraction of equity, by active account profile.
+    "aggregate_max_loss_fraction": {"ORIGINAL_ACCOUNT_PAPER": 0.30, "SMALL_ACCOUNT_PAPER": 0.40},
+    // Owner-authorized 2026-10-23: one correlated cluster's combined maximum loss <= one per-trade budget.
+    "cluster_max_loss": "one_trade_budget"
+  },
+
+  "option_quality": {
+    "enabled": true,
+    "max_quote_age_seconds": 30,
+    "min_bid_size": 1,
+    "min_ask_size": 1,
+    // Volatility inputs come from tastytrade market-metrics (IV rank/percentile over its own 52-week history,
+    // 30-day historical volatility). V2 does not compute its own IV rank.
+    "max_iv_rank": 0.85,
+    // Extreme-outlier guard only. Implied normally exceeds realized volatility: across the 55 V2 symbols on
+    // 2026-10-23 IV index / HV30 had median 1.49, 90th percentile 1.83, max 2.30. IV rank and the earnings rules
+    // carry the "unusually expensive" judgement; this rejects only a premium far above anything seen in that sample.
+    "max_iv_to_hv30": 2.5,
+    "max_contract_iv_to_index_iv": 1.30,
+    "max_metrics_age_minutes": 30,
+    "missing_volatility_data": "reject"
+  },
+
+  "events": {
+    "enabled": true,
+    "earnings": {
+      // Entries are flattened at the close, so the risk is paying the pre-report IV premium.
+      "reject_if_reports_today_after_close": true,
+      "reject_if_reports_next_session_before_open": true,
+      "reported_today_before_open": "review",
+      "unknown_time_of_day": "treat_as_both",
+      "estimated_date": "apply_and_flag_unverified",
+      "metrics_unavailable": "reject"
+    },
+    "economic": {
+      "FOMC_RATE_DECISION": {"block_entries_from_et": "13:30", "block_entries_until_et": "15:00", "open_positions": "review"},
+      // 08:30 ET releases print before the open; the 15-minute opening range already contains the reaction.
+      "pre_open_release_types": ["CPI", "PPI", "EMPLOYMENT_SITUATION", "GDP", "PCE"],
+      "pre_open_release_block_minutes_after_open": 0
+    },
+    "calendar_expired": "reject"
+  },
+
+  "sizing": {
+    // Owner decision 2026-10-23: 1 contract for week 1. The risk-based quantity is computed and logged.
+    "max_contracts": 1,
+    "max_fraction_of_displayed_size": 0.5,
+    "max_fraction_of_open_interest": 0.01,
+    "quality_score_affects_size": false
+  },
+
+  "management": {
+    "breakeven": {"enabled": true, "trigger_r": 1.0},
+    "trailing": {"enabled": true, "trigger_r": 1.0, "atr_multiple": "rules.stop_underlying_atr"},
+    "time_stop": {"enabled": false, "after_minutes": 60, "min_progress_r": 0.25},
+    "partial_profit": {"enabled": false, "trigger_r": 1.0, "fraction": 0.5}
+  },
+
+  "shadow_benchmark": {"enabled": true}
+}

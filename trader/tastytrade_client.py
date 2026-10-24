@@ -72,6 +72,23 @@ def set_request_rate_limit(per_second: float | None) -> None:
     _PACER = _RequestPacer(per_second) if per_second else None
 
 
+# Optional observer(method, path, status, seconds, attempt) for request logging (V2 API accounting). None = off.
+_OBSERVER = None
+
+
+def set_request_observer(observer) -> None:
+    global _OBSERVER
+    _OBSERVER = observer
+
+
+def _observe(method: str, path: str, status, started: float, attempt: int) -> None:
+    if _OBSERVER is not None:
+        try:
+            _OBSERVER(method, path, status, time.monotonic() - started, attempt)
+        except Exception:
+            pass  # logging must never affect a request
+
+
 class TastytradeClient:
     """Small OAuth REST client. It never submits an order except via submit_order()."""
     def __init__(self, client_id: str, client_secret: str, refresh_token: str, *, base_url: str,
@@ -100,11 +117,14 @@ class TastytradeClient:
         for attempt in range(attempts):
             if _PACER is not None:
                 _PACER.wait()
+            started = time.monotonic()
             try:
                 with urllib.request.urlopen(req, timeout=self.timeout) as response:
                     content = _decode_content(response.read(), response.headers.get("Content-Encoding", ""))
+                    _observe(method, path, getattr(response, "status", None), started, attempt + 1)
                     return json.loads(content.decode("utf-8"))
             except urllib.error.HTTPError as exc:
+                _observe(method, path, exc.code, started, attempt + 1)
                 content = _decode_content(exc.read(), exc.headers.get("Content-Encoding", ""))
                 detail = content.decode("utf-8", errors="replace")[:1000]
                 if exc.code == 429 and attempt + 1 < attempts:
@@ -112,6 +132,7 @@ class TastytradeClient:
                     continue
                 raise BrokerError(f"tastytrade HTTP {exc.code} for {method} {path}: {detail} (status={exc.code})") from exc
             except (urllib.error.URLError, TimeoutError) as exc:
+                _observe(method, path, "transport_error", started, attempt + 1)
                 raise TransportError(f"tastytrade request failed: {exc}") from exc
         raise AssertionError("unreachable")
 

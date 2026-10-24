@@ -1,0 +1,215 @@
+diff --git a/trader/account_profiles.py b/trader/account_profiles.py
+index abb3627..42a8f88 100644
+--- a/trader/account_profiles.py
++++ b/trader/account_profiles.py
+@@ -332,7 +332,7 @@ def today_decision_logs(data_dir: Path, today: str) -> list[Path]:
+ 
+ 
+ def run_profile_paper_session(*, root: Path, cfg, strategy: Strategy, profile_name: str = "small",
+-                              symbols: tuple[str, ...] | None = None) -> dict[str, Any]:
++                              symbols: tuple[str, ...] | None = None, v2=None) -> dict[str, Any]:
+     """Run the shared PAPER loop on the profile's isolated ledger. Transitions are checked only at the
+     session boundaries (before the session starts and after it ends), never mid-session."""
+     from .config import Mode
+@@ -361,7 +361,7 @@ def run_profile_paper_session(*, root: Path, cfg, strategy: Strategy, profile_na
+     try:
+         # ORIGINAL runs with profile=None: byte-for-byte the original account behaviour, on this ledger.
+         run_paper_session(root=root, cfg=profile_cfg, strategy=run_strategy, symbols=symbols,
+-                          profile=policy if policy.allocation_fraction is not None else None)
++                          profile=policy if policy.allocation_fraction is not None else None, v2=v2)
+     finally:
+         ledger.check_transition(boundary="session_end")
+         ledger._audit("session_end", active_profile=ledger.active_profile)
+diff --git a/trader/cli.py b/trader/cli.py
+index ad7e503..63a06b3 100644
+--- a/trader/cli.py
++++ b/trader/cli.py
+@@ -29,6 +29,9 @@ def main(argv: list[str] | None = None) -> int:
+     for command in (paper, paper_test):
+         command.add_argument("--symbol", action="append", type=str.upper, dest="symbols",
+                              help="Limit the session to this underlying (repeatable). Default: the whole strategy universe.")
++    paper.add_argument("--strategy", choices=("original", "v2"), default="original",
++                       help="original: the active strategy.txt (default). v2: PROFESSIONAL_STRATEGY_V2 decision stages "
++                            "on the same core strategy (PAPER only; needs an activated V2 manifest).")
+     paper.add_argument("--account-profile", choices=("small",), default=None,
+                        help="Run on an isolated account-profile PAPER ledger (small: $1,000, 40%% aggregate cap, "
+                             "expanded universe; restores the original settings at $10,000). Default: the original ledger.")
+@@ -72,6 +75,18 @@ def main(argv: list[str] | None = None) -> int:
+     authorize.add_argument("--account-suffix", required=True, help="Last 4 characters of TASTYTRADE_ACCOUNT_NUMBER")
+     authorize.add_argument("--statement", required=True, help='Exactly: "I AUTHORIZE LIVE EXECUTION OF THIS EXACT STRATEGY HASH"')
+     authorize.add_argument("--note", default="")
++    sub.add_parser("v2-validate", help="Validate PROFESSIONAL_STRATEGY_V2 config, sector map and calendar (offline)")
++    v2_activate = sub.add_parser("v2-activate", help="Owner action: activate the current V2 configuration for PAPER")
++    v2_activate.add_argument("--approve", action="store_true", help="Write the V2 manifest. Without it, only validate.")
++    v2_activate.add_argument("--note", default="", help="Why (stored in the manifest)")
++    v2_ready = sub.add_parser("v2-readiness", help="Read-only V2 readiness checks against tastytrade (never orders)")
++    v2_ready.add_argument("--skip-stream", action="store_true", help="Skip the live DXLink trade-stream probe")
++    sub.add_parser("v2-report", help="Write the Professional Strategy dashboard (data/v2_dashboard.html)")
++    v2_replay = sub.add_parser("v2-replay", help="Historical replay: original vs V2 on cached history (underlying proxy)")
++    v2_replay.add_argument("--source", choices=("massive_cache", "tastytrade"), default="massive_cache")
++    v2_replay.add_argument("--in-sample-end", default="2026-08-15")
++    v2_replay.add_argument("--out", default="data/v2_replay")
++    sub.add_parser("v2-compare", help="Original-strategy shadow vs V2 results from the PAPER ledgers (read-only)")
+     dash = sub.add_parser("dashboard"); dash.add_argument("--host", default="127.0.0.1"); dash.add_argument("--port", type=int, default=8765)
+     sub.add_parser("status")
+     args = parser.parse_args(argv)
+@@ -90,13 +105,20 @@ def main(argv: list[str] | None = None) -> int:
+         elif args.command == "paper-session":
+             from .paper_runner import run_paper_session
+             strategy = parse_strategy(root / "strategy.txt")
++            v2 = None
++            if args.strategy == "v2":
++                from .v2.config import load_v2_config, verify_v2_manifest
++                v2 = load_v2_config(root)
++                verify_v2_manifest(root, v2)
++                from .tastytrade_client import set_request_rate_limit
++                set_request_rate_limit(10)  # V2 adds metrics/VIX/chain requests; pace every V2 engine
+             if args.account_profile:
+                 from .account_profiles import run_profile_paper_session
+                 run_profile_paper_session(root=root, cfg=cfg, strategy=strategy, profile_name=args.account_profile,
+-                                          symbols=tuple(args.symbols) if args.symbols else None)
++                                          symbols=tuple(args.symbols) if args.symbols else None, v2=v2)
+             else:
+                 run_paper_session(root=root, cfg=cfg, strategy=strategy,
+-                                  symbols=tuple(args.symbols) if args.symbols else None)
++                                  symbols=tuple(args.symbols) if args.symbols else None, v2=v2)
+         elif args.command == "profile-status":
+             from .account_profiles import ProfileConfig, ProfileLedger
+             strategy = parse_strategy(root / "strategy.txt")
+@@ -113,6 +135,12 @@ def main(argv: list[str] | None = None) -> int:
+             from .profile_report import write_report
+             print(write_report(root, cfg.data_dir, args.account_profile))
+             print(write_comparison(root, cfg.data_dir, args.account_profile))
++            if (root / "strategies" / "professional_v2.manifest.json").exists():
++                try:  # the V2 dashboard rides the same 2-minute report task; a failure never stops the reports
++                    from .v2.report import write_dashboard
++                    print(write_dashboard(root, cfg.data_dir))
++                except Exception as exc:
++                    print(f"V2 dashboard not written: {type(exc).__name__}: {exc}", file=sys.stderr)
+         elif args.command == "paper-test-session":
+             from .paper_runner import run_paper_test_session
+             if cfg.mode is Mode.LIVE:
+@@ -142,6 +170,9 @@ def main(argv: list[str] | None = None) -> int:
+             path = authorize_live(root=root, cfg=cfg, strategy_hash=args.strategy_hash,
+                                   account_suffix=args.account_suffix, statement=args.statement, note=args.note)
+             print(json.dumps({"authorized": True, "file": str(path)}, indent=2))
++        elif args.command in ("v2-validate", "v2-activate", "v2-readiness", "v2-report", "v2-replay", "v2-compare"):
++            from .v2.commands import run_command
++            return run_command(args, cfg, root)
+         elif args.command == "dashboard":
+             import uvicorn
+             uvicorn.run(create_app(cfg.data_dir, root), host=args.host, port=args.port)
+diff --git a/trader/supervisor.py b/trader/supervisor.py
+index 56533a6..a9953ca 100644
+--- a/trader/supervisor.py
++++ b/trader/supervisor.py
+@@ -333,6 +333,36 @@ def review_targets(root: Path = ROOT, data_dir: Path = DATA, *, only: str | None
+     return targets
+ 
+ 
++def v2_summary(data_dir: Path, limit: int = 3000) -> dict[str, Any] | None:
++    """PROFESSIONAL_STRATEGY_V2 evidence for this ledger, when an engine ran it: which stage decided each candidate,
++    the latest market context and regime, entries, management events, and the original-strategy shadow benchmark."""
++    status = _safe_json(data_dir / "v2_status.json", None)
++    if status is None:
++        return None
++    rows = _tail_jsonl(data_dir / "v2_decisions.jsonl", limit)
++    candidates = [r for r in rows if r.get("type") == "candidate"]
++    outcomes = Counter(r.get("outcome") for r in candidates)
++    deciding = Counter()
++    for r in candidates:
++        for name, stage in (r.get("stages") or {}).items():
++            if stage.get("status") in ("REJECT", "WAIT", "INSUFFICIENT_DATA"):
++                deciding[f"{name}:{stage.get('status')}"] += 1
++                break
++    context = _safe_json(data_dir / "v2_context_snapshot.json", {})
++    shadow = _safe_json(data_dir / "v2_shadow_original" / "paper_account.json", {})
++    shadow_closed = [x for x in shadow.get("ledger", []) if x.get("type") == "paper_close"]
++    return {"status": status, "candidate_outcomes": dict(outcomes), "first_deciding_stage": dict(deciding.most_common(12)),
++            "latest_regime": (context.get("regime") or {}).get("regime"), "regime_detail": context.get("regime"),
++            "vix": context.get("vix"), "breadth": context.get("breadth"),
++            "recent_candidates": [{"symbol": r.get("symbol"), "side": r.get("side"), "timestamp": r.get("timestamp"),
++                                   "outcome": r.get("outcome"), "reasons": (r.get("reasons") or [])[:3]} for r in candidates[-30:]],
++            "entries": [r for r in rows if r.get("type") == "entry"][-20:],
++            "management_events": [r for r in rows if r.get("type") == "management"][-20:],
++            "original_strategy_shadow": {"cash": shadow.get("cash"), "realized_pnl": shadow.get("realized_pnl"),
++                                         "closed_trades": len(shadow_closed),
++                                         "recent_closes": shadow_closed[-10:]}}
++
++
+ def capture_snapshot(root: Path = ROOT, data_dir: Path = DATA, ledger: dict[str, Any] | None = None) -> dict[str, Any]:
+     """Capture only strategy, paper ledger, decision records, and bounded local health evidence."""
+     strategy = _safe_json(root / "active_strategy.json", {})
+@@ -377,6 +407,9 @@ def capture_snapshot(root: Path = ROOT, data_dir: Path = DATA, ledger: dict[str,
+             "Missing heartbeat means engine health cannot be established from this snapshot.",
+         ],
+     }
++    v2 = v2_summary(data_dir)
++    if v2 is not None:
++        snapshot["professional_strategy_v2"] = v2
+     # Keep prompts bounded while preserving the latest observations.
+     encoded = json.dumps(snapshot, default=str, separators=(",", ":"))
+     if len(encoded) > 180_000:
+@@ -398,6 +431,11 @@ def _prompt(snapshot: dict[str, Any], reviewer: str) -> str:
+         "The snapshot's ledger section names the paper ledger under review. When it lists account_profile_rules, that "
+         "ledger runs the same strategy under those extra limits (allocation, per-trade cap, loss limits); judge its trades "
+         "and blockers against them and name the ledger_id in your findings.\n"
++        "When professional_strategy_v2 is present, this ledger trades PROFESSIONAL_STRATEGY_V2: the unchanged original "
++        "strategy plus decision stages (confirmation, regime, sector, VWAP, events, correlation, option pricing/volatility, "
++        "sizing). Its decisions are in professional_strategy_v2 (first_deciding_stage says which stage stopped candidates), "
++        "and original_strategy_shadow is the original strategy run on the same data without orders, the benchmark. Compare "
++        "the two and say which V2 stage binds; V2 changes go to strategies/professional_v2.json and need v2-activate.\n"
+         "Start from blocker_summary_by_session: name the binding_constraint for the latest session, say whether it is "
+         "operational (data, kill switch, engine health) or a strategy/risk gate, and propose at most one concrete "
+         "parameter change aimed at it, with the exact strategy.txt key, current and proposed value, and the effect you "
+diff --git a/trader/tastytrade_client.py b/trader/tastytrade_client.py
+index 68c5f75..c176714 100644
+--- a/trader/tastytrade_client.py
++++ b/trader/tastytrade_client.py
+@@ -72,6 +72,23 @@ def set_request_rate_limit(per_second: float | None) -> None:
+     _PACER = _RequestPacer(per_second) if per_second else None
+ 
+ 
++# Optional observer(method, path, status, seconds, attempt) for request logging (V2 API accounting). None = off.
++_OBSERVER = None
++
++
++def set_request_observer(observer) -> None:
++    global _OBSERVER
++    _OBSERVER = observer
++
++
++def _observe(method: str, path: str, status, started: float, attempt: int) -> None:
++    if _OBSERVER is not None:
++        try:
++            _OBSERVER(method, path, status, time.monotonic() - started, attempt)
++        except Exception:
++            pass  # logging must never affect a request
++
++
+ class TastytradeClient:
+     """Small OAuth REST client. It never submits an order except via submit_order()."""
+     def __init__(self, client_id: str, client_secret: str, refresh_token: str, *, base_url: str,
+@@ -100,11 +117,14 @@ class TastytradeClient:
+         for attempt in range(attempts):
+             if _PACER is not None:
+                 _PACER.wait()
++            started = time.monotonic()
+             try:
+                 with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                     content = _decode_content(response.read(), response.headers.get("Content-Encoding", ""))
++                    _observe(method, path, getattr(response, "status", None), started, attempt + 1)
+                     return json.loads(content.decode("utf-8"))
+             except urllib.error.HTTPError as exc:
++                _observe(method, path, exc.code, started, attempt + 1)
+                 content = _decode_content(exc.read(), exc.headers.get("Content-Encoding", ""))
+                 detail = content.decode("utf-8", errors="replace")[:1000]
+                 if exc.code == 429 and attempt + 1 < attempts:
+@@ -112,6 +132,7 @@ class TastytradeClient:
+                     continue
+                 raise BrokerError(f"tastytrade HTTP {exc.code} for {method} {path}: {detail} (status={exc.code})") from exc
+             except (urllib.error.URLError, TimeoutError) as exc:
++                _observe(method, path, "transport_error", started, attempt + 1)
+                 raise TransportError(f"tastytrade request failed: {exc}") from exc
+         raise AssertionError("unreachable")
+ 
