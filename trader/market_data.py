@@ -416,6 +416,10 @@ def parse_candle_feed(messages: list[dict], *, start: datetime, end: datetime, s
                 snapshot_started = True
             if not snapshot_started:
                 continue
+            if stamp > end and not flags & 8:
+                # The still-forming minute can update mid-snapshot; it is outside the window, so it
+                # cannot be an out-of-order row of the requested history.
+                continue
             if previous_time is not None and stamp > previous_time:
                 out_of_order += 1
                 if audit is not None:

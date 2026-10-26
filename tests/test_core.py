@@ -147,6 +147,22 @@ class CoreTests(unittest.TestCase):
             parse_candle_feed([{"data": ["Candle", begin, "Candle", duplicate, "Candle", conflict]}], start=start,
                               end=start + timedelta(minutes=2), symbol="SPY")
 
+    def test_candle_parser_ignores_forming_minute_update_after_window_end(self):
+        start = datetime(2024, 1, 2, 14, 30, tzinfo=timezone.utc)
+        symbol = "SPY{=1m,a=s,tho=true}"
+        def candle(minute, close, flags):
+            stamp = int((start + timedelta(minutes=minute)).timestamp() * 1000)
+            return ["Candle", symbol, 0, stamp, 0, 1, 470, 472, 469, close, 1000, flags]
+        forming, update = candle(3, 471, 4), candle(3, 471.5, 0)
+        frames = [{"data": ["Candle", forming, "Candle", candle(2, 470.5, 0), "Candle", update,
+                            "Candle", candle(1, 470.25, 0), "Candle", candle(0, 470, 8)]}]
+        rows = parse_candle_feed(frames, start=start, end=start + timedelta(minutes=2), symbol="SPY")
+        self.assertEqual([row["close"] for row in rows], [470, 470.25, 470.5])
+        late_in_window = [{"data": ["Candle", forming, "Candle", candle(1, 470.25, 0), "Candle", candle(2, 470.5, 0),
+                                    "Candle", candle(0, 470, 8)]}]
+        with self.assertRaisesRegex(RuntimeError, "out of order"):
+            parse_candle_feed(late_in_window, start=start, end=start + timedelta(minutes=2), symbol="SPY")
+
     def test_massive_403_reports_provider_entitlement_without_secret(self):
         start = datetime(2026, 10, 12, 13, 30, tzinfo=timezone.utc)
         error_body = json.dumps({"status": "NOT_AUTHORIZED", "message": "Your plan doesn't include this data timeframe"}).encode()
