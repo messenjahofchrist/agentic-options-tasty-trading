@@ -338,11 +338,13 @@ async def live_minute_bars(dxlink_url: str, quote_token: str, symbols: list[str]
                 for item in payload:
                     if not isinstance(item, list) or not item:
                         continue
-                    if item[0] == "Trade":
-                        candidates = [item]
-                    elif len(item) % 6 == 0:
+                    # COMPACT batches several Trade events back to back in one list; unpack every one of
+                    # them (checked before the single-event case because a batch also starts with "Trade").
+                    if len(item) % 6 == 0:
                         candidates = [item[offset:offset + 6] for offset in range(0, len(item), 6)
                                       if item[offset] == "Trade"]
+                    elif item[0] == "Trade":
+                        candidates = [item]
                     else:
                         candidates = []
                     for trade in candidates:

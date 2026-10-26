@@ -557,6 +557,34 @@ class CoreTests(unittest.TestCase):
         self.assertEqual([bar.timestamp for _, bar in bars], [fresh, fresh + timedelta(minutes=1)])
         self.assertEqual((bars[0][1].open, bars[0][1].close, bars[0][1].volume), (276.1, 276.3, 20))
 
+    def test_live_bars_unpack_every_trade_in_a_compact_batch(self):
+        import trader.market_data as market_data
+        fresh = datetime.now(timezone.utc).replace(second=0, microsecond=0) + timedelta(minutes=1)
+        def trade(symbol, at, price, size): return ["Trade", symbol, int(at.timestamp() * 1000), price, 0, size]
+
+        async def fake_events(*args, **kwargs):
+            # The live feed sends one flat list per batch, e.g. ["Trade", "SPY", ..., "Trade", "TSLA", ...].
+            yield {"data": ["Trade", trade("TSLA", fresh, 391.0, 40) + trade("SPY", fresh, 765.0, 80)
+                            + trade("SPY", fresh + timedelta(seconds=20), 766.0, 100)
+                            + trade("SPY", fresh + timedelta(seconds=40), 764.5, 20)]}
+            yield {"data": ["Trade", trade("TSLA", fresh + timedelta(minutes=1), 391.5, 10)
+                            + trade("SPY", fresh + timedelta(minutes=1), 765.5, 10)]}
+
+        async def collect():
+            out = {}
+            async for symbol, bar in market_data.live_minute_bars("wss://x", "t", ["SPY", "TSLA"]):
+                out[symbol] = bar
+                if len(out) == 2:
+                    break
+            return out
+
+        with patch("trader.market_data.dxlink_events", fake_events):
+            bars = asyncio.run(collect())
+        spy = bars["SPY"]
+        self.assertEqual((spy.timestamp, spy.open, spy.high, spy.low, spy.close, spy.volume),
+                         (fresh, 765.0, 766.0, 764.5, 764.5, 200))
+        self.assertEqual((bars["TSLA"].close, bars["TSLA"].volume), (391.0, 40))
+
     def test_multi_symbol_session_bootstraps_ranks_enters_and_carries_positions(self):
         """End-to-end run of the session loop with fake broker data for two underlyings."""
         import types
