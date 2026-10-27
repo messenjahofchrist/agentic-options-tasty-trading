@@ -311,7 +311,13 @@ async def dxlink_events(dxlink_url: str, quote_token: str, subscriptions: list[d
 
 
 async def live_minute_bars(dxlink_url: str, quote_token: str, symbols: list[str]) -> AsyncIterator[tuple[str, Bar]]:
-    """Aggregate live DXLink Trade events into completed UTC one-minute OHLCV bars."""
+    """Stream completed UTC one-minute OHLCV bars from DXLink's live Candle feed.
+
+    These are the same server-built candles as the history bootstrap and gap recovery, so live and historical
+    bars count volume the same way. Bars built from Trade events undercounted it: the feed conflates trades
+    within its aggregation period, so only some trade sizes arrive. Each Candle update carries the minute's
+    full OHLCV so far; a minute is emitted once a later minute's candle arrives for that symbol.
+    """
     try:
         from websockets.exceptions import ConnectionClosed
     except ImportError as exc:
@@ -320,62 +326,47 @@ async def live_minute_bars(dxlink_url: str, quote_token: str, symbols: list[str]
         raise ValueError("At least one symbol is required for live paper candles")
     for symbol in symbols:
         require_ticker(symbol)
-    subscriptions = [{"type": "Trade", "symbol": symbol} for symbol in symbols]
+    by_event_symbol = {f"{symbol}{{={period},a=s,tho=true}}": symbol for symbol in symbols for period in ("1m", "m")}
     current: dict[str, dict[str, float | datetime]] = {}
     reconnects = 0
     while True:
-        # A minute that began before this connection opened is incomplete (we joined mid-minute, or
-        # the event is the last-trade snapshot). It is never emitted; the caller recovers that minute
-        # from complete history as a gap instead. Minutes starting after the connect are complete,
-        # so a pre-open start still emits the 09:30 bar.
+        # A minute that began before this connection opened is never emitted (as with the earlier Trade
+        # feed); the caller recovers that minute from complete history as a gap instead. Minutes starting
+        # after the connect are emitted, so a pre-open start still emits the 09:30 bar.
         connected_at = datetime.now(timezone.utc)
+        from_time = int(connected_at.replace(second=0, microsecond=0).timestamp() * 1000)
+        subscriptions = [{"type": "Candle", "symbol": f"{symbol}{{=1m,a=s,tho=true}}", "fromTime": from_time}
+                         for symbol in symbols]
         try:
             async for message in dxlink_events(dxlink_url, quote_token, subscriptions):
                 reconnects = 0
                 payload = message.get("data")
                 if not isinstance(payload, list):
                     continue
-                for item in payload:
-                    if not isinstance(item, list) or not item:
+                try:
+                    rows = _compact_candle_rows(payload)
+                except ValueError:
+                    continue
+                for row in rows:
+                    symbol = by_event_symbol.get(str(row[1]))
+                    if symbol is None or _candle_flags(row[11]) & 2:   # REMOVE_EVENT
                         continue
-                    # COMPACT batches several Trade events back to back in one list; unpack every one of
-                    # them (checked before the single-event case because a batch also starts with "Trade").
-                    if len(item) % 6 == 0:
-                        candidates = [item[offset:offset + 6] for offset in range(0, len(item), 6)
-                                      if item[offset] == "Trade"]
-                    elif item[0] == "Trade":
-                        candidates = [item]
-                    else:
-                        candidates = []
-                    for trade in candidates:
-                        if len(trade) < 6 or str(trade[1]) not in symbols:
-                            continue
-                        symbol = str(trade[1])
-                        try:
-                            timestamp = _candle_time(trade[2])
-                            price, size = float(trade[3]), float(trade[5])
-                        except (TypeError, ValueError, OverflowError):
-                            continue
-                        if not math.isfinite(price) or not math.isfinite(size) or price <= 0 or size < 0:
-                            continue
-                        minute = timestamp.replace(second=0, microsecond=0)
-                        state = current.get(symbol)
-                        if state and minute < state["timestamp"]:
-                            continue
-                        if state and minute > state["timestamp"]:
-                            if not state.get("partial"):
-                                yield symbol, Bar(state["timestamp"], state["open"], state["high"], state["low"],
-                                                  state["close"], state["volume"])
-                            state = None
-                        if state is None:
-                            current[symbol] = {"timestamp": minute, "open": price, "high": price, "low": price,
-                                               "close": price, "volume": size,
-                                               "partial": minute < connected_at}
-                        else:
-                            state["high"] = max(state["high"], price)
-                            state["low"] = min(state["low"], price)
-                            state["close"] = price
-                            state["volume"] += size
+                    try:
+                        minute = _candle_time(row[3]).replace(second=0, microsecond=0)
+                        opening, high, low, close, volume = (float(row[index]) for index in range(6, 11))
+                    except (TypeError, ValueError, OverflowError):
+                        continue
+                    if (not all(math.isfinite(value) for value in (opening, high, low, close, volume))
+                            or min(opening, high, low, close) <= 0 or volume < 0):
+                        continue
+                    state = current.get(symbol)
+                    if state and minute < state["timestamp"]:
+                        continue
+                    if state and minute > state["timestamp"] and not state.get("partial"):
+                        yield symbol, Bar(state["timestamp"], state["open"], state["high"], state["low"],
+                                          state["close"], state["volume"])
+                    current[symbol] = {"timestamp": minute, "open": opening, "high": high, "low": low,
+                                       "close": close, "volume": volume, "partial": minute < connected_at}
         except (ConnectionClosed, ConnectionError, OSError) as exc:
             # Server-side drops (e.g. a KEEPALIVE timeout ERROR) arrive as ConnectionError, not
             # ConnectionClosed. Reconnect for both. Discard the partially built minute: the caller

@@ -531,18 +531,26 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(late_with_slot)
         self.assertFalse(late_without_slot)
 
+    @staticmethod
+    def _live_candle(symbol, at, ohlc, volume, flags=0):
+        return ["Candle", f"{symbol}{{=1m,a=s,tho=true}}", 0, int(at.timestamp() * 1000), 0, 1, *ohlc, volume, flags]
+
     def test_live_bars_drop_the_minute_in_progress_at_connect(self):
         import trader.market_data as market_data
         base = datetime.now(timezone.utc).replace(second=0, microsecond=0)
         joined = base - timedelta(minutes=1)            # minute already running when we connected
         fresh = base + timedelta(minutes=1)             # minutes that start after the connection
-        def trade(at, price): return ["Trade", "IWM", int(at.timestamp() * 1000), price, 0, 10]
+        def candle(at, ohlc, volume): return self._live_candle("IWM", at, ohlc, volume)
+        subscriptions = []
 
-        async def fake_events(*args, **kwargs):
-            yield {"data": [trade(joined + timedelta(seconds=40), 276.0)]}
-            yield {"data": [trade(fresh, 276.1), trade(fresh + timedelta(seconds=30), 276.3)]}
-            yield {"data": [trade(fresh + timedelta(minutes=1), 276.2)]}
-            yield {"data": [trade(fresh + timedelta(minutes=2), 276.4)]}
+        async def fake_events(url, token, subs, **kwargs):
+            subscriptions.extend(subs)
+            yield {"data": ["Candle", candle(joined, (276.0, 276.0, 276.0, 276.0), 500)]}
+            # Each update carries the minute's OHLCV so far; the last one before the next minute is the bar.
+            yield {"data": ["Candle", candle(fresh, (276.1, 276.1, 276.1, 276.1), 10)
+                            + candle(fresh, (276.1, 276.35, 276.05, 276.3), 2400)]}
+            yield {"data": ["Candle", candle(fresh + timedelta(minutes=1), (276.3, 276.3, 276.2, 276.2), 300)]}
+            yield {"data": ["Candle", candle(fresh + timedelta(minutes=2), (276.2, 276.4, 276.2, 276.4), 100)]}
 
         async def collect():
             out = []
@@ -553,22 +561,26 @@ class CoreTests(unittest.TestCase):
             return out
 
         with patch("trader.market_data.dxlink_events", fake_events):
-            bars = asyncio.run(collect())
+            bars = asyncio.run(asyncio.wait_for(collect(), 5))
+        self.assertEqual(subscriptions[0]["type"], "Candle")
+        self.assertEqual(subscriptions[0]["symbol"], "IWM{=1m,a=s,tho=true}")
         self.assertEqual([bar.timestamp for _, bar in bars], [fresh, fresh + timedelta(minutes=1)])
-        self.assertEqual((bars[0][1].open, bars[0][1].close, bars[0][1].volume), (276.1, 276.3, 20))
+        first = bars[0][1]
+        self.assertEqual((first.open, first.high, first.low, first.close, first.volume),
+                         (276.1, 276.35, 276.05, 276.3, 2400))
 
-    def test_live_bars_unpack_every_trade_in_a_compact_batch(self):
+    def test_live_bars_take_each_symbols_candle_from_a_compact_batch(self):
         import trader.market_data as market_data
         fresh = datetime.now(timezone.utc).replace(second=0, microsecond=0) + timedelta(minutes=1)
-        def trade(symbol, at, price, size): return ["Trade", symbol, int(at.timestamp() * 1000), price, 0, size]
+        later = fresh + timedelta(minutes=1)
 
         async def fake_events(*args, **kwargs):
-            # The live feed sends one flat list per batch, e.g. ["Trade", "SPY", ..., "Trade", "TSLA", ...].
-            yield {"data": ["Trade", trade("TSLA", fresh, 391.0, 40) + trade("SPY", fresh, 765.0, 80)
-                            + trade("SPY", fresh + timedelta(seconds=20), 766.0, 100)
-                            + trade("SPY", fresh + timedelta(seconds=40), 764.5, 20)]}
-            yield {"data": ["Trade", trade("TSLA", fresh + timedelta(minutes=1), 391.5, 10)
-                            + trade("SPY", fresh + timedelta(minutes=1), 765.5, 10)]}
+            # The live feed sends one flat list per batch: ["Candle", "TSLA{...}", ..., "Candle", "SPY{...}", ...].
+            yield {"data": ["Candle", self._live_candle("TSLA", fresh, (391.0, 391.2, 390.8, 391.0), 40000)
+                            + self._live_candle("SPY", fresh, (765.0, 766.0, 764.5, 764.5), 31250)]}
+            yield {"data": ["Candle", self._live_candle("SPY", fresh, (765.0, 766.0, 764.4, 764.6), 9e9, 2)  # removal
+                            + self._live_candle("TSLA", later, (391.5, 391.5, 391.5, 391.5), 10)
+                            + self._live_candle("SPY", later, (765.5, 765.5, 765.5, 765.5), 10)]}
 
         async def collect():
             out = {}
@@ -579,11 +591,11 @@ class CoreTests(unittest.TestCase):
             return out
 
         with patch("trader.market_data.dxlink_events", fake_events):
-            bars = asyncio.run(collect())
+            bars = asyncio.run(asyncio.wait_for(collect(), 5))
         spy = bars["SPY"]
         self.assertEqual((spy.timestamp, spy.open, spy.high, spy.low, spy.close, spy.volume),
-                         (fresh, 765.0, 766.0, 764.5, 764.5, 200))
-        self.assertEqual((bars["TSLA"].close, bars["TSLA"].volume), (391.0, 40))
+                         (fresh, 765.0, 766.0, 764.5, 764.5, 31250))
+        self.assertEqual((bars["TSLA"].close, bars["TSLA"].volume), (391.0, 40000))
 
     def test_multi_symbol_session_bootstraps_ranks_enters_and_carries_positions(self):
         """End-to-end run of the session loop with fake broker data for two underlyings."""
