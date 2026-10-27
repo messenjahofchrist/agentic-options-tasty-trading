@@ -767,5 +767,35 @@ class SeparationTests(unittest.TestCase):
             ProfileLedger(small, original_data_dir=small.data_dir)
 
 
+class DashboardSummaryTests(unittest.TestCase):
+    def test_plain_summary_counts_wins_losses_and_open_trades(self):
+        from trader.v2 import report
+        now = datetime(2026, 10, 27, 16, 0, tzinfo=timezone.utc)
+        def buy(trade_id, symbol, at): return {"type": "fill", "side": "BUY", "trade_id": trade_id, "symbol": symbol, "timestamp": at}
+        def close(trade_id, stock, pnl, reason, at): return {"type": "paper_close", "trade_id": trade_id, "underlying": stock,
+                                                             "realized_pnl": pnl, "reason": reason, "timestamp": at}
+        account = {"starting_capital": 1000.0, "cash": 900.0, "ledger": [
+            buy("a", "SPY   261102C00762000", "2026-10-26T14:00:00+00:00"), close("a", "SPY", 20.0, "underlying_profit_target", "2026-10-26T14:30:00+00:00"),
+            buy("b", "BAC   261106P00051000", "2026-10-27T14:00:00+00:00"), close("b", "BAC", 12.5, "v2_trailing_stop", "2026-10-27T14:20:00+00:00"),
+            buy("c", "XLE   261106P00068500", "2026-10-27T14:15:00+00:00"), close("c", "XLE", -5.0, "v2_breakeven_stop", "2026-10-27T14:37:00+00:00")],
+            "positions": [{"underlying": "T", "symbol": "T     261106C00021000", "right": "C", "quantity": 1, "entry_price": 0.58,
+                           "entry_fees": 1.14, "last_bid": 0.65, "stop_underlying": 20.92, "target_underlying": 21.37,
+                           "entry_time": "2026-10-27T15:21:00+00:00", "modeled_risk_dollars": 59.14}]}
+        results = report.trade_results(account)
+        self.assertEqual([(r["underlying"], r["right"], r["pnl"]) for r in results],
+                         [("SPY", "C", 20.0), ("BAC", "P", 12.5), ("XLE", "P", -5.0)])
+        opened = report.open_trade(account["positions"][0])
+        self.assertAlmostEqual(opened["pnl"], 65.0 - 59.14)
+        view = {"account": account, "heartbeat": {"lifecycle_state": "RUNNING", "updated_at_utc": now.isoformat()}}
+        page = report._summary_block(view, now)
+        self.assertIn("1 won · 1 lost", page)                       # today only: BAC won, XLE lost
+        self.assertIn(report._signed(12.5 - 5.0 + 65.0 - 59.14), page)  # today's closed + open result
+        self.assertIn("1 winning · 0 losing", page)
+        self.assertIn("Breakeven stop (the gain faded)", page)
+        self.assertIn("profit target if T rises to $21.37", page)
+        self.assertIn("<b>3</b> trades closed, <b>2</b> won, <b>1</b> lost", page)
+        self.assertIn("Running", page)
+
+
 if __name__ == "__main__":
     unittest.main()
