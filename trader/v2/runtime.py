@@ -70,6 +70,7 @@ class V2Session:
                          for s in self.trade_symbols}
         self.events = EventEngine(config.calendar, self.cfg["events"], next_session=self._next_session)
         self.correlation = CorrelationModel(self.cfg["correlation"], self.sector_map, {})
+        self.daily_closes: dict[str, list[float]] = {}
         self.metrics: dict[str, dict] = {}
         self.metrics_error: str | None = None
         self.last_metrics_refresh: datetime | None = None
@@ -131,6 +132,8 @@ class V2Session:
                 self.context.prior[symbol] = DailyLevels(last["session_date"], last["open"], last["high"], last["low"], last["close"])
         self.correlation = CorrelationModel(self.cfg["correlation"], self.sector_map,
                                             {s: [(r["session_date"], r["close"]) for r in rows] for s, rows in daily.items()})
+        self.daily_closes = {s: [float(r["close"]) for r in rows if r["session_date"] < today.isoformat()]
+                             for s, rows in daily.items()}
         self.context.provenance["daily_history"] = {"source": "tastytrade DXLink {=1d} candles (shared cache)",
                                                     "symbols": len(daily), "failures": failures, "today": today.isoformat()}
         status["daily_history"] = {"symbols": len(daily), "failures": failures}
@@ -287,7 +290,8 @@ class V2Session:
             correlation=self.correlation, risk_state=risk_state, positions=copy.deepcopy(account.positions),
             pending=list(pending), cash=float(account.cash), equity=equity, profile_name=self.profile_name,
             fetch_chain=lambda: self.chain_sync(symbol, bars[-1].timestamp, spot, now), data_fresh=data_fresh,
-            entries_blocked=entries_blocked, core_signal_now=core_signal is not None)
+            entries_blocked=entries_blocked, core_signal_now=core_signal is not None,
+            daily_closes=self.daily_closes.get(symbol))
         report = await asyncio.to_thread(pipeline.evaluate_candidate, inputs)
         record = pipeline.report_record(report)
         self.latest_reports[symbol] = record

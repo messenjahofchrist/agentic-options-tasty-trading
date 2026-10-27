@@ -5,7 +5,7 @@
 // Plain-English companion: docs/v2/professional_strategy_v2.md.
 {
   "strategy_id": "PROFESSIONAL_STRATEGY_V2",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "status": "research_test",
   "mode": "PAPER",
   "base_strategy": {
@@ -147,8 +147,22 @@
     "quality_score_affects_size": false
   },
 
+  // Bigger-picture trend: a CALL needs the price above, a PUT below, the average of the last sma_sessions daily closes.
+  "daily_trend": {"enabled": false, "sma_sessions": 20},
+
+  // Entry filters from the 2026-10-27 replay scorecard (each lost in all three replay periods): no entries in the
+  // excluded symbols, and none in the skip window (ET), the first minutes after the opening range forms.
+  "entry_filters": {"enabled": true, "exclude_symbols": ["TLT"], "skip_from_et": "10:00", "skip_until_et": "10:30"},
+
+  // Fewer trades: at most this many V2 entries per session (on top of the original 6-per-day risk limit).
+  "trade_limits": {"enabled": false, "max_entries_per_session": 3},
+
   "management": {
-    "breakeven": {"enabled": true, "trigger_r": 1.0},
+    // require_option_above_floor: breakeven arms only once the option bid has actually covered cost + fees.
+    "breakeven": {"enabled": true, "trigger_r": 1.0, "require_option_above_floor": true},
+    // let_winners_run: at the target, hold instead of selling; the stop locks in lock_r x R and trails trail_r x R
+    // behind the best price (R = the initial stop distance).
+    "let_winners_run": {"enabled": true, "lock_r": 1.0, "trail_r": 1.0},
     "trailing": {"enabled": true, "trigger_r": 1.0, "atr_multiple": "rules.stop_underlying_atr"},
     "time_stop": {"enabled": false, "after_minutes": 60, "min_progress_r": 0.25},
     "partial_profit": {"enabled": false, "trigger_r": 1.0, "fraction": 0.5}

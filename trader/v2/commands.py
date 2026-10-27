@@ -274,8 +274,9 @@ def run_command(args, cfg, root: Path) -> int:
         return 0
     if args.command == "v2-replay":
         from .replay import run_replay
-        print(json.dumps(run_replay(root, cfg, source=args.source, in_sample_end=args.in_sample_end, out=Path(args.out)),
-                         indent=2, default=str)[:20000])
+        variants = [v.strip() for v in getattr(args, "variants", "").split(",") if v.strip()] or None
+        print(json.dumps(run_replay(root, cfg, source=args.source, in_sample_end=args.in_sample_end, out=Path(args.out),
+                                    variants=variants), indent=2, default=str)[:20000])
         return 0
     if args.command == "v2-compare":
         from .compare import compare_ledgers

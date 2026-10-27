@@ -533,6 +533,54 @@ class ManagementTests(unittest.TestCase):
         self.step(p, 99.0, 2.5)
         self.assertAlmostEqual(p["v2_management"]["trail_stop_underlying"], 99.2)
 
+    def runner_cfg(self):
+        c = json.loads(json.dumps(self.c))
+        c["let_winners_run"].update(enabled=True, lock_r=1.0, trail_r=1.0)
+        c["trailing"]["enabled"] = False
+        return c
+
+    def test_let_winners_run_holds_past_the_target_behind_a_rising_stop(self):
+        c, p = self.runner_cfg(), self.pos()          # entry 100, stop 99 (R = 1), target 102
+        self.assertFalse(self.step(p, 101.5, 2.8, c=c)["hold_past_target"])
+        at_target = self.step(p, 102.0, 3.0, c=c)
+        self.assertTrue(at_target["hold_past_target"])
+        self.assertIsNone(at_target["exit_reason"])
+        self.assertAlmostEqual(p["v2_management"]["runner_stop_underlying"], 101.0)   # +1R locked in
+        self.step(p, 104.0, 5.0, c=c)
+        self.assertAlmostEqual(p["v2_management"]["runner_stop_underlying"], 103.0)   # trails 1R behind the best
+        self.assertIsNone(self.step(p, 103.5, 4.5, c=c)["exit_reason"])
+        self.assertAlmostEqual(p["v2_management"]["runner_stop_underlying"], 103.0)   # never moves back
+        self.assertEqual(self.step(p, 102.9, 4.0, c=c)["exit_reason"], "v2_runner_stop")
+
+    def test_let_winners_run_off_never_holds_past_the_target(self):
+        c = json.loads(json.dumps(self.c))
+        c["let_winners_run"]["enabled"] = False
+        p = self.pos()
+        self.assertFalse(self.step(p, 102.5, 3.0, c=c)["hold_past_target"])
+
+    def test_let_winners_run_put_side(self):
+        c = self.runner_cfg()
+        p = dict(self.pos(), right="P", stop_underlying=101.0, target_underlying=98.0)
+        self.assertTrue(self.step(p, 98.0, 3.0, c=c)["hold_past_target"])
+        self.assertAlmostEqual(p["v2_management"]["runner_stop_underlying"], 99.0)
+        self.step(p, 96.0, 5.0, c=c)
+        self.assertAlmostEqual(p["v2_management"]["runner_stop_underlying"], 97.0)
+        self.assertEqual(self.step(p, 97.1, 4.0, c=c)["exit_reason"], "v2_runner_stop")
+
+    def test_breakeven_can_require_the_option_to_have_covered_its_cost(self):
+        c = json.loads(json.dumps(self.c))
+        c["breakeven"]["require_option_above_floor"] = True
+        p = self.pos()
+        # +1R on the underlying but the bid (2.00) is still below cost + fees: not armed, so no instant losing exit.
+        self.assertIsNone(self.step(p, 101.0, 2.0, c=c)["exit_reason"])
+        self.assertNotIn("breakeven_armed", p["v2_management"])
+        self.step(p, 101.0, 2.5, c=c)
+        self.assertTrue(p["v2_management"]["breakeven_armed"])
+        # Without the requirement the same first bar arms and exits at a loss (the 2026-10-27 XLE case).
+        c["breakeven"]["require_option_above_floor"] = False
+        q = self.pos()
+        self.assertEqual(self.step(q, 101.0, 2.0, c=c)["exit_reason"], "v2_breakeven_stop")
+
 
 class PipelineTests(unittest.TestCase):
     """End-to-end candidate evaluation with mocked inputs."""
@@ -613,6 +661,50 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(pipeline.evaluate_candidate(self.inputs(entries_blocked="kill_switch_active")).outcome, "REJECTED")
         self.assertEqual(pipeline.evaluate_candidate(self.inputs(data_fresh=False)).outcome, "INSUFFICIENT_DATA")
         self.assertEqual(self.calls, 0)
+
+    def test_daily_trend_needs_the_price_on_the_trades_side_of_its_average(self):
+        data = json.loads(json.dumps(self.c.data)); data["daily_trend"].update(enabled=True, sma_sessions=20)
+        below = pipeline.evaluate_candidate(self.inputs(v2=data, daily_closes=[200.0] * 25))   # price ~101 < 200
+        self.assertEqual(below.outcome, "REJECTED")
+        self.assertIn("daily_trend", below.reasons[0])
+        self.assertEqual(self.calls, 0)
+        above = pipeline.evaluate_candidate(self.inputs(v2=data, daily_closes=[50.0] * 25))
+        self.assertEqual(above.outcome, "APPROVED", above.reasons)
+        short = pipeline.evaluate_candidate(self.inputs(v2=data, daily_closes=[50.0] * 5))
+        self.assertEqual(short.outcome, "INSUFFICIENT_DATA")
+        off = pipeline.evaluate_candidate(self.inputs(daily_closes=[200.0] * 25))              # switch off: ignored
+        self.assertEqual(off.outcome, "APPROVED", off.reasons)
+
+    def test_entry_filters_exclude_symbols_and_the_skip_window(self):
+        data = json.loads(json.dumps(self.c.data))
+        data["entry_filters"].update(enabled=True, exclude_symbols=["NVDA"], skip_from_et="10:00", skip_until_et="10:30")
+        excluded = pipeline.evaluate_candidate(self.inputs(v2=data))
+        self.assertEqual(excluded.outcome, "REJECTED")
+        self.assertIn("excluded", excluded.reasons[0])
+        data["entry_filters"]["exclude_symbols"] = []
+        at = lambda hh, mm: datetime(2026, 10, 26, hh, mm, 30, tzinfo=ZoneInfo("America/New_York"))
+        self.assertEqual(pipeline.evaluate_candidate(self.inputs(v2=data, now=at(10, 15), clock=lambda: at(10, 15))).outcome,
+                         "REJECTED")
+        self.assertEqual(pipeline.evaluate_candidate(self.inputs(v2=data, now=at(10, 30), clock=lambda: at(10, 30))).outcome,
+                         "APPROVED")
+        self.assertEqual(self.calls, 1)          # rejected candidates never requested an option chain
+
+    def test_trade_limit_stops_new_entries_for_the_day(self):
+        data = json.loads(json.dumps(self.c.data)); data["trade_limits"].update(enabled=True, max_entries_per_session=3)
+        self.assertEqual(pipeline.evaluate_candidate(self.inputs(v2=data, risk_state=RiskState(10_000, 0, 0, 0, 2, 0))).outcome,
+                         "APPROVED")
+        capped = pipeline.evaluate_candidate(self.inputs(v2=data, risk_state=RiskState(10_000, 0, 0, 0, 3, 0)))
+        self.assertEqual(capped.outcome, "REJECTED")
+        self.assertIn("3 trades per day", " ".join(capped.reasons))
+
+    def test_replay_variant_overrides_merge_into_the_config(self):
+        from trader.v2.replay import VARIANTS, variant_config
+        merged = variant_config(self.c.data, VARIANTS["v2_run_trend_no_early_trail"][2])
+        self.assertTrue(merged["management"]["let_winners_run"]["enabled"])
+        self.assertEqual(merged["management"]["let_winners_run"]["trail_r"], self.c.data["management"]["let_winners_run"]["trail_r"])
+        self.assertFalse(merged["management"]["trailing"]["enabled"])
+        self.assertTrue(merged["daily_trend"]["enabled"])
+        self.assertFalse(self.c.data["daily_trend"]["enabled"])                                 # base untouched
 
     def test_original_risk_engine_still_blocks(self):
         r = pipeline.evaluate_candidate(self.inputs(risk_state=RiskState(10_000, -250, -250, 0, 0, 0)))

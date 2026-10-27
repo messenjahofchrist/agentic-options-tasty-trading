@@ -25,6 +25,7 @@ CLOSE_REASONS = {
     "underlying_profit_target": "Hit its profit target",
     "underlying_invalidation_stop": "Hit its stop-loss",
     "v2_trailing_stop": "Trailing stop (locked in part of a gain)",
+    "v2_runner_stop": "Passed its target, rode it higher, sold on the pullback",
     "v2_breakeven_stop": "Breakeven stop (the gain faded)",
     "v2_time_stop_no_progress": "Closed: no progress in time",
     "v2_partial_profit": "Sold part for profit",
@@ -145,11 +146,20 @@ def _engine_status(heartbeat: dict, now: datetime) -> tuple[str, str]:
     return state.title() or "Unknown", "down" if state else ""
 
 
-def _closes_when(p: dict) -> str:
+def _closes_when(p: dict, letting_winners_run: bool = False) -> str:
     """When the engine will sell this position, in plain words (only the exits that are active)."""
     stock, stop, target = p["underlying"], float(p["stop_underlying"]), float(p["target_underlying"])
     m = p.get("v2_management") or {}
-    if str(p.get("right", "")).upper() in ("C", "CALL"):
+    if m.get("runner"):
+        falls = "falls" if str(p.get("right", "")).upper() in ("C", "CALL") else "rises"
+        return (f"Passed its profit target: letting it run. Sells if {stock} {falls} back to "
+                f"${float(m['runner_stop_underlying']):,.2f} (this line only moves in our favor); otherwise at the end of the day.")
+    up = str(p.get("right", "")).upper() in ("C", "CALL")
+    if letting_winners_run:
+        moves = "rises" if up else "falls"
+        return (f"If {stock} {moves} to its target ${target:,.2f}, it keeps riding with a rising safety line instead of "
+                f"selling. Stop-loss if it {'falls' if up else 'rises'} to ${stop:,.2f}; otherwise sells at the end of the day.")
+    if up:
         parts = [f"profit target if {stock} rises to ${target:,.2f}", f"stop-loss if it falls to ${stop:,.2f}"]
     else:
         parts = [f"profit target if {stock} falls to ${target:,.2f}", f"stop-loss if it rises to ${stop:,.2f}"]
@@ -190,7 +200,7 @@ def _summary_block(view: dict, now: datetime) -> str:
         f"<tr><td><b>{e(p['underlying'])}</b></td><td>{_bet(p.get('right'))}</td><td class='num'>{_money(o['paid'])}</td>"
         f"<td class='num'>{_money(o['worth'])}</td><td class='num {_tone(o['pnl'])}'><b>{'Winning' if o['pnl'] > 0 else 'Losing' if o['pnl'] < 0 else 'Even'}"
         f"</b> {_signed(o['pnl'])} ({_percent(o['pct'])})</td><td>{_ct(p.get('entry_time'))}</td>"
-        f"<td class='small'>{e(_closes_when(p))}<div class='muted'>Most it can lose: {_money(p.get('modeled_risk_dollars'))}</div></td></tr>"
+        f"<td class='small'>{e(_closes_when(p, bool(view.get('let_winners_run'))))}<div class='muted'>Most it can lose: {_money(p.get('modeled_risk_dollars'))}</div></td></tr>"
         for p, o in opened)
     closed_rows = "".join(
         f"<tr><td><b>{e(r['underlying'])}</b></td><td>{_bet(r['right']) if r['right'] else '—'}</td>"
@@ -374,11 +384,14 @@ def write_dashboard(root: Path, original_data_dir: Path, now: datetime | None = 
     now = now or datetime.now(timezone.utc)
     small = ProfileConfig.load(root, "small")
     from .config import load_v2_config
-    fractions = load_v2_config(root).data["portfolio"]["aggregate_max_loss_fraction"]
+    v2_data = load_v2_config(root).data
+    fractions = v2_data["portfolio"]["aggregate_max_loss_fraction"]
     views = [ledger_view("$10K ledger — ORIGINAL_ACCOUNT_PAPER", Path(original_data_dir), now, root,
                          fractions["ORIGINAL_ACCOUNT_PAPER"], label="$10,000 account"),
              ledger_view("$1K ledger — SMALL_ACCOUNT_PAPER", small.data_dir, now, root, fractions["SMALL_ACCOUNT_PAPER"],
                          label="$1,000 account")]
+    for view in views:
+        view["let_winners_run"] = bool(v2_data["management"]["let_winners_run"]["enabled"])
     out = Path(original_data_dir) / "v2_dashboard.html"
     fd, tmp = tempfile.mkstemp(dir=out.parent, prefix=out.name, suffix=".tmp")
     with os.fdopen(fd, "w", encoding="utf-8") as stream:

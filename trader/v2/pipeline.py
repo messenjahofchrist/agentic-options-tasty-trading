@@ -3,14 +3,16 @@
 Stages (each recorded with status PASS / REJECT / WAIT / INSUFFICIENT_DATA / NOT_APPLICABLE / NOT_EVALUATED, the
 reason and the inputs that decided it):
    1 technical_signal       the core strategy signal qualified at the breakout bar, and on this bar the core's own
-                            trend (EMA 9/21), ATR and volatility-spike conditions still hold
+                            trend (EMA 9/21), ATR and volatility-spike conditions still hold; with daily_trend enabled
+                            the price must also be on the trade's side of its N-session average daily close
    2 breakout_confirmation  confirmation.py state (WAIT until actionable)
    3 market_regime          regime.py; the trade's direction must be allowed in the current regime
    4 sector_confirmation    sectors.py
    5 volume_confirmation    the breakout bar's relative volume met the strategy minimum; price on the trade's side of
                             V2's session VWAP
    6 events                 events.py (earnings, FOMC window); a window that ends later in the session is a WAIT
-   7 portfolio_correlation  remaining aggregate and cluster budgets (pre-check, then the full check in 11)
+   7 portfolio_correlation  V2 trades-per-day limit (trade_limits), remaining aggregate and cluster budgets (pre-check,
+                            then the full check in 11)
    8 option_pricing         ORIGINAL contract selection (option_selector.evaluate_options) within V2's budget
    9 implied_volatility     options.evaluate_option (spread, size, quote age, IV rank, IV/HV, contract IV)
   10 liquidity              part of 8-9: original OI/volume/spread rules plus displayed size
@@ -22,8 +24,9 @@ Expensive stages (8+) run only when 1-7 pass, so a candidate that is waiting or 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 from ..fees import FeeSchedule, economic_gate
 from ..models import Bar, OptionQuote
@@ -38,6 +41,7 @@ from .regime import RegimeResult
 from .sectors import SectorMap, sector_confirmation
 from .sizing import size_long_option
 
+ET = ZoneInfo("America/New_York")
 STAGES = ("technical_signal", "breakout_confirmation", "market_regime", "sector_confirmation", "volume_confirmation",
           "events", "portfolio_correlation", "option_pricing", "implied_volatility", "liquidity", "position_sizing", "final")
 
@@ -93,6 +97,7 @@ class CandidateInputs:
     # Wall clock for quote/metrics age (the original engine also ages quotes against real time, not the bar time).
     clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc)
     core_signal_now: bool = True           # the core signal qualified on THIS bar (required when confirmation is off)
+    daily_closes: list[float] | None = None  # completed prior sessions' closes, oldest first (daily_trend stage-1 check)
 
 
 @dataclass
@@ -150,6 +155,16 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
     if not inp.data_fresh:
         report.set("technical_signal", "INSUFFICIENT_DATA", "underlying data not fresh (bar or quote)")
         return _finish(report)
+    filters = cfg.get("entry_filters") or {}
+    if filters.get("enabled"):
+        local = inp.now.astimezone(ET).time()
+        if inp.symbol in filters["exclude_symbols"]:
+            report.set("technical_signal", "REJECT", f"{inp.symbol} is excluded from V2 entries (entry_filters)")
+            return _finish(report)
+        if time.fromisoformat(filters["skip_from_et"]) <= local < time.fromisoformat(filters["skip_until_et"]):
+            report.set("technical_signal", "REJECT", f"no new entries {filters['skip_from_et']}-{filters['skip_until_et']} ET "
+                       "(entry_filters)", decision_time_et=local.isoformat(timespec="minutes"))
+            return _finish(report)
     fast, slow, atr = metrics.get("ema_fast"), metrics.get("ema_slow"), metrics.get("atr")
     trend_ok = fast is not None and slow is not None and ((fast > slow) if side == "CALL" else (fast < slow))
     atr_ok = atr is not None and price > 0 and atr / price <= float(rules["max_atr_fraction"])
@@ -157,8 +172,20 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
     spike_ok = spike is not None and spike <= float(rules["max_atr_expansion"])
     tech = {"breakout_bar_utc": setup.get("trigger_time"), "ema_fast": fast, "ema_slow": slow, "atr": atr,
             "atr_fraction": atr / price if atr and price else None, "atr_expansion": spike}
-    if not (trend_ok and atr_ok and spike_ok):
-        failed = [n for n, ok in (("ema_trend", trend_ok), ("atr_filter", atr_ok), ("volatility_spike", spike_ok)) if not ok]
+    daily = cfg.get("daily_trend") or {}
+    daily_ok = True
+    if daily.get("enabled"):
+        sessions = int(daily["sma_sessions"])
+        closes = list(inp.daily_closes or [])[-sessions:]
+        sma = sum(closes) / len(closes) if len(closes) == sessions else None
+        tech.update(daily_sma=sma, daily_sma_sessions=sessions)
+        if sma is None:
+            report.set("technical_signal", "INSUFFICIENT_DATA", f"fewer than {sessions} daily closes for the daily trend", **tech)
+            return _finish(report)
+        daily_ok = (price > sma) if side == "CALL" else (price < sma)
+    if not (trend_ok and atr_ok and spike_ok and daily_ok):
+        failed = [n for n, ok in (("ema_trend", trend_ok), ("atr_filter", atr_ok), ("volatility_spike", spike_ok),
+                                  ("daily_trend", daily_ok)) if not ok]
         report.set("technical_signal", "REJECT", "core conditions no longer hold on this bar: " + ",".join(failed), **tech)
     else:
         report.set("technical_signal", "PASS", "core signal qualified at the breakout bar and still holds", **tech)
@@ -233,7 +260,11 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
            "aggregate_open_max_loss": round(budgets.aggregate_open, 2), "cluster_cap": round(budgets.cluster_cap, 2),
            "cluster_open_max_loss": round(cluster_open, 2), "correlated_positions": related,
            "contract_budget": round(contract_budget, 2)}
-    if not cfg["portfolio"]["enabled"]:
+    limits = cfg.get("trade_limits") or {}
+    if limits.get("enabled") and inp.risk_state.trades_today >= int(limits["max_entries_per_session"]):
+        report.set("portfolio_correlation", "REJECT", f"V2 limit of {limits['max_entries_per_session']} trades per day reached",
+                   trades_today=inp.risk_state.trades_today, **pre)
+    elif not cfg["portfolio"]["enabled"]:
         contract_budget = budgets.per_trade
         report.set("portfolio_correlation", "NOT_APPLICABLE", "portfolio stage disabled", **pre)
     elif contract_budget <= 0:

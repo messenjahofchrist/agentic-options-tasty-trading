@@ -30,7 +30,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class V2EngineTests(unittest.TestCase):
-    def _session(self, tmp: Path):
+    def _session(self, tmp: Path, overrides: dict | None = None, run_up: bool = False):
         root = make_root(tmp, universe=["SPY"])
         shutil.copytree(ROOT / "strategies", root / "strategies")
         (root / v2config.MANIFEST_FILE).unlink(missing_ok=True)
@@ -44,6 +44,9 @@ class V2EngineTests(unittest.TestCase):
         history, breakout = session[:-1], session[-1]
         confirm = Bar(breakout.timestamp + timedelta(minutes=1), 100.40, 100.62, 100.38, 100.60, 1500)
         follow = Bar(confirm.timestamp + timedelta(minutes=1), 100.60, 100.70, 100.55, 100.65, 1200)
+        # run_up: two more bars far beyond any target (to test holding past the target)
+        extra = [Bar(follow.timestamp + timedelta(minutes=k), 102.0 + k, 103.0 + k, 101.9 + k, 103.0 + k, 1500)
+                 for k in (1, 2)] if run_up else []
         requests = {"option_chain": 0, "metrics": 0, "vix": 0}
 
         class FakeCalendar:
@@ -100,7 +103,7 @@ class V2EngineTests(unittest.TestCase):
             return out, {}
 
         async def fake_live(url, token, symbols):
-            for item in (breakout, confirm, follow):
+            for item in (breakout, confirm, follow, *extra):
                 for symbol in symbols:
                     yield symbol, item
                 await asyncio.sleep(0.3)
@@ -116,6 +119,10 @@ class V2EngineTests(unittest.TestCase):
         # not classify the synthetic session as disorderly (the guard itself is unit-tested separately).
         data = json.loads(json.dumps(config.data))
         data["regime"]["spy_disorderly_atr_fraction"] = 0.05
+        data["entry_filters"]["enabled"] = False   # the fixture runs at wall-clock time; the skip window is unit-tested
+        if overrides:
+            from trader.v2.replay import variant_config
+            data = variant_config(data, overrides)
         config = replace(config, base=no_flat, data=data)
         cfg = AppConfig(mode=Mode.PAPER, data_dir=root / "data", client_id="x", client_secret="y", refresh_token="z")
         with patch.object(paper_runner, "MarketCalendar", FakeCalendar), \
@@ -169,6 +176,23 @@ class V2EngineTests(unittest.TestCase):
         self.assertLess(shadow.positions[0]["entry_time"], position["entry_time"])
         # cached: the chain listing once per symbol per day
         self.assertEqual(requests["option_chain"], 1)
+
+    def test_let_winners_run_holds_past_the_target_in_the_engine(self):
+        # Trailing off isolates the runner: SPY runs from ~100.6 to 104, far past the target.
+        with tempfile.TemporaryDirectory() as tmp:
+            _, held, _, _, _ = self._session(Path(tmp), overrides={"let_winners_run": {"enabled": True},
+                                                                   "trailing": {"enabled": False}}, run_up=True)
+        self.assertEqual(len(held.positions), 1, "the position must still be open, riding past its target")
+        self.assertEqual([e for e in held.ledger if e.get("type") == "paper_close"], [])
+        position = held.positions[0]
+        self.assertLess(position["target_underlying"], 103.0)          # the run-up went far past the target
+        self.assertTrue(position["v2_management"]["runner"])
+        self.assertGreater(position["v2_management"]["runner_stop_underlying"], position["entry_underlying"])
+        with tempfile.TemporaryDirectory() as tmp:
+            _, sold, _, _, _ = self._session(Path(tmp), overrides={"let_winners_run": {"enabled": False},
+                                                                   "trailing": {"enabled": False}}, run_up=True)
+        # switch off: the same trade is sold at its target (a later breakout may open a new one)
+        self.assertEqual([e["reason"] for e in sold.ledger if e.get("type") == "paper_close"][:1], ["underlying_profit_target"])
 
     def test_v2_with_live_execution_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:

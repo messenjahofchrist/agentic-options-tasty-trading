@@ -86,6 +86,7 @@ def main(argv: list[str] | None = None) -> int:
     v2_replay.add_argument("--source", choices=("massive_cache", "tastytrade"), default="massive_cache")
     v2_replay.add_argument("--in-sample-end", default="2026-08-15")
     v2_replay.add_argument("--out", default="data/v2_replay")
+    v2_replay.add_argument("--variants", default="", help="comma-separated replay variants (default: all)")
     sub.add_parser("v2-compare", help="Original-strategy shadow vs V2 results from the PAPER ledgers (read-only)")
     dash = sub.add_parser("dashboard"); dash.add_argument("--host", default="127.0.0.1"); dash.add_argument("--port", type=int, default=8765)
     sub.add_parser("status")

@@ -932,11 +932,14 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
                                     daily_loss_hit=daily_pnl <= -current_equity * float(strategy.risk["max_daily_loss_fraction"]),
                                     enable_time_exit=bool(active_strategy.execution["enable_time_exit"])))
             if v2s is not None and why not in ("end_of_session_close", "emergency_daily_risk_exit"):
-                # V2 trade management can only exit earlier than the original stop/target; it never widens them.
+                # V2 trade management exits earlier than the original stop/target and never widens the stop; with
+                # let_winners_run enabled it may hold past the target behind a stop that has locked in a gain.
                 managed = v2s.manage(position_data, bar=bar, option_bid=quote.bid, now=bar_now,
                                      exit_fees_estimate=executor.fees.estimate(position.quantity))
                 if managed["exit_reason"]:
                     why = managed["exit_reason"]
+                elif why == "underlying_profit_target" and managed.get("hold_past_target"):
+                    why = None   # let_winners_run: the V2 runner stop (gain already locked in) replaces the target
                 elif not why and managed["partial_quantity"]:
                     book_paper_partial_exit(position_data, quote, int(managed["partial_quantity"]), "v2_partial_profit", bar_now)
                     position_data["v2_management"]["partial_taken"] = True

@@ -63,6 +63,12 @@ def _tickers(value: Any, where: str) -> None:
         raise V2ConfigError(f"{where} must be a non-empty list of uppercase tickers")
 
 
+def _ticker_list(value: Any, where: str) -> None:
+    """A possibly empty list of uppercase tickers."""
+    if not isinstance(value, list) or any(not isinstance(s, str) or not s.isupper() or len(s) > 8 for s in value):
+        raise V2ConfigError(f"{where} must be a list of uppercase tickers")
+
+
 def _string(value: Any, where: str) -> None:
     if not isinstance(value, str) or not value.strip():
         raise V2ConfigError(f"{where} must be a non-empty string")
@@ -133,7 +139,12 @@ SCHEMA: dict[str, Any] = {
                "calendar_expired": _choice("reject")},
     "sizing": {"max_contracts": _num(1, 10, integer=True), "max_fraction_of_displayed_size": _num(0, 1, lo_open=True),
                "max_fraction_of_open_interest": _num(0, 1, lo_open=True), "quality_score_affects_size": _bool},
-    "management": {"breakeven": {"enabled": _bool, "trigger_r": _num(0, lo_open=True)},
+    "daily_trend": {"enabled": _bool, "sma_sessions": _num(5, 200, integer=True)},
+    "entry_filters": {"enabled": _bool, "exclude_symbols": _ticker_list, "skip_from_et": _hhmm, "skip_until_et": _hhmm},
+    "trade_limits": {"enabled": _bool, "max_entries_per_session": _num(1, 20, integer=True)},
+    "management": {"breakeven": {"enabled": _bool, "trigger_r": _num(0, lo_open=True),
+                                 "require_option_above_floor": _bool},
+                   "let_winners_run": {"enabled": _bool, "lock_r": _num(0, 10), "trail_r": _num(0, 10, lo_open=True)},
                    "trailing": {"enabled": _bool, "trigger_r": _num(0, lo_open=True),
                                 "atr_multiple": _choice("rules.stop_underlying_atr")},
                    "time_stop": {"enabled": _bool, "after_minutes": _num(1, 390, integer=True), "min_progress_r": _num(0, 10)},

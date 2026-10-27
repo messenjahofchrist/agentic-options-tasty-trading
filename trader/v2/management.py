@@ -1,12 +1,18 @@
 """Dynamic trade management layered on the original exits.
 
 The original exit logic (trader.position_manager.exit_reason: underlying stop and target, daily-loss emergency
-exit, flatten at the close) always runs and is the baseline. These rules can only exit EARLIER or protect more;
-none of them widens a stop or moves a target away.
+exit, flatten at the close) always runs and is the baseline. These rules exit EARLIER or protect more and never widen
+a stop. The one exception is let_winners_run (off unless enabled): at the target the position is held instead of
+sold, with a stop that has locked in part of the gain and rises behind the best price (hold_past_target).
 
 R = the position's initial underlying stop distance |entry_underlying - stop_underlying| (the strategy's own).
   breakeven     once the underlying has moved trigger_r x R in favour, exit if the option bid falls to the price that
-                returns the premium plus entry fees, estimated exit fees and slippage (net ~0).
+                returns the premium plus entry fees, estimated exit fees and slippage (net ~0). With
+                require_option_above_floor it arms only once the bid has actually reached that price, so it can never
+                fire on the bar it arms at a loss (a wide option spread can lag a small underlying move).
+  let_winners_run  once the underlying reaches the original target, keep the position: its stop becomes the tighter
+                of entry + lock_r x R and best price - trail_r x R (only ever rising), and the position is sold when the
+                underlying closes back through it (or at the session close).
   trailing      once the underlying has moved trigger_r x R in favour, trail the underlying stop at the best price
                 since entry minus k x ATR(14) of the latest completed bar, k = the strategy's stop_underlying_atr. It
                 only tightens, and never sits behind the original stop.
@@ -61,8 +67,27 @@ def manage(position: dict, *, underlying: float, atr: float | None, option_bid: 
     if be["enabled"] and not state.get("breakeven_armed") and favourable_r >= be["trigger_r"]:
         floor = breakeven_option_price(position, exit_fees_estimate=exit_fees_estimate,
                                        slippage_per_contract=slippage_per_contract)
-        state.update(breakeven_armed=True, breakeven_option_floor=round(floor, 4), breakeven_armed_at=now.isoformat())
-        events.append({"event": "breakeven_armed", "option_floor": round(floor, 4), "favourable_r": round(favourable_r, 3)})
+        if not be.get("require_option_above_floor") or option_bid > floor:
+            state.update(breakeven_armed=True, breakeven_option_floor=round(floor, 4), breakeven_armed_at=now.isoformat())
+            events.append({"event": "breakeven_armed", "option_floor": round(floor, 4), "favourable_r": round(favourable_r, 3)})
+
+    runner = cfg.get("let_winners_run") or {}
+    target_r = abs(float(position["target_underlying"]) - entry) / r
+    if runner.get("enabled") and favourable_r >= target_r:
+        lock = entry + direction * float(runner["lock_r"]) * r
+        trail_behind = best - direction * float(runner["trail_r"]) * r
+        level = max(lock, trail_behind) if direction == 1 else min(lock, trail_behind)
+        previous = state.get("runner_stop_underlying")
+        if previous is not None:
+            level = max(level, previous) if direction == 1 else min(level, previous)
+        if not state.get("runner"):
+            state["runner"] = True
+            events.append({"event": "target_reached_letting_it_run", "favourable_r": round(favourable_r, 3),
+                           "runner_stop": round(level, 4)})
+        elif level != previous:
+            events.append({"event": "runner_stop_moved", "from": previous, "to": round(level, 4), "best_underlying": best})
+        state["runner_stop_underlying"] = round(level, 4)
+    result["hold_past_target"] = bool(state.get("runner"))
 
     trail = cfg["trailing"]
     if trail["enabled"] and favourable_r >= trail["trigger_r"] and atr is not None and atr > 0:
@@ -84,7 +109,10 @@ def manage(position: dict, *, underlying: float, atr: float | None, option_bid: 
         events.append({"event": "partial_profit_due", "quantity": sell, "of": quantity})
 
     trail_stop = state.get("trail_stop_underlying")
-    if trail_stop is not None and (underlying - trail_stop) * direction <= 0:
+    runner_stop = state.get("runner_stop_underlying")
+    if runner_stop is not None and (underlying - runner_stop) * direction <= 0:
+        result["exit_reason"] = "v2_runner_stop"
+    elif trail_stop is not None and (underlying - trail_stop) * direction <= 0:
         result["exit_reason"] = "v2_trailing_stop"
     elif state.get("breakeven_armed") and option_bid <= float(state["breakeven_option_floor"]):
         result["exit_reason"] = "v2_breakeven_stop"

@@ -151,6 +151,15 @@ def _metrics(trades: list[dict]) -> dict[str, Any]:
             "slippage": round(SLIPPAGE_PER_SHARE * 200 * len(r), 2)}
 
 
+def _bucket(value: Any, edges: tuple[float, ...]) -> str:
+    if value is None:
+        return "unknown"
+    for low, high in zip((None, *edges), (*edges, None)):
+        if high is None or float(value) < high:
+            return f"<{high}" if low is None else (f">={low}" if high is None else f"{low}-{high}")
+    return "unknown"
+
+
 def _breakdown(trades: list[dict], key: str) -> dict[str, Any]:
     groups: dict[str, list[dict]] = defaultdict(list)
     for t in trades:
@@ -158,25 +167,62 @@ def _breakdown(trades: list[dict], key: str) -> dict[str, Any]:
     return {k: _metrics(v) for k, v in sorted(groups.items())}
 
 
+_RUN = {"let_winners_run": {"enabled": True}}
+_TREND = {"daily_trend": {"enabled": True}}
 VARIANTS = {
-    # name: (entry rule, V2 management on)
-    "original": ("original", False),
-    "original_plus_v2_management": ("original", True),
-    "v2_filters_fixed_exits": ("v2", False),
-    "v2": ("v2", True),
+    # name: (entry rule, V2 management on, config overrides applied on top of the active V2 config)
+    "original": ("original", False, {}),
+    "original_plus_v2_management": ("original", True, {}),
+    "v2_filters_fixed_exits": ("v2", False, {}),
+    "v2": ("v2", True, {}),
     # Ablations: every V2 stage except the confirmation wait (entry on the core signal bar, like the original).
-    "v2_no_confirmation_fixed_exits": ("v2_noconf", False),
-    "v2_no_confirmation": ("v2_noconf", True),
+    "v2_no_confirmation_fixed_exits": ("v2_noconf", False, {}),
+    "v2_no_confirmation": ("v2_noconf", True, {}),
+    # 2.1 candidates (2026-10-27): let winners run, daily trend filter, fewer trades per day.
+    "v2_baseline": ("v2", True, {"let_winners_run": {"enabled": False}, "daily_trend": {"enabled": False},
+                                  "trade_limits": {"enabled": False}}),
+    "v2_run": ("v2", True, _RUN),
+    "v2_run_wide": ("v2", True, {"let_winners_run": {"enabled": True, "lock_r": 1.0, "trail_r": 1.5}}),
+    "v2_run_no_early_trail": ("v2", True, {**_RUN, "trailing": {"enabled": False}}),
+    "v2_trend": ("v2", True, _TREND),
+    "v2_run_trend": ("v2", True, {**_RUN, **_TREND}),
+    "v2_run_trend_cap3": ("v2", True, {**_RUN, **_TREND, "trade_limits": {"enabled": True, "max_entries_per_session": 3}}),
+    "v2_run_trend_no_early_trail": ("v2", True, {**_RUN, **_TREND, "trailing": {"enabled": False}}),
+    # round 2: the scorecard's entry filters (TLT excluded, no entries 10:00-10:30 ET)
+    "v2_filters": ("v2", True, {"entry_filters": {"enabled": True}}),
+    "v2_run_filters": ("v2", True, {**_RUN, "entry_filters": {"enabled": True}}),
+    "v2_run_filters_no_early_trail": ("v2", True, {**_RUN, "entry_filters": {"enabled": True}, "trailing": {"enabled": False}}),
+    "v2_run_filters_cap3": ("v2", True, {**_RUN, "entry_filters": {"enabled": True},
+                                         "trade_limits": {"enabled": True, "max_entries_per_session": 3}}),
 }
+_MANAGEMENT_KEYS = ("breakeven", "trailing", "time_stop", "partial_profit", "let_winners_run")
+
+
+def variant_config(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+    """The V2 config with a variant's overrides merged in (management sub-keys are given at the top level)."""
+    cfg = copy.deepcopy(base)
+    for key, value in overrides.items():
+        section = cfg["management"] if key in _MANAGEMENT_KEYS else cfg
+        section[key] = {**section.get(key, {}), **value}
+    return cfg
 
 
 def replay_days(*, config: V2Config, trade_symbols: list[str], rth: dict[str, dict[date, list[Bar]]],
                 premarket: dict[str, dict[date, dict]], vix_daily: dict[date, float],
                 vix_minutes: list[tuple[datetime, float]], daily_closes: dict[str, list[tuple[str, float]]],
-                days: list[date]) -> dict[str, list[dict]]:
+                days: list[date], variants: list[str] | None = None,
+                trend_closes: dict[str, list[tuple[str, float]]] | None = None) -> dict[str, list[dict]]:
     strategy = config.base
     cfg = config.data
     rules = strategy.rules
+    selected = list(variants or VARIANTS)
+    variant_cfgs = {}
+    for name in selected:
+        vcfg = variant_config(cfg, VARIANTS[name][2])
+        if VARIANTS[name][0] == "v2_noconf":
+            vcfg["confirmation"]["enabled"] = False
+        variant_cfgs[name] = vcfg
+    trend_closes = trend_closes if trend_closes is not None else daily_closes
     sector_map = SectorMap(config.sector_map)
     calendar_data = copy.deepcopy(config.calendar)
     calendar_data["events"] = HISTORICAL_FOMC + calendar_data["events"]
@@ -189,10 +235,8 @@ def replay_days(*, config: V2Config, trade_symbols: list[str], rth: dict[str, di
                 return day + timedelta(days=k)
         return None
     events = EventEngine(calendar_data, cfg["events"], next_session=next_session)
-    noconf_cfg = copy.deepcopy(cfg)
-    noconf_cfg["confirmation"]["enabled"] = False
     context_symbols = list(config.context_symbols())
-    results: dict[str, list[dict]] = {name: [] for name in VARIANTS}
+    results: dict[str, list[dict]] = {name: [] for name in selected}
     vix_index = 0
     for day in days:
         day_bars = {s: rth[s][day] for s in set(trade_symbols) | set(context_symbols) if s in rth and day in rth[s]}
@@ -202,6 +246,9 @@ def replay_days(*, config: V2Config, trade_symbols: list[str], rth: dict[str, di
         # correlation from daily closes strictly before this day
         before = {s: [(d, c) for d, c in rows if d < day.isoformat()] for s, rows in daily_closes.items()}
         model = CorrelationModel(cfg["correlation"], sector_map, before)
+        prior_closes = {s: [c for d, c in rows if d < day.isoformat()] for s, rows in trend_closes.items()}
+        sma_days = int(cfg["daily_trend"]["sma_sessions"])
+        sma = {s: sum(v[-sma_days:]) / sma_days for s, v in prior_closes.items() if len(v) >= sma_days}
         ctx = MarketContext(tuple(cfg["context"]["broad_symbols"]), tuple(cfg["context"]["sector_etfs"]),
                             int(rules["trend_ema_fast"]), int(rules["trend_ema_slow"]), int(rules["atr_period"]),
                             int(cfg["regime"]["efficiency_window_bars"]), float(cfg["context"]["max_bar_age_seconds"]),
@@ -226,7 +273,7 @@ def replay_days(*, config: V2Config, trade_symbols: list[str], rth: dict[str, di
         index_of = {s: {b.timestamp: i for i, b in enumerate(bars)} for s, bars in day_bars.items()}
         minutes = sorted({b.timestamp for s in trade_symbols for b in day_bars[s]})
         trackers = {s: BreakoutTracker(cfg["confirmation"], int(rules["breakout_lookback_bars"])) for s in trade_symbols}
-        books = {name: {"open": [], "closed": [], "entries": 0, "consecutive": 0} for name in VARIANTS}
+        books = {name: {"open": [], "closed": [], "entries": 0, "consecutive": 0} for name in selected}
         last_minute = minutes[-1]
         for minute in minutes:
             now = minute + timedelta(minutes=1)
@@ -251,9 +298,11 @@ def replay_days(*, config: V2Config, trade_symbols: list[str], rth: dict[str, di
                 signal, metrics, _ = evaluate_underlying_diagnostics(growing[s], strategy, opening_range_start=session_open)
                 core[s] = (signal, metrics)
                 tracked[s] = trackers[s].update(growing[s][-1], signal, metrics)
-            for name, (entry_rule, managed) in VARIANTS.items():
+            for name in selected:
+                entry_rule, managed, _ = VARIANTS[name]
+                vcfg = variant_cfgs[name]
                 book = books[name]
-                _manage_exits(book, minute, now, growing, core, cfg, rules, managed, last_minute, regime)
+                _manage_exits(book, minute, now, growing, core, vcfg, rules, managed, last_minute, regime)
                 candidates = []
                 for s in core:
                     if any(p["underlying"] == s for p in book["open"]) or minute == last_minute:
@@ -273,11 +322,12 @@ def replay_days(*, config: V2Config, trade_symbols: list[str], rth: dict[str, di
                             continue
                         inp = pipeline.CandidateInputs(
                             symbol=s, now=now, bars=growing[s], core_metrics=metrics, tracker=tracker, snapshot=snap,
-                            regime=regime, strategy=strategy, v2=noconf_cfg if entry_rule == "v2_noconf" else cfg,
+                            regime=regime, strategy=strategy, v2=vcfg,
                             sector_map=sector_map, events=events, metrics={},
                             correlation=model, risk_state=RiskState(10_000, 0, 0, 0, book["entries"], len(book["open"])),
                             positions=book["open"], pending=[], cash=10_000, equity=10_000,
-                            profile_name="ORIGINAL_ACCOUNT_PAPER", fetch_chain=_no_options)
+                            profile_name="ORIGINAL_ACCOUNT_PAPER", fetch_chain=_no_options,
+                            daily_closes=prior_closes.get(s))
                         report = pipeline.evaluate_candidate(inp)
                         # Stages 1-7 all passed exactly when the pipeline went on to request the option chain.
                         reached_options = report.stages.get("option_pricing", {}).get("reason", "").startswith(
@@ -291,9 +341,10 @@ def replay_days(*, config: V2Config, trade_symbols: list[str], rth: dict[str, di
                         else:
                             side, stop_d, target_d = setup["side"], float(setup["stop_distance"]), float(setup["target_distance"])
                             setup_type = tracker["state"]
-                    candidates.append((float(metrics.get("trend_efficiency") or 0.0), s, side, stop_d, target_d, setup_type))
-                candidates.sort(reverse=True)
-                for eff, s, side, stop_d, target_d, setup_type in candidates:
+                    candidates.append((float(metrics.get("trend_efficiency") or 0.0), s, side, stop_d, target_d, setup_type,
+                                       metrics.get("relative_volume")))
+                candidates.sort(key=lambda c: (c[0], c[1]), reverse=True)
+                for eff, s, side, stop_d, target_d, setup_type, rel_volume in candidates:
                     if len(book["open"]) >= int(strategy.risk["max_open_positions"]) or book["entries"] >= int(strategy.risk["max_trades_per_day"]):
                         break
                     if book["consecutive"] >= int(strategy.risk["max_consecutive_losses"]):
@@ -304,16 +355,20 @@ def replay_days(*, config: V2Config, trade_symbols: list[str], rth: dict[str, di
                         # same-minute fills re-check the cluster and aggregate caps against what was just opened
                         exposure = sum(UNIT_RISK for p in model.related_positions(s, side, book["open"]))
                         if exposure + UNIT_RISK > UNIT_RISK + 1e-9 or (len(book["open"]) + 1) * UNIT_RISK > \
-                                cfg["portfolio"]["aggregate_max_loss_fraction"]["ORIGINAL_ACCOUNT_PAPER"] * 10_000 + 1e-9:
+                                vcfg["portfolio"]["aggregate_max_loss_fraction"]["ORIGINAL_ACCOUNT_PAPER"] * 10_000 + 1e-9:
                             continue
                     book["entries"] += 1
+                    aligned = None if s not in sma else ((price > sma[s]) if side == "CALL" else (price < sma[s]))
                     book["open"].append({"trade_id": f"{name}-{s}-{minute.isoformat()}", "underlying": s,
                                          "right": "C" if side == "CALL" else "P", "quantity": 1, "entry_price": 1.0,
                                          "entry_fees": 0.0, "modeled_risk_dollars": UNIT_RISK, "entry_underlying": price,
                                          "stop_underlying": price - direction * stop_d,
                                          "target_underlying": price + direction * target_d, "entry_time": now.isoformat(),
-                                         "side": side, "setup_type": setup_type, "regime": regime.regime})
-        for name in VARIANTS:
+                                         "side": side, "setup_type": setup_type, "regime": regime.regime,
+                                         "scorecard": {"hour_et": minute.astimezone(ET).strftime("%H:00"),
+                                                       "daily_trend_aligned": aligned,
+                                                       "relative_volume": _bucket(rel_volume, (1.5, 2.5, 4.0))}})
+        for name in selected:
             results[name].extend(books[name]["closed"])
     return results
 
@@ -346,6 +401,8 @@ def _manage_exits(book, minute, now, growing, core, cfg, rules, managed, last_mi
             state = p.get("v2_management", {})
             if result["exit_reason"]:
                 why = result["exit_reason"]
+            elif why == "target" and result.get("hold_past_target"):
+                why = None
             elif mcfg["breakeven"]["enabled"] and state.get("breakeven_armed") and (close - p["entry_underlying"]) * direction <= 0:
                 why = "v2_breakeven_stop"
         if not why:
@@ -356,12 +413,29 @@ def _manage_exits(book, minute, now, growing, core, cfg, rules, managed, last_mi
         book["open"].remove(p)
         book["closed"].append({"symbol": s, "side": p["side"], "entry_time": p["entry_time"], "exit_time": now.isoformat(),
                                "entry": p["entry_underlying"], "exit": close, "exit_reason": why, "net": net, "r": net / risk,
-                               "setup_type": p["setup_type"], "regime": p["regime"]})
+                               "setup_type": p["setup_type"], "regime": p["regime"], **p.get("scorecard", {})})
         book["consecutive"] = book["consecutive"] + 1 if net < 0 else 0
 
 
-def run_replay(root: Path, cfg, *, source: str, in_sample_end: str, out: Path) -> dict[str, Any]:
+def load_trend_closes(cfg, symbols: list[str]) -> dict[str, list[tuple[str, float]]]:
+    """Daily closes since March 2026 from tastytrade {=1d} candles (the live daily_trend input), per session date."""
+    from ..tastytrade_client import TastytradeClient
+    from .datahub import daily_session_date, history_batch
+    client = TastytradeClient(cfg.client_id, cfg.client_secret, cfg.refresh_token, base_url=cfg.production_base_url)
+    token = client.quote_token().get("data", {})
+    got, _ = asyncio.run(history_batch(dxlink_url=token["dxlink-url"], quote_token=token["token"],
+                                       series={s: f"{s}{{=1d}}" for s in symbols},
+                                       start=datetime(2026, 3, 1, tzinfo=timezone.utc), timeout_seconds=240))
+    return {s: sorted((daily_session_date(r["timestamp"]).isoformat(), float(r["close"])) for r in rows)
+            for s, rows in got.items()}
+
+
+def run_replay(root: Path, cfg, *, source: str, in_sample_end: str, out: Path,
+               variants: list[str] | None = None) -> dict[str, Any]:
     config = load_v2_config(root)
+    unknown = sorted(set(variants or []) - set(VARIANTS))
+    if unknown:
+        raise ValueError(f"unknown replay variants: {', '.join(unknown)}")
     trade_symbols = list(config.base.universe)
     context_symbols = list(config.context_symbols())
     broad = list(config.data["context"]["broad_symbols"])
@@ -401,8 +475,14 @@ def run_replay(root: Path, cfg, *, source: str, in_sample_end: str, out: Path) -
     daily_closes = {s: [(d.isoformat(), b[-1].close) for d, b in sorted(days.items())] for s, days in rth.items()}
     today = datetime.now(timezone.utc).astimezone(ET).date()
     days = sorted(d for d in set().union(*[set(rth[s]) for s in trade_symbols if s in rth]) if d < today)  # completed sessions
+    try:
+        trend_closes = load_trend_closes(cfg, trade_symbols)
+    except Exception as exc:
+        trend_closes = None
+        notes.append(f"daily candles unavailable ({type(exc).__name__}); daily trend uses replay-history closes")
     results = replay_days(config=config, trade_symbols=trade_symbols, rth=rth, premarket=premarket, vix_daily=vix_daily,
-                          vix_minutes=vix_minutes, daily_closes=daily_closes, days=days)
+                          vix_minutes=vix_minutes, daily_closes=daily_closes, days=days, variants=variants,
+                          trend_closes=trend_closes)
     split = date.fromisoformat(in_sample_end)
     summary: dict[str, Any] = {"source": source, "days": len(days), "first_day": days[0].isoformat() if days else None,
                                "last_day": days[-1].isoformat() if days else None, "in_sample_end": in_sample_end,
@@ -413,10 +493,15 @@ def run_replay(root: Path, cfg, *, source: str, in_sample_end: str, out: Path) -
         oos = [t for t in trades if datetime.fromisoformat(t["entry_time"]).astimezone(ET).date() > split]
         summary["variants"][name] = {"all": _metrics(trades), "in_sample": _metrics(ins), "out_of_sample": _metrics(oos),
                                      "by_regime": _breakdown(trades, "regime"), "by_setup_type": _breakdown(trades, "setup_type"),
-                                     "by_exit": _breakdown(trades, "exit_reason")}
+                                     "by_exit": _breakdown(trades, "exit_reason"),
+                                     # scorecard: which conditions win (compare across periods before acting on one)
+                                     "by_hour_et": _breakdown(trades, "hour_et"), "by_symbol": _breakdown(trades, "symbol"),
+                                     "by_side": _breakdown(trades, "side"),
+                                     "by_daily_trend_aligned": _breakdown(trades, "daily_trend_aligned"),
+                                     "by_relative_volume": _breakdown(trades, "relative_volume")}
     out = out if out.is_absolute() else root / out
     out.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + ("-" + "+".join(variants) if variants else "")
     (out / f"{source}-{stamp}-summary.json").write_text(json.dumps(summary, indent=2, default=str), encoding="utf-8")
     (out / f"{source}-{stamp}-trades.json").write_text(json.dumps(results, indent=1, default=str), encoding="utf-8")
     return summary
