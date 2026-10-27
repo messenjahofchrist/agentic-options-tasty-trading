@@ -7,7 +7,7 @@
   "configuration_hash": "c57c33feee0d8f4ac51248472ce1d027ea6020ed02b447fa734cb3617f772f8a",
   "base_strategy_hash": "c597cfe86d7971a7e96b08ed71bc58eff6dca6942fcb0288b24498dedf6e902b",
   "base_strategy_version": "0.1.6",
-  "activated_at_utc": "2026-10-27T17:58:45.691116+00:00",
+  "activated_at_utc": "2026-10-27T18:12:19.925284+00:00",
   "approved_by": "owner (v2-activate --approve)",
-  "note": "V2 2.1.0 (owner request 2026-10-27): let winners run, breakeven fix, entry filters (TLT, 10:00-10:30 ET). Revert: scripts\\set_v2_version.ps1 2.0.0"
+  "note": "Owner switch to V2 2.1.0 via scripts\\set_v2_version.ps1"
 }

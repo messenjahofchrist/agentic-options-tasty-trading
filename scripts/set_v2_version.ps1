@@ -15,14 +15,27 @@ Copy-Item $source strategies\professional_v2.json -Force
 & .venv\Scripts\python.exe -m trader.cli v2-activate --approve --note "Owner switch to V2 $Version via scripts\set_v2_version.ps1"
 if ($LASTEXITCODE -ne 0) { throw "v2-activate failed; the engines were not restarted" }
 
+# Ending the scheduled task only stops its cmd.exe wrapper; the python engine keeps running (and keeps the log file
+# open, so a new instance cannot start). Stop the engine's own python processes, found by their command line.
+$engines = @{
+    "SmallAccountEngine" = { param($cmd) $cmd -match "paper-session" -and $cmd -match "--account-profile small" }
+    "PaperEngine"        = { param($cmd) $cmd -match "paper-session" -and $cmd -notmatch "--account-profile" }
+}
 foreach ($task in "SmallAccountEngine", "PaperEngine") {
+    $procs = @(Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+               Where-Object { $_.CommandLine -and (& $engines[$task] $_.CommandLine) })
     $state = (Get-ScheduledTask -TaskPath "\OptioBot\" -TaskName $task).State
-    if ($state -eq "Running") {
-        schtasks /End /TN "\OptioBot\$task" | Out-Null
-        Start-Sleep -Seconds 3
-        schtasks /Run /TN "\OptioBot\$task" | Out-Null
-        Write-Output "$task restarted on V2 $Version"
-    } else {
-        Write-Output "$task is not running ($state); it starts on V2 $Version at its next scheduled time"
+    if ($procs.Count -eq 0 -and $state -ne "Running") {
+        Write-Output "$task is not running; it starts on V2 $Version at its next scheduled time"
+        continue
     }
+    schtasks /End /TN "\OptioBot\$task" 2>$null | Out-Null
+    foreach ($p in $procs) { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue }
+    $deadline = (Get-Date).AddSeconds(30)
+    while ((Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+            Where-Object { $_.CommandLine -and (& $engines[$task] $_.CommandLine) }) -and (Get-Date) -lt $deadline) {
+        Start-Sleep -Seconds 1
+    }
+    schtasks /Run /TN "\OptioBot\$task" | Out-Null
+    Write-Output "$task restarted on V2 $Version (stopped $($procs.Count) engine process(es))"
 }
