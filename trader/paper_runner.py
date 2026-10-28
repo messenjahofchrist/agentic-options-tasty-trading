@@ -8,7 +8,7 @@ import time
 import uuid
 from logging.handlers import RotatingFileHandler
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
@@ -1105,7 +1105,9 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
             equity=cycle_equity,
             daily_pnl=_daily_realized(account, bar_now) + account.unrealized_pnl,
             weekly_pnl=_weekly_realized(account, bar_now) + account.unrealized_pnl,
-            consecutive_losses=_consecutive_losses(account), trades_today=_trades_today(account, bar_now),
+            consecutive_losses=_consecutive_losses(account, since=bar_now.astimezone(ZoneInfo("America/New_York")).date()
+                                                   if v2.data["loss_streak"]["reset_each_session"] else None),
+            trades_today=_trades_today(account, bar_now),
             open_positions=len(account.positions),
             open_underlyings=tuple(str(position["underlying"]) for position in account.positions))
         blocked = ("kill_switch_active" if (root / "KILL_SWITCH").exists() else
@@ -1366,9 +1368,13 @@ def _weekly_realized(account: PaperAccount, now: datetime) -> float:
                if week_start <= datetime.fromisoformat(item["timestamp"]).astimezone(ZoneInfo("America/New_York")).date() <= today)
 
 
-def _consecutive_losses(account: PaperAccount) -> int:
+def _consecutive_losses(account: PaperAccount, since: date | None = None) -> int:
+    # since: count only trades closed on or after this ET date (V2 loss_streak.reset_each_session; owner-authorized
+    # 2026-10-28). Without it the streak carries across sessions, as in the original strategy.
     count = 0
     for item in reversed(_closed(account)):
+        if since is not None and datetime.fromisoformat(item["timestamp"]).astimezone(ZoneInfo("America/New_York")).date() < since:
+            break
         if float(item["realized_pnl"]) >= 0:
             break
         count += 1

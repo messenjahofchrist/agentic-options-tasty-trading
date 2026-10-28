@@ -905,5 +905,26 @@ class DashboardSummaryTests(unittest.TestCase):
         self.assertIn("Running", page)
 
 
+class LossStreakTests(unittest.TestCase):
+    def test_reset_each_session_counts_only_todays_losses(self):
+        from datetime import date
+        from types import SimpleNamespace
+        from trader.paper_runner import _consecutive_losses
+        close = lambda ts, pnl: {"type": "paper_close", "timestamp": ts, "realized_pnl": pnl}
+        account = SimpleNamespace(ledger=[close("2026-10-27T15:00:00+00:00", 5.0), close("2026-10-27T17:00:00+00:00", -11.0),
+                                          close("2026-10-27T19:59:00+00:00", -2.0), close("2026-10-27T19:59:30+00:00", -15.0),
+                                          close("2026-10-28T13:59:00+00:00", -64.0)])
+        self.assertEqual(_consecutive_losses(account), 4)                              # original: carries across days
+        self.assertEqual(_consecutive_losses(account, since=date(2026, 10, 28)), 1)    # today only
+        self.assertEqual(_consecutive_losses(account, since=date(2026, 10, 29)), 0)
+
+    def test_every_saved_version_is_a_valid_v2_config(self):
+        versions = sorted((ROOT / "strategies" / "v2_versions").glob("professional_v2_*.json"))
+        self.assertGreaterEqual(len(versions), 4)
+        loaded = {v2config.load_v2_config(ROOT, path).data["version"]: v2config.load_v2_config(ROOT, path).data for path in versions}
+        self.assertFalse(loaded["2.2.0"]["loss_streak"]["reset_each_session"])
+        self.assertTrue(loaded["2.3.0"]["loss_streak"]["reset_each_session"])
+
+
 if __name__ == "__main__":
     unittest.main()

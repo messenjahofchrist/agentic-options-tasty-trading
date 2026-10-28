@@ -44,12 +44,22 @@ The cutoff removed 9 replay trades (total -0.91R): effectively neutral in the re
 proxy, so it understates what a late entry costs (the option spread is paid in full on a trade that is held for
 minutes). Results: `data/v2_replay/v22`.
 
+## 2.3.0 (2026-10-28): the 3-losses-in-a-row block resets each day
+
+The original strategy stops entries after 3 losing trades in a row and only a winning trade resets the count, so a
+streak carried into later sessions with no way to end it. On 2026-10-28 both ledgers were locked this way (the $1K
+from the 2026-10-27 close, the $10K after its first trade). Owner-authorized: `loss_streak.reset_each_session` (new
+switch; off in the saved 2.0.0-2.2.0, on in 2.3.0) makes the V2 entry path count only trades closed today (ET). The
+2% daily and 5% weekly loss limits are unchanged. The original-strategy shadow benchmark keeps the original count.
+The replay already reset the streak each session, so the replay numbers above are unchanged.
+
 ## Switching versions
 
 ```
 powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.0.0   # revert
 powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.1.0   # 2.1
-powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.2.0   # 2.2 (active from 2026-10-28)
+powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.2.0   # 2.2
+powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.3.0   # 2.3 (active from 2026-10-28 13:35 CT)
 ```
 
 The script copies the saved version from `strategies\v2_versions\`, re-activates the manifest and restarts the running

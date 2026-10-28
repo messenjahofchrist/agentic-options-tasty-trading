@@ -121,6 +121,7 @@ class V2EngineTests(unittest.TestCase):
         data["regime"]["spy_disorderly_atr_fraction"] = 0.05
         data["entry_filters"]["enabled"] = False   # the fixture runs at wall-clock time; the skip window is unit-tested
         data["late_entry_cutoff"]["enabled"] = False   # likewise wall-clock dependent; unit-tested in test_v2
+        data["events"]["economic"]["FOMC_RATE_DECISION"].update(block_entries_from_et="00:00", block_entries_until_et="00:01")  # FOMC days; unit-tested
         if overrides:
             from trader.v2.replay import variant_config
             data = variant_config(data, overrides)

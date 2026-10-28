@@ -471,7 +471,8 @@ class StrategyIntegrityTests(unittest.TestCase):
         # feed-gap fix, broker fees), the paper fill's side-aware fee call (2026-10-20) and the candle parser
         # ignoring the still-forming minute (2026-10-26, docs/profiles/market_data_forming_minute_fix.diff) and the
         # live bar builder unpacking every Trade in a batch (2026-10-26, docs/profiles/market_data_trade_batch_fix.diff),
-        # then building live bars from the live Candle feed (2026-10-27, docs/profiles/market_data_live_candles.diff).
+        # then building live bars from the live Candle feed (2026-10-27, docs/profiles/market_data_live_candles.diff),
+        # and the V2 entry path's consecutive-loss count resetting each session (2026-10-28, V2 loss_streak switch).
         frozen = {"trader/paper_runner.py", "trader/paper_execution.py", "trader/market_data.py"}
         for line in baseline.read_text().splitlines():
             if line.startswith("#") or not line.strip():

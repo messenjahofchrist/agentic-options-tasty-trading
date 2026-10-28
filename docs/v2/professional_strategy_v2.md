@@ -122,7 +122,8 @@ simulated ledger. Signals V2 did not take get a hypothetical underlying outcome 
 * Live 1-minute bars carry no VWAP, so the original strategy's own VWAP check has never run live (it passes when VWAP
   is missing). V2's stage 5 supplies a real session VWAP; the original check is left unchanged.
 * The original strategy's 3-consecutive-loss block carries across sessions (`_consecutive_losses` reads the whole
-  ledger); it is unchanged in V2.
+  ledger). From V2 2.3.0 (`loss_streak.reset_each_session`, owner-authorized 2026-10-28) the V2 entry path counts
+  only today's trades; the original path and the shadow benchmark are unchanged.
 * One DXLink connection per engine: the two engines each stream their own symbols (the $10K ledger's 14 are a subset
   of the $1K ledger's 47). Slow-changing data is shared through the disk cache.
 * LIVE: V2 is refused by the shared loop with LIVE execution. A separate production-readiness audit is required.

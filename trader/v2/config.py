@@ -143,6 +143,7 @@ SCHEMA: dict[str, Any] = {
     "entry_filters": {"enabled": _bool, "exclude_symbols": _ticker_list, "skip_from_et": _hhmm, "skip_until_et": _hhmm},
     "trade_limits": {"enabled": _bool, "max_entries_per_session": _num(1, 20, integer=True)},
     "late_entry_cutoff": {"enabled": _bool, "no_entries_final_minutes": _num(1, 390, integer=True)},
+    "loss_streak": {"reset_each_session": _bool},
     "management": {"breakeven": {"enabled": _bool, "trigger_r": _num(0, lo_open=True),
                                  "require_option_above_floor": _bool},
                    "let_winners_run": {"enabled": _bool, "lock_r": _num(0, 10), "trail_r": _num(0, 10, lo_open=True)},

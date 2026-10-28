@@ -3,6 +3,7 @@
 #   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.0.0   # revert: V2 as deployed 2026-10-26
 #   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.1.0   # let winners run, breakeven fix, entry filters
 #   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.2.0   # 2.1.0 + no new entries in the last 30 minutes
+#   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.3.0   # 2.2.0 + the 3-loss streak resets each day
 #
 # The saved versions live in strategies\v2_versions\. Ledgers (balances, open trades) are never touched: a running
 # engine is stopped and started again with the chosen version and keeps managing its open trades.

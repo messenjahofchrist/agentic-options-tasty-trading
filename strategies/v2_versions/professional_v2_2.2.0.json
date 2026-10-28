@@ -161,6 +161,10 @@
   // days). Every trade is sold at the close, so a late entry mostly pays fees and the spread.
   "late_entry_cutoff": {"enabled": true, "no_entries_final_minutes": 30},
 
+  // Loss streak: the original strategy stops entries after 3 losing trades in a row and only a win resets it, so a
+  // streak carries into later sessions with no way to end it. reset_each_session counts only today's trades.
+  "loss_streak": {"reset_each_session": false},
+
   "management": {
     // require_option_above_floor: breakeven arms only once the option bid has actually covered cost + fees.
     "breakeven": {"enabled": true, "trigger_r": 1.0, "require_option_above_floor": true},
