@@ -120,6 +120,7 @@ class V2EngineTests(unittest.TestCase):
         data = json.loads(json.dumps(config.data))
         data["regime"]["spy_disorderly_atr_fraction"] = 0.05
         data["entry_filters"]["enabled"] = False   # the fixture runs at wall-clock time; the skip window is unit-tested
+        data["late_entry_cutoff"]["enabled"] = False   # likewise wall-clock dependent; unit-tested in test_v2
         if overrides:
             from trader.v2.replay import variant_config
             data = variant_config(data, overrides)

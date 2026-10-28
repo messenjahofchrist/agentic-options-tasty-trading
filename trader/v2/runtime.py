@@ -291,7 +291,7 @@ class V2Session:
             pending=list(pending), cash=float(account.cash), equity=equity, profile_name=self.profile_name,
             fetch_chain=lambda: self.chain_sync(symbol, bars[-1].timestamp, spot, now), data_fresh=data_fresh,
             entries_blocked=entries_blocked, core_signal_now=core_signal is not None,
-            daily_closes=self.daily_closes.get(symbol))
+            daily_closes=self.daily_closes.get(symbol), session_close=self.session_close)
         report = await asyncio.to_thread(pipeline.evaluate_candidate, inputs)
         record = pipeline.report_record(report)
         self.latest_reports[symbol] = record

@@ -689,6 +689,22 @@ class PipelineTests(unittest.TestCase):
                          "APPROVED")
         self.assertEqual(self.calls, 1)          # rejected candidates never requested an option chain
 
+    def test_late_entry_cutoff_stops_entries_near_the_close(self):
+        data = json.loads(json.dumps(self.c.data)); data["late_entry_cutoff"].update(enabled=True, no_entries_final_minutes=30)
+        et = lambda hh, mm, ss=0: datetime(2026, 10, 26, hh, mm, ss, tzinfo=ZoneInfo("America/New_York"))
+        now = et(10, 30, 30)                     # the fixture's quotes are fresh at this time
+        run = lambda **kw: pipeline.evaluate_candidate(self.inputs(v2=data, now=now, clock=lambda: now, **kw))
+        self.assertEqual(run().outcome, "APPROVED")                              # no close given: 16:00 ET, cutoff 15:30
+        self.assertEqual(run(session_close=et(11, 1)).outcome, "APPROVED")       # cutoff 10:31
+        late = run(session_close=et(11, 0))                                      # cutoff 10:30 (an early close)
+        self.assertEqual(late.outcome, "REJECTED")
+        self.assertIn("last 30 minutes", late.reasons[0])
+        data["late_entry_cutoff"]["no_entries_final_minutes"] = 330              # 16:00 ET default close -> 10:30 cutoff
+        self.assertEqual(run().outcome, "REJECTED")
+        data["late_entry_cutoff"]["enabled"] = False
+        self.assertEqual(run(session_close=et(11, 0)).outcome, "APPROVED")
+        self.assertEqual(self.calls, 3)          # rejected candidates never requested an option chain
+
     def test_trade_limit_stops_new_entries_for_the_day(self):
         data = json.loads(json.dumps(self.c.data)); data["trade_limits"].update(enabled=True, max_entries_per_session=3)
         self.assertEqual(pipeline.evaluate_candidate(self.inputs(v2=data, risk_state=RiskState(10_000, 0, 0, 0, 2, 0))).outcome,

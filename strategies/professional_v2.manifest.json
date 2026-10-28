@@ -1,13 +1,13 @@
 {
   "strategy_id": "PROFESSIONAL_STRATEGY_V2",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "status": "research_test",
   "mode": "PAPER",
   "live_enabled": false,
-  "configuration_hash": "c57c33feee0d8f4ac51248472ce1d027ea6020ed02b447fa734cb3617f772f8a",
+  "configuration_hash": "41594954caa318263e09b5f00aaefeb00469973dbce3962ec757e86fa6b0edd1",
   "base_strategy_hash": "c597cfe86d7971a7e96b08ed71bc58eff6dca6942fcb0288b24498dedf6e902b",
   "base_strategy_version": "0.1.6",
-  "activated_at_utc": "2026-10-27T18:12:19.925284+00:00",
+  "activated_at_utc": "2026-10-27T23:45:09.789998+00:00",
   "approved_by": "owner (v2-activate --approve)",
-  "note": "Owner switch to V2 2.1.0 via scripts\\set_v2_version.ps1"
+  "note": "Owner switch to V2 2.2.0 via scripts\\set_v2_version.ps1"
 }

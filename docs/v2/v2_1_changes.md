@@ -28,11 +28,28 @@ replay data's scorecard (TLT and 10:00-10:30 ET lost in all three periods), so p
 spreads, decay and IV are not in the replay; the $1K ledger's other 33 symbols were not replayed. Results:
 `data/v2_replay/v21` (round one) and `data/v2_replay/v21b` (round two); `v2-replay --variants` reruns any variant.
 
+## 2.2.0 (2026-10-27): no new entries in the last 30 minutes
+
+Owner request after the $1K ledger bought PFE at 15:58 ET and the session-close flatten sold it a minute later
+(-$2.29, fees and spread). `late_entry_cutoff` (new switch; off in the saved 2.0.0 and 2.1.0, on in 2.2.0) rejects
+V2 entries from 30 minutes before the session's actual close (15:30 ET, 12:30 ET on an early-close day). The original
+strategy's entry window (09:30-16:00 ET) is unchanged.
+
+| Variant | Jun 1-Aug 15 | Aug 16-Oct 9 | Oct 1-26 |
+|---|---|---|---|
+| 2.1.0 | +0.125 (292) | -0.092 (216) | +0.010 (100) |
+| 2.2.0 (2.1.0 + cutoff) | +0.130 (288) | -0.093 (212) | +0.010 (99) |
+
+The cutoff removed 9 replay trades (total -0.91R): effectively neutral in the replay. The replay is an underlying
+proxy, so it understates what a late entry costs (the option spread is paid in full on a trade that is held for
+minutes). Results: `data/v2_replay/v22`.
+
 ## Switching versions
 
 ```
 powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.0.0   # revert
 powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.1.0   # 2.1
+powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.2.0   # 2.2 (active from 2026-10-28)
 ```
 
 The script copies the saved version from `strategies\v2_versions\`, re-activates the manifest and restarts the running

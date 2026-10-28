@@ -1,7 +1,8 @@
 # Switch PROFESSIONAL_STRATEGY_V2 (PAPER) to a saved version and restart the engines that are running.
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.0.0   # revert: V2 as deployed 2026-10-26
-#   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.1.0   # let winners run + trend filter
+#   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.1.0   # let winners run, breakeven fix, entry filters
+#   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.2.0   # 2.1.0 + no new entries in the last 30 minutes
 #
 # The saved versions live in strategies\v2_versions\. Ledgers (balances, open trades) are never touched: a running
 # engine is stopped and started again with the chosen version and keeps managing its open trades.

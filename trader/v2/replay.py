@@ -194,6 +194,10 @@ VARIANTS = {
     "v2_run_filters_no_early_trail": ("v2", True, {**_RUN, "entry_filters": {"enabled": True}, "trailing": {"enabled": False}}),
     "v2_run_filters_cap3": ("v2", True, {**_RUN, "entry_filters": {"enabled": True},
                                          "trade_limits": {"enabled": True, "max_entries_per_session": 3}}),
+    # 2.2 candidate (2026-10-27): no new entries in the last 30 minutes before the close.
+    "v2_run_filters_no_late": ("v2", True, {**_RUN, "entry_filters": {"enabled": True}, "late_entry_cutoff": {"enabled": False}}),
+    "v2_run_filters_late30": ("v2", True, {**_RUN, "entry_filters": {"enabled": True},
+                                          "late_entry_cutoff": {"enabled": True, "no_entries_final_minutes": 30}}),
 }
 _MANAGEMENT_KEYS = ("breakeven", "trailing", "time_stop", "partial_profit", "let_winners_run")
 
@@ -327,7 +331,7 @@ def replay_days(*, config: V2Config, trade_symbols: list[str], rth: dict[str, di
                             correlation=model, risk_state=RiskState(10_000, 0, 0, 0, book["entries"], len(book["open"])),
                             positions=book["open"], pending=[], cash=10_000, equity=10_000,
                             profile_name="ORIGINAL_ACCOUNT_PAPER", fetch_chain=_no_options,
-                            daily_closes=prior_closes.get(s))
+                            daily_closes=prior_closes.get(s), session_close=last_minute + timedelta(minutes=1))
                         report = pipeline.evaluate_candidate(inp)
                         # Stages 1-7 all passed exactly when the pipeline went on to request the option chain.
                         reached_options = report.stages.get("option_pricing", {}).get("reason", "").startswith(

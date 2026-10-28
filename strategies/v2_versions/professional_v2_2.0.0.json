@@ -157,6 +157,10 @@
   // Fewer trades: at most this many V2 entries per session (on top of the original 6-per-day risk limit).
   "trade_limits": {"enabled": false, "max_entries_per_session": 3},
 
+  // Late entries: no new V2 entries in the final N minutes before the close (today's actual close on early-close
+  // days). Every trade is sold at the close, so a late entry mostly pays fees and the spread.
+  "late_entry_cutoff": {"enabled": false, "no_entries_final_minutes": 30},
+
   "management": {
     // require_option_above_floor: breakeven arms only once the option bid has actually covered cost + fees.
     "breakeven": {"enabled": true, "trigger_r": 1.0, "require_option_above_floor": false},

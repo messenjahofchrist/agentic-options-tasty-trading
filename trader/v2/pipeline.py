@@ -4,7 +4,8 @@ Stages (each recorded with status PASS / REJECT / WAIT / INSUFFICIENT_DATA / NOT
 reason and the inputs that decided it):
    1 technical_signal       the core strategy signal qualified at the breakout bar, and on this bar the core's own
                             trend (EMA 9/21), ATR and volatility-spike conditions still hold; with daily_trend enabled
-                            the price must also be on the trade's side of its N-session average daily close
+                            the price must also be on the trade's side of its N-session average daily close;
+                            entry_filters / late_entry_cutoff reject excluded symbols and times
    2 breakout_confirmation  confirmation.py state (WAIT until actionable)
    3 market_regime          regime.py; the trade's direction must be allowed in the current regime
    4 sector_confirmation    sectors.py
@@ -24,7 +25,7 @@ Expensive stages (8+) run only when 1-7 pass, so a candidate that is waiting or 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timedelta, timezone
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
@@ -98,6 +99,7 @@ class CandidateInputs:
     clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc)
     core_signal_now: bool = True           # the core signal qualified on THIS bar (required when confirmation is off)
     daily_closes: list[float] | None = None  # completed prior sessions' closes, oldest first (daily_trend stage-1 check)
+    session_close: datetime | None = None    # today's actual close (early closes); None = 16:00 ET (late_entry_cutoff)
 
 
 @dataclass
@@ -164,6 +166,15 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
         if time.fromisoformat(filters["skip_from_et"]) <= local < time.fromisoformat(filters["skip_until_et"]):
             report.set("technical_signal", "REJECT", f"no new entries {filters['skip_from_et']}-{filters['skip_until_et']} ET "
                        "(entry_filters)", decision_time_et=local.isoformat(timespec="minutes"))
+            return _finish(report)
+    late = cfg.get("late_entry_cutoff") or {}
+    if late.get("enabled"):
+        close = inp.session_close or datetime.combine(inp.now.astimezone(ET).date(), time(16, 0), ET)
+        cutoff = close - timedelta(minutes=int(late["no_entries_final_minutes"]))
+        if inp.now >= cutoff:
+            report.set("technical_signal", "REJECT", f"no new entries in the last {late['no_entries_final_minutes']} "
+                       "minutes before the close (late_entry_cutoff)",
+                       cutoff_et=cutoff.astimezone(ET).isoformat(timespec="minutes"))
             return _finish(report)
     fast, slow, atr = metrics.get("ema_fast"), metrics.get("ema_slow"), metrics.get("atr")
     trend_ok = fast is not None and slow is not None and ((fast > slow) if side == "CALL" else (fast < slow))
