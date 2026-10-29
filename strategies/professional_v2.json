@@ -5,7 +5,7 @@
 // Plain-English companion: docs/v2/professional_strategy_v2.md.
 {
   "strategy_id": "PROFESSIONAL_STRATEGY_V2",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "status": "research_test",
   "mode": "PAPER",
   "base_strategy": {
@@ -165,13 +165,19 @@
   // streak carries into later sessions with no way to end it. reset_each_session counts only today's trades.
   "loss_streak": {"reset_each_session": true},
 
+  // Opening range width: skip a breakout whose 15-minute opening range is under this fraction of the price
+  // (equity_fraction for single stocks, etf_fraction for funds and indexes); a narrow range puts the stop inside noise.
+  "min_opening_range": {"enabled": false, "etf_fraction": 0.003, "equity_fraction": 0.006},
+
   "management": {
     // require_option_above_floor: breakeven arms only once the option bid has actually covered cost + fees.
     "breakeven": {"enabled": true, "trigger_r": 1.0, "require_option_above_floor": true},
     // let_winners_run: at the target, hold instead of selling; the stop locks in lock_r x R and trails trail_r x R
-    // behind the best price (R = the initial stop distance).
-    "let_winners_run": {"enabled": true, "lock_r": 1.0, "trail_r": 1.0},
-    "trailing": {"enabled": true, "trigger_r": 1.0, "atr_multiple": "rules.stop_underlying_atr"},
+    // behind the best price (R = the initial stop distance). 2.4.0 (owner, 2026-10-29): trail 1.5R behind.
+    "let_winners_run": {"enabled": true, "lock_r": 1.0, "trail_r": 1.5},
+    // trailing: off from 2.4.0, so a winner is no longer sold on a 1-ATR dip before it reaches the target.
+    // atr_multiple: "rules.stop_underlying_atr" or a number of ATRs.
+    "trailing": {"enabled": false, "trigger_r": 1.0, "atr_multiple": "rules.stop_underlying_atr"},
     "time_stop": {"enabled": false, "after_minutes": 60, "min_progress_r": 0.25},
     "partial_profit": {"enabled": false, "trigger_r": 1.0, "fraction": 0.5}
   },

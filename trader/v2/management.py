@@ -14,7 +14,8 @@ R = the position's initial underlying stop distance |entry_underlying - stop_und
                 of entry + lock_r x R and best price - trail_r x R (only ever rising), and the position is sold when the
                 underlying closes back through it (or at the session close).
   trailing      once the underlying has moved trigger_r x R in favour, trail the underlying stop at the best price
-                since entry minus k x ATR(14) of the latest completed bar, k = the strategy's stop_underlying_atr. It
+                since entry minus k x ATR(14) of the latest completed bar, k = atr_multiple (a number, or the
+                strategy's stop_underlying_atr when it is "rules.stop_underlying_atr"). It
                 only tightens, and never sits behind the original stop.
   time_stop     after after_minutes, exit if the best favourable move so far is below min_progress_r x R.
   partial       once trigger_r x R is reached, sell floor(quantity x fraction) contracts (needs >= 2 contracts).
@@ -91,7 +92,8 @@ def manage(position: dict, *, underlying: float, atr: float | None, option_bid: 
 
     trail = cfg["trailing"]
     if trail["enabled"] and favourable_r >= trail["trigger_r"] and atr is not None and atr > 0:
-        candidate = best - direction * atr_multiple * atr
+        k = atr_multiple if trail["atr_multiple"] == "rules.stop_underlying_atr" else float(trail["atr_multiple"])
+        candidate = best - direction * k * atr
         original = float(position["stop_underlying"])
         previous = state.get("trail_stop_underlying")
         tightest = candidate if previous is None else (max(previous, candidate) if direction == 1 else min(previous, candidate))

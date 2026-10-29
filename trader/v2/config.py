@@ -39,6 +39,13 @@ def _num(lo: float | None = None, hi: float | None = None, *, integer: bool = Fa
     return check
 
 
+def _atr_multiple(value: Any, where: str) -> None:
+    # "rules.stop_underlying_atr" (the strategy's own stop multiple) or an explicit multiple of ATR.
+    if value == "rules.stop_underlying_atr":
+        return
+    _num(0.5, 10)(value, where)
+
+
 def _bool(value: Any, where: str) -> None:
     if not isinstance(value, bool):
         raise V2ConfigError(f"{where} must be true or false")
@@ -144,11 +151,12 @@ SCHEMA: dict[str, Any] = {
     "trade_limits": {"enabled": _bool, "max_entries_per_session": _num(1, 20, integer=True)},
     "late_entry_cutoff": {"enabled": _bool, "no_entries_final_minutes": _num(1, 390, integer=True)},
     "loss_streak": {"reset_each_session": _bool},
+    "min_opening_range": {"enabled": _bool, "etf_fraction": _num(0, 0.1), "equity_fraction": _num(0, 0.1)},
     "management": {"breakeven": {"enabled": _bool, "trigger_r": _num(0, lo_open=True),
                                  "require_option_above_floor": _bool},
                    "let_winners_run": {"enabled": _bool, "lock_r": _num(0, 10), "trail_r": _num(0, 10, lo_open=True)},
                    "trailing": {"enabled": _bool, "trigger_r": _num(0, lo_open=True),
-                                "atr_multiple": _choice("rules.stop_underlying_atr")},
+                                "atr_multiple": _atr_multiple},
                    "time_stop": {"enabled": _bool, "after_minutes": _num(1, 390, integer=True), "min_progress_r": _num(0, 10)},
                    "partial_profit": {"enabled": _bool, "trigger_r": _num(0, lo_open=True), "fraction": _num(0, 1, lo_open=True)}},
     "shadow_benchmark": {"enabled": _bool},

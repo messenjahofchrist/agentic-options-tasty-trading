@@ -385,7 +385,7 @@ class DailyLimitOverrideTests(unittest.TestCase):
 
     def test_repository_small_profile_uses_20_percent_daily_and_40_percent_weekly_limits(self):
         config = ProfileConfig.load(ROOT, "small")
-        self.assertEqual(config.small_per_trade_cap_dollars, 150.0)
+        self.assertEqual(config.small_per_trade_cap_dollars, 225.0)      # owner-authorized 2026-10-29 (was $150)
         self.assertEqual(dict(config.small_risk_overrides),
                          {"max_daily_loss_fraction": 0.20, "max_weekly_loss_fraction": 0.40})
 

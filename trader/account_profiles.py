@@ -13,8 +13,8 @@ restores the strategy's own values.
 
 The profile never edits the strategy. Per decision cycle it hands the unchanged strategy a per-trade sizing
 budget equal to the remaining aggregate allocation (owner choice, 2026-10-16: one trade may use what is left
-of the 40% pool), capped since 2026-10-19 at max_per_trade_dollars ($150 of modeled maximum loss: premium plus
-modeled round-trip costs). Signals, filters, contract selection, exits and loss limits are the strategy's own.
+of the 40% pool), capped since 2026-10-19 at max_per_trade_dollars (modeled maximum loss: premium plus
+modeled round-trip costs; $150 from 2026-10-19, $225 from 2026-10-29). Signals, filters, contract selection, exits and loss limits are the strategy's own.
 """
 from __future__ import annotations
 

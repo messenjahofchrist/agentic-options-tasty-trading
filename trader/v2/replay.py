@@ -169,6 +169,8 @@ def _breakdown(trades: list[dict], key: str) -> dict[str, Any]:
 
 _RUN = {"let_winners_run": {"enabled": True}}
 _TREND = {"daily_trend": {"enabled": True}}
+_GEMINI_MANAGEMENT = {"breakeven": {"trigger_r": 1.25}, "trailing": {"trigger_r": 1.8, "atr_multiple": 2.0},
+                      "let_winners_run": {"lock_r": 1.25, "trail_r": 0.75}}
 VARIANTS = {
     # name: (entry rule, V2 management on, config overrides applied on top of the active V2 config)
     "original": ("original", False, {}),
@@ -198,6 +200,27 @@ VARIANTS = {
     "v2_run_filters_no_late": ("v2", True, {**_RUN, "entry_filters": {"enabled": True}, "late_entry_cutoff": {"enabled": False}}),
     "v2_run_filters_late30": ("v2", True, {**_RUN, "entry_filters": {"enabled": True},
                                           "late_entry_cutoff": {"enabled": True, "no_entries_final_minutes": 30}}),
+    # 2.4 candidates (2026-10-29), each one change on top of the active 2.3.0 (owner + Gemini review suggestions).
+    "v23": ("v2", True, {}),
+    "v23_no_skip": ("v2", True, {"entry_filters": {"skip_from_et": "10:00", "skip_until_et": "10:00"}}),
+    "v23_skip_0945_1005": ("v2", True, {"entry_filters": {"skip_from_et": "09:45", "skip_until_et": "10:05"}}),
+    "v23_trail_1p8_2atr": ("v2", True, {"trailing": {"trigger_r": 1.8, "atr_multiple": 2.0}}),
+    "v23_trail_1p0_2atr": ("v2", True, {"trailing": {"trigger_r": 1.0, "atr_multiple": 2.0}}),
+    "v23_trail_1p5_1p5atr": ("v2", True, {"trailing": {"trigger_r": 1.5, "atr_multiple": 1.5}}),
+    "v23_no_early_trail": ("v2", True, {"trailing": {"enabled": False}}),
+    "v23_runner_1p25_0p75": ("v2", True, {"let_winners_run": {"lock_r": 1.25, "trail_r": 0.75},
+                                          "breakeven": {"trigger_r": 1.25}}),
+    "v23_gemini_management": ("v2", True, _GEMINI_MANAGEMENT),
+    "v23_or_width": ("v2", True, {"min_opening_range": {"enabled": True}}),
+    "v23_gemini_all": ("v2", True, {**_GEMINI_MANAGEMENT, "min_opening_range": {"enabled": True},
+                                    "entry_filters": {"skip_from_et": "09:45", "skip_until_et": "10:05"}}),
+    # round 2: hold winners longer (no early trail), varying the runner and breakeven
+    "v23_hold_run_wide": ("v2", True, {"trailing": {"enabled": False}, "let_winners_run": {"lock_r": 1.0, "trail_r": 1.5}}),
+    "v23_hold_run_tight": ("v2", True, {"trailing": {"enabled": False}, "let_winners_run": {"lock_r": 1.0, "trail_r": 0.5}}),
+    "v23_hold_run_lock1p5": ("v2", True, {"trailing": {"enabled": False}, "let_winners_run": {"lock_r": 1.5, "trail_r": 0.75}}),
+    "v23_hold_be1p5": ("v2", True, {"trailing": {"enabled": False}, "breakeven": {"trigger_r": 1.5}}),
+    "v23_hold_no_be": ("v2", True, {"trailing": {"enabled": False}, "breakeven": {"enabled": False}}),
+    "v23_trail_1p5_2atr": ("v2", True, {"trailing": {"trigger_r": 1.5, "atr_multiple": 2.0}}),
 }
 _MANAGEMENT_KEYS = ("breakeven", "trailing", "time_stop", "partial_profit", "let_winners_run")
 

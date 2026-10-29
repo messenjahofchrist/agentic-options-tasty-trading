@@ -65,12 +65,15 @@ def build_comparison(root: Path, original_data_dir: Path, profile_name: str = "s
     small = ProfileConfig.load(root, profile_name)
     ledgers = [_summary("original_paper", original_data_dir, now), _summary(small.ledger_id, small.data_dir, now)]
     days = sorted({day for ledger in ledgers for day in ledger["by_day"]})
-    return {"generated_at_utc": now.isoformat(), "mode": "PAPER", "ledgers": ledgers, "days": days}
+    return {"generated_at_utc": now.isoformat(), "mode": "PAPER", "ledgers": ledgers, "days": days,
+            "small_per_trade_cap_dollars": small.small_per_trade_cap_dollars}
 
 
 def render_comparison_html(report: dict[str, Any], refresh_seconds: int = 60) -> str:
     e = html.escape
     big, small = report["ledgers"]
+    cap = report.get("small_per_trade_cap_dollars")
+    per_trade_cap = f"at most ${cap:,.0f} per trade" if cap else "no per-trade dollar cap"
 
     def pct(value: Any) -> str:
         return "—" if value is None else f"{float(value):+.2f}%"
@@ -159,7 +162,7 @@ th[scope=row] {{ font-weight:500; }}
 <body><main>
 <h1>$10K vs $1K · PAPER</h1>
 <p class="muted small">Same strategy, same days, different account size. The $1K account also runs the small-account
-rules: 40% of equity at risk at once, at most $150 per trade, and the expanded symbol list.</p>
+rules: 40% of equity at risk at once, {e(per_trade_cap)}, and the expanded symbol list.</p>
 
 <div class="card"><table>
 <thead><tr><th></th><th class="num">{e(big['label'])}</th><th class="num">{e(small['label'])}</th></tr></thead>

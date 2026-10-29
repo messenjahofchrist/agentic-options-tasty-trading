@@ -53,13 +53,47 @@ switch; off in the saved 2.0.0-2.2.0, on in 2.3.0) makes the V2 entry path count
 2% daily and 5% weekly loss limits are unchanged. The original-strategy shadow benchmark keeps the original count.
 The replay already reset the streak each session, so the replay numbers above are unchanged.
 
+## 2.4.0 (2026-10-29): hold winners longer
+
+Owner request (after a Gemini review proposing a bundle of changes): hold winning trades longer, test before the open.
+Each candidate is one change on top of 2.3.0; replays on the 14-symbol $10K universe, expectancy in R per trade
+(trades). The tastytrade window is now Oct 5-28.
+
+| Variant | Jun 1-Aug 15 | Aug 16-Oct 9 | Oct 5-28 | Total R | Win rate |
+|---|---|---|---|---|---|
+| 2.3.0 | +0.130 (288) | -0.093 (212) | -0.006 (101) | +17.2 | 0.56 / 0.46 / 0.47 |
+| **2.4.0**: early trail off, runner trails 1.5R | **+0.129** (249) | **-0.067** (183) | **+0.076** (89) | **+26.6** | 0.39 / 0.34 / 0.37 |
+| early trail off (runner 1.0R) | +0.107 | -0.111 | +0.128 | +18.1 | |
+| trail arms 1.0R, 2 ATR behind | +0.082 | -0.076 | -0.012 | +6.6 | |
+| trail arms 1.5R, 2 ATR behind | +0.079 | -0.088 | -0.003 | +4.3 | |
+| trail arms 1.8R, 2 ATR behind (Gemini) | +0.055 | -0.102 | -0.007 | -5.9 | |
+| Gemini management (breakeven 1.25R, trail 1.8R/2 ATR, runner 1.25/0.75) | +0.032 | -0.150 | -0.040 | -23.8 | |
+| no 10:00-10:30 ET skip window | +0.015 | -0.006 | -0.079 | -5.3 | |
+| skip window 09:45-10:05 ET (Gemini) | -0.033 | +0.050 | -0.065 | -5.3 | |
+| minimum opening range 0.3% funds / 0.6% stocks (Gemini) | +0.097 | -0.098 | -0.102 | -2.7 | |
+| all of Gemini's testable changes | -0.042 | -0.096 | -0.044 | -34.0 | |
+
+2.4.0 ties 2.3.0 in Jun-Aug (-0.001R) and is better in the other two periods, with a smaller worst drawdown (30R vs 34R).
+It wins less often (about 37% of trades vs about 50%) and makes more per win. Caveats: 17 variants were tried on the same
+data, so the best one is partly luck; option decay over the longer holds is not in the replay. `min_opening_range` and a
+numeric `trailing.atr_multiple` were added as switches (off). Results: `data/v2_replay/v24`, `data/v2_replay/v24b`.
+
+Not adopted from the review (checked against the code): the economic gate already charges the full spread (entry at
+the ask, exit at the bid), so charging it again would count it twice; fees are $1.40 a round trip, not $1.25; the
+`context.max_bar_age_seconds` is 150, not 180, and stale bars fell to 9 of 1,382 decisions after the 2026-10-27 candle
+feed fix; the proposed $1K keys (daily dollar limit, max open positions, option rule overrides) do not exist.
+
+The $1K ledger's per-trade cap went from $150 to $225 (owner, 2026-10-29): `scripts\set_small_account_bet.ps1 225`;
+`... 150` reverts.
+
 ## Switching versions
 
 ```
 powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.0.0   # revert
 powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.1.0   # 2.1
 powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.2.0   # 2.2
-powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.3.0   # 2.3 (active from 2026-10-28 13:35 CT)
+powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.3.0   # 2.3
+powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.4.0   # 2.4 (active from 2026-10-29)
 ```
 
 The script copies the saved version from `strategies\v2_versions\`, re-activates the manifest and restarts the running

@@ -176,6 +176,18 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
                        "minutes before the close (late_entry_cutoff)",
                        cutoff_et=cutoff.astimezone(ET).isoformat(timespec="minutes"))
             return _finish(report)
+    width = cfg.get("min_opening_range") or {}
+    if width.get("enabled"):
+        if setup.get("range_high") is None or setup.get("range_low") is None or not price > 0:
+            report.set("technical_signal", "INSUFFICIENT_DATA", "opening range unknown (min_opening_range)")
+            return _finish(report)
+        equity = inp.sector_map.group(inp.symbol) == "us_equity"
+        need = float(width["equity_fraction" if equity else "etf_fraction"])
+        height = (float(setup["range_high"]) - float(setup["range_low"])) / price
+        if height < need:
+            report.set("technical_signal", "REJECT", f"opening range too narrow ({height:.4f} < {need:.4f} of the price; "
+                       "min_opening_range)", range_fraction=round(height, 5), required_fraction=need)
+            return _finish(report)
     fast, slow, atr = metrics.get("ema_fast"), metrics.get("ema_slow"), metrics.get("atr")
     trend_ok = fast is not None and slow is not None and ((fast > slow) if side == "CALL" else (fast < slow))
     atr_ok = atr is not None and price > 0 and atr / price <= float(rules["max_atr_fraction"])

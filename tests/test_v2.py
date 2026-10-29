@@ -503,16 +503,32 @@ class ManagementTests(unittest.TestCase):
         self.assertAlmostEqual(floor, 2.0 + 0.0002 + 2.0 / 100)
         self.assertEqual(self.step(p, 100.95, floor - 0.01)["exit_reason"], "v2_breakeven_stop")
 
+    def trail_cfg(self):
+        # the trailing stop as 2.0.0-2.3.0 ran it (switched off from 2.4.0)
+        c = json.loads(json.dumps(self.c))
+        c["trailing"].update(enabled=True, trigger_r=1.0, atr_multiple="rules.stop_underlying_atr")
+        return c
+
     def test_trailing_stop_only_tightens(self):
-        p = self.pos()
-        self.step(p, 101.0, 2.5)
+        c, p = self.trail_cfg(), self.pos()
+        self.step(p, 101.0, 2.5, c=c)
         first = p["v2_management"]["trail_stop_underlying"]
         self.assertAlmostEqual(first, 100.8)
-        self.step(p, 101.5, 2.8)
+        self.step(p, 101.5, 2.8, c=c)
         self.assertAlmostEqual(p["v2_management"]["trail_stop_underlying"], 101.3)
-        self.step(p, 101.4, 2.7, atr=0.05)
+        self.step(p, 101.4, 2.7, atr=0.05, c=c)
         self.assertGreaterEqual(p["v2_management"]["trail_stop_underlying"], 101.3)
-        self.assertEqual(self.step(p, 101.25, 2.6)["exit_reason"], "v2_trailing_stop")
+        self.assertEqual(self.step(p, 101.25, 2.6, c=c)["exit_reason"], "v2_trailing_stop")
+
+    def test_trailing_stop_can_use_an_explicit_atr_multiple(self):
+        c = json.loads(json.dumps(self.c)); c["trailing"].update(enabled=True, trigger_r=1.0, atr_multiple=2.0)
+        p = self.pos()
+        self.step(p, 101.0, 2.5, c=c)
+        self.assertAlmostEqual(p["v2_management"]["trail_stop_underlying"], 100.6)   # 101.0 - 2.0 x ATR 0.2
+        c["trailing"]["atr_multiple"] = "rules.stop_underlying_atr"
+        q = self.pos()
+        self.step(q, 101.0, 2.5, c=c)
+        self.assertAlmostEqual(q["v2_management"]["trail_stop_underlying"], 100.8)   # the strategy's own 1.0 x ATR
 
     def test_time_stop(self):
         c = json.loads(json.dumps(self.c))
@@ -530,7 +546,7 @@ class ManagementTests(unittest.TestCase):
 
     def test_put_side_mirrors(self):
         p = dict(self.pos(), right="P", stop_underlying=101.0, target_underlying=98.0)
-        self.step(p, 99.0, 2.5)
+        self.step(p, 99.0, 2.5, c=self.trail_cfg())
         self.assertAlmostEqual(p["v2_management"]["trail_stop_underlying"], 99.2)
 
     def runner_cfg(self):
@@ -704,6 +720,20 @@ class PipelineTests(unittest.TestCase):
         data["late_entry_cutoff"]["enabled"] = False
         self.assertEqual(run(session_close=et(11, 0)).outcome, "APPROVED")
         self.assertEqual(self.calls, 3)          # rejected candidates never requested an option chain
+
+    def test_min_opening_range_skips_narrow_ranges_by_instrument_type(self):
+        data = json.loads(json.dumps(self.c.data)); data["min_opening_range"].update(enabled=True, etf_fraction=0.003,
+                                                                                         equity_fraction=0.006)
+        price = self.bars[-1].close
+        tracker = lambda height: {**self.tracker, "setup": {**self.tracker["setup"], "range_high": price - 0.1,
+                                                            "range_low": price - 0.1 - height * price}}
+        narrow = pipeline.evaluate_candidate(self.inputs(v2=data, tracker=tracker(0.005)))     # NVDA: a single stock
+        self.assertEqual(narrow.outcome, "REJECTED")
+        self.assertIn("opening range too narrow", narrow.reasons[0])
+        self.assertEqual(pipeline.evaluate_candidate(self.inputs(v2=data, tracker=tracker(0.007))).outcome, "APPROVED")
+        fund = pipeline.evaluate_candidate(self.inputs(v2=data, tracker=tracker(0.005), symbol="SPY"))  # 0.5% >= 0.3%
+        self.assertNotIn("too narrow", " ".join(fund.reasons))
+        self.assertEqual(pipeline.evaluate_candidate(self.inputs(v2=data)).outcome, "INSUFFICIENT_DATA")  # range unknown
 
     def test_trade_limit_stops_new_entries_for_the_day(self):
         data = json.loads(json.dumps(self.c.data)); data["trade_limits"].update(enabled=True, max_entries_per_session=3)

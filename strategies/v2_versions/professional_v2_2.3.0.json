@@ -165,6 +165,10 @@
   // streak carries into later sessions with no way to end it. reset_each_session counts only today's trades.
   "loss_streak": {"reset_each_session": true},
 
+  // Opening range width: skip a breakout whose 15-minute opening range is under this fraction of the price
+  // (equity_fraction for single stocks, etf_fraction for funds and indexes); a narrow range puts the stop inside noise.
+  "min_opening_range": {"enabled": false, "etf_fraction": 0.003, "equity_fraction": 0.006},
+
   "management": {
     // require_option_above_floor: breakeven arms only once the option bid has actually covered cost + fees.
     "breakeven": {"enabled": true, "trigger_r": 1.0, "require_option_above_floor": true},
