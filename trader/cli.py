@@ -88,6 +88,8 @@ def main(argv: list[str] | None = None) -> int:
     v2_replay.add_argument("--out", default="data/v2_replay")
     v2_replay.add_argument("--variants", default="", help="comma-separated replay variants (default: all)")
     sub.add_parser("v2-compare", help="Original-strategy shadow vs V2 results from the PAPER ledgers (read-only)")
+    sub.add_parser("spreads-run", help="CREDIT_SPREADS (PAPER): one pass - manage open spreads, consider new ones")
+    sub.add_parser("spreads-status", help="CREDIT_SPREADS (PAPER): ledger summary (read-only, offline)")
     dash = sub.add_parser("dashboard"); dash.add_argument("--host", default="127.0.0.1"); dash.add_argument("--port", type=int, default=8765)
     sub.add_parser("status")
     args = parser.parse_args(argv)
@@ -174,6 +176,23 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command in ("v2-validate", "v2-activate", "v2-readiness", "v2-report", "v2-replay", "v2-compare"):
             from .v2.commands import run_command
             return run_command(args, cfg, root)
+        elif args.command == "spreads-run":
+            from .spreads import run_command
+            log = cfg.data_dir / "credit_spreads" / "spreads.log"
+            log.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                result = run_command(root, cfg)
+            except Exception as exc:  # the scheduled task runs windowless (pythonw): errors go to the log
+                with log.open("a", encoding="utf-8") as stream:
+                    stream.write(json.dumps({"time_utc": datetime.now(timezone.utc).isoformat(),
+                                             "error": f"{type(exc).__name__}: {exc}"}) + "\n")
+                raise
+            with log.open("a", encoding="utf-8") as stream:
+                stream.write(json.dumps(result, default=str) + "\n")
+            print(json.dumps(result, indent=2, default=str))
+        elif args.command == "spreads-status":
+            from .spreads import status
+            print(json.dumps(status(root, cfg.data_dir), indent=2, default=str))
         elif args.command == "dashboard":
             import uvicorn
             uvicorn.run(create_app(cfg.data_dir, root), host=args.host, port=args.port)

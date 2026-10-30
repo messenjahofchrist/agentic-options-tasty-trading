@@ -1,0 +1,57 @@
+// CREDIT_SPREADS (PAPER): sell protected option spreads (a credit spread) instead of buying options.
+// Runs next to the opening-range bots with its own paper ledgers; it never touches strategy.txt, the V2 config or
+// their ledgers. Plain-English companion: docs/credit_spreads.md. JSON with // comments; unknown or missing keys fail
+// closed. Owner request 2026-10-30.
+{
+  "strategy_id": "CREDIT_SPREADS",
+  "version": "1.0.0",
+  "mode": "PAPER",
+
+  // false = no new spreads; open spreads are still managed to their exits (scripts\set_credit_spreads.ps1 off).
+  "enabled": true,
+  "underlyings": ["SPY", "QQQ"],
+
+  "entry": {
+    // ET. Entries only in this window; open spreads are managed whenever the market is open.
+    "window_from_et": "10:00",
+    "window_until_et": "15:00",
+    // Direction from the bigger trend: price above its average of the last trend_sma_sessions daily closes -> sell
+    // a put spread (paid if the price does not fall much); below it -> sell a call spread.
+    "trend_sma_sessions": 50,
+    "sides": "trend",
+    // Expiration: the one closest to dte_target calendar days inside [dte_min, dte_max].
+    "dte_min": 28,
+    "dte_target": 35,
+    "dte_max": 45,
+    // The option sold: delta (roughly the chance it ends up in the money) closest to target, inside [min, max].
+    "short_delta_min": 0.15,
+    "short_delta_target": 0.20,
+    "short_delta_max": 0.25,
+    // Credit received (sell at the bid, buy the protection at the ask) must be at least this fraction of the width.
+    "min_credit_fraction_of_width": 0.15,
+    "max_leg_spread_fraction": 0.15,
+    "min_open_interest": 100,
+    "max_quote_age_seconds": 120,
+    // No new spreads when VIX is at or above this (a disorderly market).
+    "max_vix": 30.0,
+    "max_new_per_underlying_per_day": 1
+  },
+
+  "exits": {
+    // Buy back once it costs this fraction of the credit or less (0.5 = keep half the credit).
+    "take_profit_fraction": 0.50,
+    // Buy back once the loss reaches this multiple of the credit (2.0 = lose at most about twice the credit).
+    "stop_loss_multiple": 2.0,
+    // Close with this many calendar days left, before the last weeks when prices swing fastest.
+    "close_at_dte": 21
+  },
+
+  // Each ledger is separate paper money. widths: spread widths in dollars, widest first; the widest whose maximum
+  // loss fits max_loss_per_trade_dollars is used.
+  "accounts": {
+    "CREDIT_SPREADS_10K_PAPER": {"starting_capital": 10000, "max_loss_per_trade_dollars": 500, "widths": [5, 3, 2],
+                                 "max_open": 4, "max_total_risk_fraction": 0.40, "contracts": 1},
+    "CREDIT_SPREADS_1K_PAPER": {"starting_capital": 1000, "max_loss_per_trade_dollars": 225, "widths": [2, 1],
+                                "max_open": 2, "max_total_risk_fraction": 0.45, "contracts": 1}
+  }
+}
