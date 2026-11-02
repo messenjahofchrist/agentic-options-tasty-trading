@@ -40,7 +40,12 @@ def append_jsonl(path: str | Path, record: dict[str, Any]) -> None:
     if file.is_file() and file.stat().st_size >= max_bytes:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
         archive = file.with_name(f"{file.name}.{stamp}.{uuid.uuid4().hex[:6]}.archive")
-        os.replace(file, archive)
+        try:
+            atomic_replace(file, archive)
+        except PermissionError:
+            # Another process (a dashboard report reading this log) still holds it open on Windows. Rotation can
+            # wait for the next record; a log rotation must never stop the engine (PaperEngine crash 2026-11-02).
+            pass
     payload = dict(record)
     payload.setdefault("timestamp_utc", datetime.now(timezone.utc).isoformat())
     with file.open("a", encoding="utf-8") as stream:
