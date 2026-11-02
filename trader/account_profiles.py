@@ -11,6 +11,10 @@ SMALL_ACCOUNT_PAPER also uses owner-authorized loss limits (risk_overrides in th
 since 2026-10-16 in place of the strategy's 2%, weekly 40% since 2026-10-19 in place of its 5%; ORIGINAL
 restores the strategy's own values.
 
+SMALL_ACCOUNT_PAPER may also tighten the strategy's contract-quality rules (rule_overrides in the profile file;
+owner-authorized 2026-11-02): a smaller bid/ask gap, more open interest and volume. Only tightening is accepted
+(checked against the running strategy); the original account keeps the strategy's own values.
+
 The profile never edits the strategy. Per decision cycle it hands the unchanged strategy a per-trade sizing
 budget equal to the remaining aggregate allocation (owner choice, 2026-10-16: one trade may use what is left
 of the 40% pool), capped since 2026-10-19 at max_per_trade_dollars (modeled maximum loss: premium plus
@@ -41,6 +45,23 @@ class ProfileError(RuntimeError):
     pass
 
 
+# Contract-quality rules an account profile may tighten: "max" keys may only go down, "min" keys only up.
+TIGHTEN_ONLY = {"max_spread_fraction": "max", "max_spread_dollars": "max",
+                "min_open_interest": "min", "min_option_volume": "min"}
+
+
+def tightened_rules(rules: dict[str, Any], overrides: dict[str, float]) -> dict[str, Any]:
+    """The strategy's rules with the profile's tighter contract-quality values; refuses any loosening."""
+    for key, value in overrides.items():
+        current = float(rules[key])
+        if (TIGHTEN_ONLY[key] == "max" and not 0 < value <= current) or (TIGHTEN_ONLY[key] == "min" and value < current):
+            raise ProfileError(f"rule_overrides.{key}={value:g} would loosen the strategy's {current:g}")
+    out = dict(rules)
+    for key, value in overrides.items():
+        out[key] = int(value) if key.startswith("min_") else value
+    return out
+
+
 @dataclass(frozen=True)
 class ProfileConfig:
     ledger_id: str
@@ -54,6 +75,7 @@ class ProfileConfig:
     rest_requests_per_second: float | None = None
     small_risk_overrides: tuple[tuple[str, float], ...] = ()
     small_per_trade_cap_dollars: float | None = None
+    small_rule_overrides: tuple[tuple[str, float], ...] = ()
 
     @classmethod
     def load(cls, root: Path, name_or_path: str) -> "ProfileConfig":
@@ -72,6 +94,9 @@ class ProfileConfig:
             raise ProfileError("only max_daily_loss_fraction and max_weekly_loss_fraction may be overridden by an account profile")
         if any(not 0 < v <= 1 for v in overrides.values()):
             raise ProfileError("risk override fractions must be in (0, 1]")
+        rule_overrides = {str(k): float(v) for k, v in (small.get("rule_overrides") or {}).items()}
+        if set(rule_overrides) - set(TIGHTEN_ONLY):
+            raise ProfileError("rule_overrides may only set " + ", ".join(TIGHTEN_ONLY))
         per_trade_cap = small.get("max_per_trade_dollars")
         if per_trade_cap is not None and not float(per_trade_cap) > 0:
             raise ProfileError("max_per_trade_dollars must be positive")
@@ -90,7 +115,8 @@ class ProfileConfig:
                    baseline=baseline, config_path=path,
                    rest_requests_per_second=float(data["rest_requests_per_second"]) if data.get("rest_requests_per_second") else None,
                    small_risk_overrides=tuple(sorted(overrides.items())),
-                   small_per_trade_cap_dollars=None if per_trade_cap is None else float(per_trade_cap))
+                   small_per_trade_cap_dollars=None if per_trade_cap is None else float(per_trade_cap),
+                   small_rule_overrides=tuple(sorted(rule_overrides.items())))
 
 
 def verify_original_baseline(strategy: Strategy, baseline: dict[str, Any]) -> None:
@@ -259,14 +285,17 @@ class ProfileLedger:
 
     # --- what the shared loop runs -----------------------------------------------------------------
     def runtime(self, strategy: Strategy) -> tuple[Strategy, AccountProfile]:
-        """(strategy with this profile's scanning universe, allocation policy). Rules are never touched."""
+        """(strategy with this profile's scanning universe, allocation policy). Signal and exit rules are never
+        touched; the contract-quality rules may only be tightened (rule_overrides)."""
         verify_original_baseline(strategy, self.config.baseline)
         if self.active_profile == ORIGINAL:
             return strategy, AccountProfile(ORIGINAL, None)
         # Owner-authorized account rules: the daily (2026-10-16) and weekly (2026-10-19) loss limits for this
         # ledger. They feed the strategy's entry blocks and daily-loss exit exactly as its own values would.
         risk = {**strategy.risk, **dict(self.config.small_risk_overrides)}
-        return (replace(strategy, universe=self.config.small_universe, risk=risk),
+        # Owner-authorized 2026-11-02: tighter contract-quality rules for this ledger (rule_overrides).
+        rules = tightened_rules(strategy.rules, dict(self.config.small_rule_overrides)) if self.config.small_rule_overrides else strategy.rules
+        return (replace(strategy, universe=self.config.small_universe, risk=risk, rules=rules),
                 AccountProfile(SMALL, self.config.small_allocation_fraction, self.config.small_per_trade_cap_dollars))
 
     def status(self, strategy: Strategy | None = None, now: datetime | None = None) -> dict[str, Any]:

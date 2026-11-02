@@ -28,7 +28,13 @@
         "max_daily_loss_fraction": 0.2,
         "max_weekly_loss_fraction": 0.4
       },
-      "risk_overrides_note": "Owner-authorized 2026-10-16: daily loss limit 20% of equity for this ledger only (strategy value 2% restored at the $10,000 transition). Owner-authorized 2026-10-19: weekly loss limit 40% of equity for this ledger only (strategy value 5% restored at the transition)."
+      "risk_overrides_note": "Owner-authorized 2026-10-16: daily loss limit 20% of equity for this ledger only (strategy value 2% restored at the $10,000 transition). Owner-authorized 2026-10-19: weekly loss limit 40% of equity for this ledger only (strategy value 5% restored at the transition).",
+      "rule_overrides": {
+        "max_spread_fraction": 0.05,
+        "min_open_interest": 500,
+        "min_option_volume": 50
+      },
+      "rule_overrides_note": "Owner-authorized 2026-11-02 via scripts/set_small_account_options.ps1 tight: only options with a bid/ask gap of at most 5% of their price (strategy 10%), open interest >= 500 (100) and volume >= 50 (10). Tighten-only; removed at the $10,000 transition."
     },
     "ORIGINAL_ACCOUNT_PAPER": {
       "mode": "PAPER",

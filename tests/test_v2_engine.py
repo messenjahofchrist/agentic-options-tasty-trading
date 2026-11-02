@@ -56,6 +56,10 @@ class V2EngineTests(unittest.TestCase):
             def is_open(self, at): return True
             def entry_window_ok(self, at, start, end): return True
 
+        # The contract always expires 14 days from the wall clock (the fixture runs on the real clock).
+        expiry = (datetime.now(timezone.utc) + timedelta(days=14)).date()
+        contract = f"{expiry:%y%m%d}C00100000"
+
         class FakeClient:
             def __init__(self, *a, **k): pass
             def clock_offset_seconds(self): return 0.0
@@ -66,14 +70,14 @@ class V2EngineTests(unittest.TestCase):
                                             "historical-volatility-30-day": "12.0", "earnings": {"visible": False}} for s in symbols]}}
             def option_chain(self, underlying):
                 requests["option_chain"] += 1
-                return {"data": {"items": [{"symbol": f"{underlying:<6}261106C00100000", "active": True, "days-to-expiration": 14,
-                                            "strike-price": "100", "option-type": "C", "expiration-date": "2026-11-06"}]}}
+                return {"data": {"items": [{"symbol": f"{underlying:<6}{contract}", "active": True, "days-to-expiration": 14,
+                                            "strike-price": "100", "option-type": "C", "expiration-date": expiry.isoformat()}]}}
             def quotes(self, query):
                 stamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
                 if "index" in query:
                     requests["vix"] += 1
                     return {"data": {"items": [{"symbol": "VIX", "last": "17.5", "updated-at": stamp}]}}
-                return {"data": {"items": [{"symbol": "SPY   261106C00100000", "bid": "1.95", "ask": "2.00", "bid-size": "20",
+                return {"data": {"items": [{"symbol": f"SPY   {contract}", "bid": "1.95", "ask": "2.00", "bid-size": "20",
                                             "ask-size": "20", "delta": "0.55", "gamma": "0.01", "theta": "-0.02", "vega": "0.1",
                                             "volatility": "0.20", "volume": "500", "open-interest": "1000", "updated-at": stamp}]}}
 

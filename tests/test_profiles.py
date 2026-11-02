@@ -16,7 +16,7 @@ from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from trader.account_profiles import (ORIGINAL, SMALL, AccountProfile, ProfileConfig, ProfileError, ProfileLedger,
-                                     run_profile_paper_session, verify_original_baseline)
+                                     run_profile_paper_session, tightened_rules, verify_original_baseline)
 from trader.config import AppConfig, Mode
 from trader.market_data import CachedQuote
 from trader.models import Bar, OptionQuote
@@ -382,6 +382,44 @@ class DailyLimitOverrideTests(unittest.TestCase):
             path.write_text(json.dumps(data))
             with self.assertRaises(ProfileError):
                 ProfileConfig.load(root, "profiles/small_account.json")
+
+    def _with_rule_overrides(self, root: Path, overrides: dict) -> ProfileLedger:
+        path = root / "profiles" / "small_account.json"
+        data = json.loads(path.read_text())
+        data["profiles"][SMALL]["rule_overrides"] = overrides
+        path.write_text(json.dumps(data))
+        return ProfileLedger(ProfileConfig.load(root, "profiles/small_account.json"), original_data_dir=root / "data")
+
+    def test_rule_overrides_only_tighten_contract_quality_for_the_small_ledger(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            strategy = parse_strategy(root / "strategy.txt")
+            ledger = self._with_rule_overrides(root, {"max_spread_fraction": 0.05, "min_open_interest": 500,
+                                                      "min_option_volume": 50})
+            ledger.initialize()
+            run, _ = ledger.runtime(strategy)
+            changed = {k: run.rules[k] for k in strategy.rules if run.rules[k] != strategy.rules[k]}
+            self.assertEqual(changed, {"max_spread_fraction": 0.05, "min_open_interest": 500, "min_option_volume": 50})
+            self.assertEqual(parse_strategy(root / "strategy.txt").rules, strategy.rules)   # strategy.txt untouched
+            for loosen in ({"max_spread_fraction": 0.20}, {"min_open_interest": 10}):
+                with self.assertRaisesRegex(ProfileError, "loosen"):
+                    self._with_rule_overrides(root, loosen).runtime(strategy)
+            with self.assertRaisesRegex(ProfileError, "rule_overrides may only set"):
+                self._with_rule_overrides(root, {"min_abs_delta": 0.30})
+
+    def test_tight_rules_skip_a_wide_gap_option_the_original_rules_accept(self):
+        from trader.models import OptionQuote
+        from trader.option_selector import evaluate_options
+        strategy = parse_strategy(ROOT / "strategy.txt")
+        tight = replace(strategy, rules=tightened_rules(strategy.rules, {"max_spread_fraction": 0.05,
+                                                                         "min_open_interest": 500, "min_option_volume": 50}))
+        now = datetime(2026, 11, 2, 15, 0, tzinfo=timezone.utc)
+        quote = OptionQuote(symbol="F     261113C00012000", underlying="F", expiration=now + timedelta(days=11), strike=12,
+                            right="C", bid=0.40, ask=0.43, delta=0.55, volume=600, open_interest=5000)  # 7% gap
+        self.assertIsNotNone(evaluate_options([quote], "CALL", now, strategy)[0])
+        selected, audit = evaluate_options([quote], "CALL", now, tight)
+        self.assertIsNone(selected)
+        self.assertIn("spread_percentage_exceeded", audit[0]["rejection_reasons"])
 
     def test_repository_small_profile_uses_20_percent_daily_and_40_percent_weekly_limits(self):
         config = ProfileConfig.load(ROOT, "small")

@@ -11,7 +11,8 @@ Only three things differ from the original account:
 | Universe | 47 symbols: the original 14 plus 33 audited additions (`profiles/small_account_universe.json`) | the original 14, from `strategy.txt` |
 | Daily loss limit | **20% of equity** ($200 at $1,000). Owner-authorized 2026-10-16 as `risk_overrides` in `profiles/small_account.json` | strategy's own 2% |
 | Weekly loss limit | **40% of equity** (~$400 at $1,000). Owner-authorized 2026-10-19 as `risk_overrides` in `profiles/small_account.json` | strategy's own 5% |
-| Per-trade cap | **$225** of modeled maximum loss (premium x 100 plus modeled round-trip costs). Owner-authorized as `max_per_trade_dollars` in `profiles/small_account.json`: $150 from 2026-10-19, $225 from 2026-10-29 (`scripts\set_small_account_bet.ps1 <dollars>` changes it; `150` reverts); the budget is the remaining 40% pool or $150, whichever is smaller | none (strategy's own sizing) |
+| Per-trade cap | **$225** of modeled maximum loss (premium x 100 plus modeled round-trip costs). Owner-authorized as `max_per_trade_dollars` in `profiles/small_account.json`: $150 from 2026-10-19, $225 from 2026-10-29 (`scripts\set_small_account_bet.ps1 <dollars>` changes it; `150` reverts); the budget is the remaining 40% pool or the cap, whichever is smaller | none (strategy's own sizing) |
+| Option quality | **Tighter** (owner, 2026-11-02, `rule_overrides`): bid/ask gap at most 5% of the option's price (strategy 10%), open interest at least 500 (100), traded today at least 50 (10). Tighten-only; delta, expiration and the $0.10 gap ceiling unchanged. `scripts\set_small_account_options.ps1 tight`; `original` reverts | strategy's own rules |
 
 Everything else is the strategy's own and identical in both profiles: candles, indicators, opening range, signals, filters, contract selection, exits, the 1-contract limit, 4 open positions, 6 trades a day, and the weekly and consecutive-loss limits.
 
