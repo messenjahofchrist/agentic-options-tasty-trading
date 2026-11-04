@@ -21,8 +21,8 @@
       "mode": "PAPER",
       "max_aggregate_allocation_fraction": 0.4,
       "per_trade_budget": "remaining aggregate allocation (owner choice 2026-10-16), at most max_per_trade_dollars",
-      "max_per_trade_dollars": 225,
-      "max_per_trade_dollars_note": "Owner-authorized 2026-10-29 via scripts/set_small_account_bet.ps1: no single trade's modeled maximum loss (premium x 100 plus modeled round-trip costs) above $225. Removed at the $10,000 transition.",
+      "max_per_trade_dollars": 150,
+      "max_per_trade_dollars_note": "Owner-authorized 2026-11-04 via scripts/set_small_account_bet.ps1: no single trade's modeled maximum loss (premium x 100 plus modeled round-trip costs) above $150. Removed at the $10,000 transition.",
       "universe_file": "profiles/small_account_universe.json",
       "risk_overrides": {
         "max_daily_loss_fraction": 0.2,
