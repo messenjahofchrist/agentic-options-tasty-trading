@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import json
 import tempfile
+import time
 import types
 import unittest
 from dataclasses import replace
@@ -36,7 +37,7 @@ def carried_position(strategy, entry_time: datetime) -> dict:
 
 
 class FeedGapTests(unittest.TestCase):
-    def _run(self, root: Path, *, gap_fetch_failures: int, quote_fresh: bool = True):
+    def _run(self, root: Path, *, gap_fetch_failures: int, quote_fresh: bool = True, max_fill: int = 0):
         """SPY (holding a position) and IWM. SPY's first live bar skips a minute; the backfill for that minute
         fails `gap_fetch_failures` times before the history provider can serve it."""
         now = datetime.now(timezone.utc)
@@ -102,7 +103,7 @@ class FeedGapTests(unittest.TestCase):
                 patch.object(paper_runner, "create_history_provider", lambda *a, **k: FakeHistory()), \
                 patch.object(paper_runner, "live_minute_bars", fake_live), \
                 patch.object(paper_runner, "_option_marks", fake_marks), \
-                patch.object(paper_runner, "GAP_RECOVERY_RETRY_SECONDS", 0.01), \
+                patch.object(paper_runner, "GAP_RECOVERY_RETRY_SECONDS", 0.01),                 patch.object(paper_runner, "MAX_FILLED_GAP_MINUTES", max_fill), \
                 patch.object(paper_runner, "ENTRY_ARBITRATION_SECONDS", 0.05), \
                 patch("trader.notifications.email_configured", return_value=False), \
                 patch("trader.notifications.push_configured", return_value=False):
@@ -141,6 +142,19 @@ class FeedGapTests(unittest.TestCase):
         self.assertEqual(account.positions[0]["last_bid"], 1.20)  # managed on the live bar after recovery
         self.assertNotIn("paper_symbol_disabled", [a["event"] for a in alerts])
 
+    def test_a_short_gap_with_no_candle_is_filled_after_the_retries_and_the_position_stays_managed(self):
+        """2026-11-04: a minute with no candle no longer forces a held position out (XLU, 2026-11-03)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            account, alerts, error, fetches = self._run(make_root(Path(tmp)), gap_fetch_failures=99,
+                                                        max_fill=paper_runner.MAX_FILLED_GAP_MINUTES)
+        self.assertIsNone(error)
+        self.assertEqual(fetches["gap"], paper_runner.GAP_RECOVERY_ATTEMPTS)   # the real minute got every chance to arrive
+        self.assertEqual([p["trade_id"] for p in account.positions], ["carried-spy"])
+        self.assertEqual(account.positions[0]["last_bid"], 1.20)
+        events = [a["event"] for a in alerts]
+        self.assertNotIn("paper_position_protective_exit", events)
+        self.assertNotIn("paper_symbol_disabled", events)
+
     def test_without_a_fresh_quote_the_position_stays_and_the_session_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             account, alerts, error, _ = self._run(make_root(Path(tmp)), gap_fetch_failures=99, quote_fresh=False)
@@ -155,6 +169,98 @@ class FeedGapTests(unittest.TestCase):
                                                                    positions=[{"trade_id": "a"}, {"trade_id": "b"}]))
             self.assertEqual(paper_runner._ledger_position_count(data), 2)
             self.assertEqual(paper_runner._ledger_position_count(data / "missing"), 0)
+
+
+class FirstMinuteStartTests(unittest.TestCase):
+    """2026-11-04: a start between 09:31:00 and 09:31:59 asked for history from 09:30 through 09:30. The provider
+    refuses start==end, so SPY, QQQ, IWM and DIA were disabled for the day."""
+
+    def _run(self, root: Path, *, opening_bar_missing_for: tuple[str, ...] = ()):
+        now = datetime.now(timezone.utc)
+        if now.second >= 50:   # the start must stay inside the minute after the open for the whole test
+            time.sleep(61 - now.second)
+            now = datetime.now(timezone.utc)
+        open_utc = now.replace(second=0, microsecond=0) - timedelta(minutes=1)
+        template = test_profiles.ProfileLoopTests._bars()
+        shift = open_utc - template[0].timestamp
+        session = [Bar(b.timestamp + shift, b.open, b.high, b.low, b.close, b.volume) for b in template[:3]]
+        requests: list[tuple[str, datetime, datetime]] = []
+
+        class FakeCalendar:
+            def session_bounds(self, day):
+                return (open_utc.astimezone(ZoneInfo("America/New_York")),
+                        (datetime.now(timezone.utc) + timedelta(seconds=3)).astimezone(ZoneInfo("America/New_York")))
+            def is_open(self, at): return True
+            def entry_window_ok(self, at, start, end): return False
+
+        class FakeClient:
+            def __init__(self, *a, **k): pass
+            def clock_offset_seconds(self): return 0.0
+            def quote_token(self): return {"data": {"token": "t", "dxlink-url": "wss://example"}}
+
+        class FakeQuotes:
+            def __init__(self, client): pass
+            def snapshots(self, symbols):
+                return [CachedQuote(symbols[0], 100.0, 100.02, datetime.now(timezone.utc), {})]
+
+        class FakeHistory:
+            name = "fixture"
+            async def fetch(self, *, symbol, start, end):
+                requests.append((symbol, start, end))
+                if start >= end:   # the real providers' guard (market_data.fetch_historical_candles)
+                    raise ValueError("start/end must be timezone-aware and start must precede end")
+                rows = [b for b in session if start <= b.timestamp <= end
+                        and not (symbol in opening_bar_missing_for and b.timestamp == open_utc)]
+                candles = [{"timestamp": b.timestamp.isoformat(), "open": b.open, "high": b.high, "low": b.low,
+                            "close": b.close, "volume": b.volume} for b in rows]
+                return types.SimpleNamespace(candles=candles, audit={}, provider="fixture", retrieval_method="fixture",
+                                             retrieved_at_utc=now, requested_start_utc=start, requested_end_utc=end)
+
+        async def fake_live(url, token, symbols):
+            for symbol in symbols:  # the minute in progress at the connect is dropped as partial
+                yield symbol, session[2]
+            await asyncio.sleep(3600)
+
+        strategy = parse_strategy(root / "strategy.txt")
+        no_flat = replace(strategy, execution={**strategy.execution, "flatten_at_session_close": False})
+        cfg = AppConfig(mode=Mode.PAPER, data_dir=root / "data", client_id="x", client_secret="y", refresh_token="z")
+        save_account(cfg.data_dir / "paper_account.json", PaperAccount(starting_capital=1000, cash=1000))
+        error = None
+        with patch.object(paper_runner, "MarketCalendar", FakeCalendar),                 patch.object(paper_runner, "TastytradeClient", FakeClient),                 patch.object(paper_runner, "ProductionMarketData", FakeQuotes),                 patch.object(paper_runner, "create_history_provider", lambda *a, **k: FakeHistory()),                 patch.object(paper_runner, "live_minute_bars", fake_live),                 patch.object(paper_runner, "GAP_RECOVERY_RETRY_SECONDS", 0.01),                 patch.object(paper_runner, "ENTRY_ARBITRATION_SECONDS", 0.05),                 patch("trader.notifications.email_configured", return_value=False),                 patch("trader.notifications.push_configured", return_value=False):
+            try:
+                asyncio.run(paper_runner._run(root=root, cfg=replace(cfg, starting_cash=1000), strategy=no_flat,
+                                              symbols=("SPY", "IWM")))
+            except RuntimeError as exc:
+                error = exc
+            finally:
+                paper_runner._close_session_log_file(paper_runner._session_logger(cfg.data_dir))
+        alerts_path = cfg.data_dir / "critical_alerts.jsonl"
+        alerts = [json.loads(line) for line in alerts_path.read_text().splitlines()] if alerts_path.exists() else []
+        disabled = {a["details"]["symbol"] for a in alerts if a["event"] == "paper_symbol_disabled"}
+        reports = {json.loads(path.read_text())["symbol"]: json.loads(path.read_text())
+                   for path in (cfg.data_dir / "recovery_reports").glob("*.json")}
+        return error, disabled, reports, requests, session
+
+    def test_a_first_minute_start_recovers_the_opening_minutes_and_disables_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            error, disabled, reports, requests, session = self._run(make_root(Path(tmp)))
+        self.assertIsNone(error)
+        self.assertEqual(disabled, set())
+        # The only requests run from the open to the first live bar, whose two earlier minutes join it.
+        self.assertEqual(sorted(requests), [("IWM", session[0].timestamp, session[2].timestamp),
+                                            ("SPY", session[0].timestamp, session[2].timestamp)])
+        for symbol in ("SPY", "IWM"):
+            self.assertEqual(reports[symbol]["historical_to_live_transition_status"], "VERIFIED")
+            self.assertEqual(reports[symbol]["observed_session_bar_count"], 3)
+
+    def test_a_first_minute_start_still_refuses_a_missing_opening_minute(self):
+        """The session's first minute is never inferred or filled: that symbol stops and the others continue."""
+        with tempfile.TemporaryDirectory() as tmp:
+            error, disabled, reports, _, _ = self._run(make_root(Path(tmp)), opening_bar_missing_for=("SPY",))
+        self.assertIsNone(error)
+        self.assertEqual(disabled, {"SPY"})
+        self.assertEqual(reports["SPY"]["final_readiness"], "SYMBOL_DISABLED")
+        self.assertEqual(reports["IWM"]["observed_session_bar_count"], 3)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,8 @@
 # Set the $1K PAPER ledger's per-trade cap (max_per_trade_dollars in profiles\small_account.json) and restart its engine
 # if it is running. The ledger (balance, open trades) is never touched.
 #
-#   powershell -ExecutionPolicy Bypass -File scripts\set_small_account_bet.ps1 225   # revert: the 2026-10-29 cap
+#   powershell -ExecutionPolicy Bypass -File scripts\set_small_account_bet.ps1 350   # owner choice 2026-11-04 (current)
+#   powershell -ExecutionPolicy Bypass -File scripts\set_small_account_bet.ps1 225   # the 2026-10-29 cap
 #   powershell -ExecutionPolicy Bypass -File scripts\set_small_account_bet.ps1 150   # owner choice 2026-11-04 (also the 2026-10-19 cap)
 param([Parameter(Mandatory = $true)][double]$Dollars)
 $ErrorActionPreference = "Stop"

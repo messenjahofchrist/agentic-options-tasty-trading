@@ -1,0 +1,14 @@
+--- a/trader/paper_runner.py
++++ b/trader/paper_runner.py
+@@ -1277,7 +1277,10 @@
+         async with asyncio.timeout(remaining):
+             if v2s is not None:
+                 await v2s.startup(token_data, datetime.now(timezone.utc))
+-            if not test_mode and now >= session_open.astimezone(timezone.utc) + timedelta(minutes=1):
++            # In the first minute after the open the only completed bar is the open itself, and a history request
++            # for it has start==end, which the providers refuse (2026-11-04: SPY, QQQ, IWM and DIA disabled for the
++            # day). Such a start, like one before it, recovers the opening minutes from the first live bar instead.
++            if not test_mode and now >= session_open.astimezone(timezone.utc) + timedelta(minutes=2):
+                 for state in states.values():
+                     try:
+                         await bootstrap(state)

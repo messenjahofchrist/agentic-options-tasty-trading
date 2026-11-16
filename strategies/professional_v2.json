@@ -5,7 +5,7 @@
 // Plain-English companion: docs/v2/professional_strategy_v2.md.
 {
   "strategy_id": "PROFESSIONAL_STRATEGY_V2",
-  "version": "2.4.0",
+  "version": "2.8.0",
   "status": "research_test",
   "mode": "PAPER",
   "base_strategy": {
@@ -152,7 +152,8 @@
 
   // Entry filters from the 2026-10-27 replay scorecard (each lost in all three replay periods): no entries in the
   // excluded symbols, and none in the skip window (ET), the first minutes after the opening range forms.
-  "entry_filters": {"enabled": true, "exclude_symbols": ["TLT"], "skip_from_et": "10:00", "skip_until_et": "10:30"},
+  // 2.5.0 (owner-authorized 2026-11-05): BAC and DIA also excluded; both lost in the replay in June-August and again afterward.
+  "entry_filters": {"enabled": true, "exclude_symbols": ["TLT", "BAC", "DIA"], "skip_from_et": "10:00", "skip_until_et": "10:30"},
 
   // Fewer trades: at most this many V2 entries per session (on top of the original 6-per-day risk limit).
   "trade_limits": {"enabled": false, "max_entries_per_session": 3},
@@ -182,5 +183,24 @@
     "partial_profit": {"enabled": false, "trigger_r": 1.0, "fraction": 0.5}
   },
 
-  "shadow_benchmark": {"enabled": true}
+  "shadow_benchmark": {"enabled": true},
+
+  // 2.8.0 (owner-authorized 2026-11-11, review reports/review_20261111). Cost gate: the contract's round-trip cost
+  // (bid/ask gap in and out, fees, slippage) divided by what one R of stock move is worth on it (|delta| x stop
+  // distance x 100). enforce false = measured and logged on every approved candidate, nothing is blocked; the nightly
+  // scoreboard shows what the gate would have kept and dropped. Set enforce true for a profile to switch it on
+  // (it then also takes the place of the "expected net R" gate, which has no relationship to results).
+  // Not enforced on day one: on the $10K's 45 live trades a 0.20R limit would have dropped 20 trades that made +$87
+  // in total, and on the $1K it would block nearly every trade (owner 2026-11-08: do not pause the $1K).
+  "cost_gate": {
+    "enabled": true,
+    "max_cost_r": {"ORIGINAL_ACCOUNT_PAPER": 0.20, "SMALL_ACCOUNT_PAPER": 0.20},
+    "enforce": {"ORIGINAL_ACCOUNT_PAPER": false, "SMALL_ACCOUNT_PAPER": false},
+    "replaces_expected_net_r_gate": true
+  },
+
+  // 2.8.0 (owner-authorized 2026-11-11). The advisor (any agent, see agents.json) may block entries in one symbol
+  // for a stated reason until a stated time (data/advisor/vetoes.json). Block-only: it never adds a trade or changes
+  // size. The file is ignored once older than max_age_minutes, so a stopped advisor leaves no block behind.
+  "ai_veto": {"enabled": true, "enforce": true, "max_age_minutes": 90}
 }

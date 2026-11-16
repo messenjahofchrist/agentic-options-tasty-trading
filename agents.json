@@ -1,0 +1,67 @@
+// Which AI agent does which job, and how each agent is started. The bot never depends on one vendor: every agent is
+// just a command that reads a prompt and prints (or writes) a reply. Change a role to switch agents; add an entry
+// under "agents" to plug in any other bot. Machine-readable JSON with // comments. Read by trader/agents.py.
+//
+// roles:   job -> agent name, or a list tried in order (the next one is used if the first fails or returns bad JSON).
+// agents:  name -> how to run it:
+//   command          argv list. Placeholders: {workdir} = an empty temporary folder the agent runs in,
+//                    {output_file} = a file in it the agent may write its reply to, {prompt} = the prompt text
+//                    (only for agents that cannot read standard input; long prompts can exceed Windows' limit).
+//   prompt_via       "stdin" (default) or "argument" (the command must then contain {prompt}).
+//   output_from      "stdout" (default) or "file" (reads {output_file}).
+//   label            optional display name in reports and emails (default: the agent's name, capitalized).
+//   timeout_seconds  optional; the caller's default applies when absent.
+// Agents get no broker, mail or API credentials (the environment is filtered) and run outside the project folder.
+//
+// Note: the Claude and Codex agents use the same accounts as your own Claude Code / Codex sessions, so their usage
+// counts against the same limits (11/11: Claude's 5-hour limit was hit mid-afternoon and Codex covered the advisor).
+{
+  "roles": {
+    // Market-news advisor: sentiment, in-play watchlist, vetoes and trade ideas (trader/advisor.py). Web search.
+    "advisor": ["claude", "codex"],
+    // The hourly supervisor review has two independent reviewers with no tools (trader/supervisor.py). Keep them
+    // different agents: the point is a second opinion. A list adds a fallback for that slot.
+    "reviewer_1": "claude-review",
+    "reviewer_2": "codex-review"
+  },
+  "agents": {
+    "claude": {
+      "command": ["claude", "--print", "--no-session-persistence", "--strict-mcp-config", "--tools", "WebSearch,WebFetch",
+                  "--allowedTools", "WebSearch,WebFetch", "--output-format", "text"],
+      "prompt_via": "stdin",
+      "output_from": "stdout"
+    },
+    "codex": {
+      "command": ["codex", "-C", "{workdir}", "--sandbox", "read-only", "--ask-for-approval", "never", "--search", "exec",
+                  "--skip-git-repo-check", "--ephemeral", "--output-last-message", "{output_file}", "-"],
+      "prompt_via": "stdin",
+      "output_from": "file"
+    },
+    "gemini": {
+      "command": ["gemini", "--skip-trust", "--approval-mode", "plan", "--output-format", "text", "-p",
+                  "Follow the instructions given on standard input and reply with the JSON object only."],
+      "prompt_via": "stdin",
+      "output_from": "stdout"
+    },
+    "claude-review": {
+      "label": "Claude",
+      "command": ["claude", "--print", "--no-session-persistence", "--strict-mcp-config", "--tools", "", "--output-format", "text"],
+      "prompt_via": "stdin",
+      "output_from": "stdout"
+    },
+    "codex-review": {
+      "label": "Codex",
+      "command": ["codex", "-C", "{workdir}", "--sandbox", "read-only", "--ask-for-approval", "never", "exec",
+                  "--ignore-user-config", "--skip-git-repo-check", "--ephemeral", "--output-last-message", "{output_file}", "-"],
+      "prompt_via": "stdin",
+      "output_from": "file"
+    },
+    "gemini-review": {
+      "label": "Gemini",
+      "command": ["gemini", "--skip-trust", "--approval-mode", "plan", "--output-format", "text", "-p",
+                  "Follow the instructions given on standard input and reply with the JSON object only."],
+      "prompt_via": "stdin",
+      "output_from": "stdout"
+    }
+  }
+}

@@ -190,7 +190,10 @@ def run_eod(root: Path, profile_name: str = "small", *, notify: bool = True,
         flag = f"{len(eod['open_positions'])} OPEN OVERNIGHT - " if eod["overnight_violation"] else ""
         headline = (f"{flag}{len(eod['contracts'])} bought, day {_money(led['day_realized_pnl'], sign=True)}, "
                     f"cash {_money(led['day_end_cash'])}")
-        if email_configured():
+        from .notifications import routine_email_enabled
+        if email_configured() and not routine_email_enabled("end_of_day"):
+            result["email"] = "skipped (notifications.json end_of_day is false)"
+        elif email_configured():
             try:
                 send_email(f"OptioBot {eod['label']} {eod['trading_day']}: {headline}", render_eod_text(eod))
                 result["email"] = "sent"

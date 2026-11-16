@@ -411,7 +411,12 @@ def parse_candle_feed(messages: list[dict], *, start: datetime, end: datetime, s
                 continue
             if stamp > end and not flags & 8:
                 # The still-forming minute can update mid-snapshot; it is outside the window, so it
-                # cannot be an out-of-order row of the requested history.
+                # cannot be an out-of-order row of the requested history. When it follows a SNAPSHOT_END still
+                # marked pending and is not pending itself, it closes that transaction, which is also where
+                # _has_candle_snapshot_end stops the fetch (seen as "did not complete" with history intact).
+                if snapshot_end_waiting and not flags & 1:
+                    snapshot_complete = True
+                    break
                 continue
             if previous_time is not None and stamp > previous_time:
                 out_of_order += 1
@@ -455,7 +460,8 @@ def parse_candle_feed(messages: list[dict], *, start: datetime, end: datetime, s
                           "snapshot_end": False, "snapshot_snip": False,
                           "duplicate_candle_count": duplicates, "out_of_order_count": out_of_order,
                           "received_candle_count": len(rows)})
-        raise RuntimeError("DXLink historical snapshot did not complete; refusing partial candle history")
+        raise RuntimeError("DXLink historical snapshot did not complete; refusing partial candle history "
+                           f"(events {raw_candles}, begin {snapshot_started}, end seen {snapshot_end_waiting})")
     if not rows:
         raise RuntimeError(f"DXLink returned no candles for {symbol} in the requested date range")
     if audit is not None:

@@ -36,6 +36,7 @@ from .events import EventEngine
 from .options import fetch_option_quotes_cached
 from .regime import RegimeResult, classify
 from .sectors import SectorMap
+from .vetoes import VETO_FILE, load_vetoes
 
 ET = ZoneInfo("America/New_York")
 TRACKER_REPLAY_BARS = 60
@@ -84,6 +85,7 @@ class V2Session:
         self._snapshot: tuple[datetime, dict] | None = None
         self._snapshot_built = datetime.now(timezone.utc)
         self._chains: dict[tuple[str, datetime], list[OptionQuote]] = {}
+        self._veto_cache: tuple[float | None, dict | None] = (None, None)
         self.decisions_log = data_dir / "v2_decisions.jsonl"
         self.snapshot_path = data_dir / "v2_context_snapshot.json"
         self.status_path = data_dir / "v2_status.json"
@@ -91,7 +93,8 @@ class V2Session:
         if self.cfg["shadow_benchmark"]["enabled"] and helpers is not None:
             from .shadow import ShadowOriginal
             self.shadow = ShadowOriginal(root=root, data_dir=data_dir, strategy=strategy, starting_cash=starting_cash,
-                                         profile=profile_policy, arbiter_factory=arbiter_factory, helpers=helpers)
+                                         profile=profile_policy, arbiter_factory=arbiter_factory, helpers=helpers,
+                                         reset_loss_streak_each_session=bool(self.cfg["loss_streak"]["reset_each_session"]))
 
     # ------------------------------------------------------------------------------------------------
     def is_context_only(self, symbol: str) -> bool:
@@ -259,18 +262,35 @@ class V2Session:
         return result
 
     # --- entries ------------------------------------------------------------------------------------------
-    def chain_sync(self, symbol: str, bar_time: datetime, spot: float, now: datetime) -> list[OptionQuote]:
-        key = (symbol, bar_time)
+    def chain_sync(self, symbol: str, bar_time: datetime, spot: float, now: datetime,
+                   dte: tuple[int, int] | None = None) -> list[OptionQuote]:
+        """Option quotes for one symbol and bar, cached per DTE range. dte None = strategy.txt's range (the original
+        benchmark always uses it); V2 entries pass contract_policy's range, which is the same unless the policy is on."""
+        min_dte, max_dte = dte or (int(self.strategy.rules["min_dte"]), int(self.strategy.rules["max_dte"]))
+        key = (symbol, bar_time, min_dte, max_dte)
         if key not in self._chains:
             for old in [k for k in self._chains if k[1] < bar_time - timedelta(minutes=2)]:
                 del self._chains[old]
             self._chains[key] = fetch_option_quotes_cached(self.client, self.hub, underlying=symbol, spot=spot, now=now,
-                                                           min_dte=int(self.strategy.rules["min_dte"]),
-                                                           max_dte=int(self.strategy.rules["max_dte"]))
+                                                           min_dte=min_dte, max_dte=max_dte)
         return self._chains[key]
 
+    def vetoes(self) -> dict | None:
+        """The advisor's veto file, re-read only when it changes. None when ai_veto is off or the file is absent."""
+        if not (self.cfg.get("ai_veto") or {}).get("enabled"):
+            return None
+        try:
+            stamp = (self.root / VETO_FILE).stat().st_mtime
+        except OSError:
+            return None
+        if self._veto_cache[0] != stamp:
+            self._veto_cache = (stamp, load_vetoes(self.root))
+        return self._veto_cache[1]
+
     async def evaluate(self, *, symbol: str, bars: list[Bar], now: datetime, account, equity: float, strategy: Strategy,
-                       risk_state, data_fresh: bool, entries_blocked: str | None, pending: list[dict]) -> pipeline.CandidateReport | None:
+                       risk_state, data_fresh: bool, entries_blocked: str | None, pending: list[dict],
+                       cash: float | None = None) -> pipeline.CandidateReport | None:
+        """`cash` overrides the ledger's cash (LIVE passes the broker's settled funds; the LIVE ledger holds none)."""
         tracker = self.last_tracker.get(symbol)
         if not tracker or tracker["state"] == "NO_SETUP":
             return None
@@ -288,10 +308,12 @@ class V2Session:
             snapshot=snap, regime=regime, strategy=strategy, v2=self.cfg, sector_map=self.sector_map, events=self.events,
             metrics=self.metrics.get(symbol) if not self.metrics_error or symbol in self.metrics else None,
             correlation=self.correlation, risk_state=risk_state, positions=copy.deepcopy(account.positions),
-            pending=list(pending), cash=float(account.cash), equity=equity, profile_name=self.profile_name,
-            fetch_chain=lambda: self.chain_sync(symbol, bars[-1].timestamp, spot, now), data_fresh=data_fresh,
+            pending=list(pending), cash=float(account.cash if cash is None else cash), equity=equity,
+            profile_name=self.profile_name,
+            fetch_chain=lambda: self.chain_sync(symbol, bars[-1].timestamp, spot, now,
+                                                dte=pipeline.contract_range(self.cfg, strategy)[:2]), data_fresh=data_fresh,
             entries_blocked=entries_blocked, core_signal_now=core_signal is not None,
-            daily_closes=self.daily_closes.get(symbol), session_close=self.session_close)
+            daily_closes=self.daily_closes.get(symbol), session_close=self.session_close, vetoes=self.vetoes())
         report = await asyncio.to_thread(pipeline.evaluate_candidate, inputs)
         record = pipeline.report_record(report)
         self.latest_reports[symbol] = record
@@ -331,8 +353,9 @@ class V2Session:
                 "v2_management": {"initial_stop_distance": abs(float(entry["entry_underlying"]) - float(entry["stop_underlying"]))}}
 
     def portfolio_recheck(self, report: pipeline.CandidateReport, account, equity: float, strategy: Strategy,
-                          pending: list[dict]) -> tuple[bool, str]:
+                          pending: list[dict], cash: float | None = None) -> tuple[bool, str]:
         """Synchronous re-check right before the fill (positions may have changed while ranking)."""
+        available_cash = float(account.cash if cash is None else cash)
         from . import portfolio as portfolio_mod
         entry = report.entry or {}
         side = report.side
@@ -341,10 +364,10 @@ class V2Session:
                                             aggregate_fraction=self.cfg["portfolio"]["aggregate_max_loss_fraction"][self.profile_name],
                                             positions=account.positions, pending=pending)
         option = entry["option"]
-        cash = (option.ask * 100 + float(strategy.execution["slippage_per_contract"])) * int(entry["quantity"])
+        entry_cash = (option.ask * 100 + float(strategy.execution["slippage_per_contract"])) * int(entry["quantity"])
         check = portfolio_mod.evaluate(model=self.correlation, symbol=report.symbol, side=side,
-                                       candidate_max_loss=float(entry["modeled_risk_dollars"]), entry_cash=cash,
-                                       cash=float(account.cash), positions=account.positions, budgets=budgets)
+                                       candidate_max_loss=float(entry["modeled_risk_dollars"]), entry_cash=entry_cash,
+                                       cash=available_cash, positions=account.positions, budgets=budgets)
         return check.ok, "; ".join(check.reasons)
 
     def log_outcome(self, symbol: str, now: datetime, outcome: str, detail: str) -> None:

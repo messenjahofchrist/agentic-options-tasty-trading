@@ -373,15 +373,40 @@ class ProfileLoopTests(unittest.TestCase):
 
 
 class DailyLimitOverrideTests(unittest.TestCase):
-    def test_only_the_daily_and_weekly_loss_fractions_can_be_overridden(self):
+    def _with_risk_overrides(self, root: Path, overrides: dict) -> ProfileLedger:
+        path = root / "profiles" / "small_account.json"
+        data = json.loads(path.read_text())
+        data["profiles"][SMALL]["risk_overrides"] = overrides
+        path.write_text(json.dumps(data))
+        return ProfileLedger(ProfileConfig.load(root, "profiles/small_account.json"), original_data_dir=root / "data")
+
+    def test_only_loss_fractions_and_position_counts_can_be_overridden(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_root(Path(tmp))
-            path = root / "profiles" / "small_account.json"
-            data = json.loads(path.read_text())
-            data["profiles"][SMALL]["risk_overrides"] = {"max_trades_per_day": 50}
-            path.write_text(json.dumps(data))
-            with self.assertRaises(ProfileError):
-                ProfileConfig.load(root, "profiles/small_account.json")
+            strategy = parse_strategy(root / "strategy.txt")
+            with self.assertRaisesRegex(ProfileError, "may be overridden"):
+                self._with_risk_overrides(root, {"max_consecutive_losses": 1})
+            with self.assertRaisesRegex(ProfileError, "positive integer"):
+                self._with_risk_overrides(root, {"max_open_positions": 0.5})
+            # A count may only be lowered: 50 trades a day loosens the strategy's 6 and is refused at runtime.
+            with self.assertRaisesRegex(ProfileError, "loosen"):
+                self._with_risk_overrides(root, {"max_trades_per_day": 50}).runtime(strategy)
+
+    def test_one_open_position_override_reaches_the_strategy_risk_and_nothing_else_changes(self):
+        """Owner 2026-11-04: max_open_positions 1 for the $1K ledger ("one trade at a time")."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            strategy = parse_strategy(root / "strategy.txt")
+            ledger = self._with_risk_overrides(root, {"max_daily_loss_fraction": 0.20, "max_weekly_loss_fraction": 0.40,
+                                                      "max_open_positions": 1})
+            ledger.initialize()
+            run, _ = ledger.runtime(strategy)
+            self.assertEqual(run.risk["max_open_positions"], 1)
+            self.assertIsInstance(run.risk["max_open_positions"], int)
+            changed = {k for k in strategy.risk if run.risk[k] != strategy.risk[k]}
+            self.assertEqual(changed, {"max_daily_loss_fraction", "max_weekly_loss_fraction", "max_open_positions"})
+            self.assertEqual(strategy.risk["max_open_positions"], 4)   # the strategy object is untouched
+            self.assertEqual(ledger.status(strategy)["risk_overrides"]["max_open_positions"], 1)
 
     def _with_rule_overrides(self, root: Path, overrides: dict) -> ProfileLedger:
         path = root / "profiles" / "small_account.json"
@@ -407,6 +432,44 @@ class DailyLimitOverrideTests(unittest.TestCase):
             with self.assertRaisesRegex(ProfileError, "rule_overrides may only set"):
                 self._with_rule_overrides(root, {"min_abs_delta": 0.30})
 
+    def test_friction_gate_removes_high_friction_contracts_only_for_the_small_ledger(self):
+        """Owner 2026-11-04: max_friction_fraction 0.04. Friction = (bid/ask gap x 100 + modeled round-trip costs)
+        / premium. A $1.16 contract with a $0.05 gap: (5 + 1.44) / 116 = 5.6%, removed. A $3.50 contract with the
+        same gap: 1.8%, kept."""
+        from trader.models import OptionQuote
+        from trader.v2.options import friction_fraction, within_friction
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            strategy = parse_strategy(root / "strategy.txt")
+            path = root / "profiles" / "small_account.json"
+            data = json.loads(path.read_text())
+            data["profiles"][SMALL]["max_friction_fraction"] = 0.04
+            path.write_text(json.dumps(data))
+            config = ProfileConfig.load(root, "profiles/small_account.json")
+            ledger = ProfileLedger(config, original_data_dir=root / "data")
+            ledger.initialize()
+            run, _ = ledger.runtime(strategy)
+            self.assertEqual(run.rules["max_friction_fraction"], 0.04)
+            self.assertNotIn("max_friction_fraction", strategy.rules)
+            self.assertEqual(parse_strategy(root / "strategy.txt").sha256, strategy.sha256)
+            now = datetime(2026, 11, 4, 15, 0, tzinfo=timezone.utc)
+            cheap = OptionQuote(symbol="VZ    261120C00045000", underlying="VZ", expiration=now + timedelta(days=16),
+                                strike=45, right="C", bid=1.11, ask=1.16, delta=0.55, volume=600, open_interest=5000)
+            rich = OptionQuote(symbol="IWM   261120P00283000", underlying="IWM", expiration=now + timedelta(days=16),
+                               strike=283, right="P", bid=3.45, ask=3.50, delta=-0.55, volume=600, open_interest=5000)
+            self.assertAlmostEqual(friction_fraction(cheap, 1.44), 6.44 / 116, places=6)
+            self.assertEqual(within_friction([cheap, rich], 0.04, 1.44), [rich])
+            data["profiles"][SMALL]["max_friction_fraction"] = 1.5
+            path.write_text(json.dumps(data))
+            with self.assertRaisesRegex(ProfileError, "max_friction_fraction"):
+                ProfileConfig.load(root, "profiles/small_account.json")
+
+    def test_repository_small_profile_carries_the_2026_11_04_owner_values(self):
+        config = ProfileConfig.load(ROOT, "small")
+        self.assertEqual(config.small_per_trade_cap_dollars, 350.0)
+        self.assertEqual(config.small_max_friction_fraction, 0.04)
+        self.assertEqual(dict(config.small_risk_overrides)["max_open_positions"], 1)
+
     def test_tight_rules_skip_a_wide_gap_option_the_original_rules_accept(self):
         from trader.models import OptionQuote
         from trader.option_selector import evaluate_options
@@ -423,9 +486,9 @@ class DailyLimitOverrideTests(unittest.TestCase):
 
     def test_repository_small_profile_uses_20_percent_daily_and_40_percent_weekly_limits(self):
         config = ProfileConfig.load(ROOT, "small")
-        self.assertEqual(config.small_per_trade_cap_dollars, 150.0)      # owner-authorized 2026-11-04 (was $225 from 2026-10-29)
+        self.assertEqual(config.small_per_trade_cap_dollars, 350.0)      # owner-authorized 2026-11-04 (was $150, $225 before)
         self.assertEqual(dict(config.small_risk_overrides),
-                         {"max_daily_loss_fraction": 0.20, "max_weekly_loss_fraction": 0.40})
+                         {"max_daily_loss_fraction": 0.20, "max_weekly_loss_fraction": 0.40, "max_open_positions": 1})
 
 
 class RequestPacingTests(unittest.TestCase):
@@ -490,14 +553,15 @@ class RequestPacingTests(unittest.TestCase):
 
 
 class RealProfileConfigTests(unittest.TestCase):
-    def test_repository_profile_matches_the_recorded_original_and_expands_the_universe(self):
+    def test_repository_profile_matches_the_recorded_original_and_trades_11_of_its_symbols(self):
         strategy = parse_strategy(ROOT / "strategy.txt")
         config = ProfileConfig.load(ROOT, "small")
         verify_original_baseline(strategy, config.baseline)
         self.assertEqual((config.starting_balance, config.small_allocation_fraction, config.transition_equity),
                          (1000.0, 0.40, 10000.0))
-        self.assertEqual(list(config.small_universe[:14]), list(strategy.universe))  # expanded, never replaced
-        self.assertGreater(len(config.small_universe), len(strategy.universe))
+        self.assertEqual(len(config.small_universe), 11)  # owner-authorized 2026-11-05
+        self.assertLessEqual(set(config.small_universe), set(strategy.universe))
+        self.assertFalse({"TLT", "BAC", "DIA"} & set(config.small_universe))
         self.assertEqual(len(config.small_universe), len(set(config.small_universe)))
         self.assertNotEqual(config.data_dir.resolve(), (ROOT / "data").resolve())
 

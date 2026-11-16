@@ -20,7 +20,7 @@ import asyncio
 import copy
 import json
 import math
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -31,7 +31,7 @@ from ..risk_engine import RiskState
 from ..strategy_engine import evaluate_underlying_diagnostics
 from . import management as management_mod
 from . import pipeline
-from .config import V2Config, load_v2_config
+from .config import V2Config, load_v2_config, stop_and_target
 from .confirmation import TERMINAL, BreakoutTracker
 from .context import DailyLevels, MarketContext, VixReading
 from .correlation import CorrelationModel
@@ -79,6 +79,195 @@ def load_massive_cache(root: Path, symbols: list[str]) -> dict[str, list[Bar]]:
         if path.is_file():
             out[symbol] = _bars(json.loads(path.read_text(encoding="utf-8")))
     return out
+
+
+HISTORICAL_FOMC_LONG = [   # long replay only (2024-12 to 2026-05): the Fed's published meeting calendar, decision 14:00 ET;
+    # entered from the calendar as recalled on 2026-11-11, not re-checked against federalreserve.gov (time_verified false)
+    *({"date": d, "time_et": "14:00", "time_verified": False, "type": "FOMC_RATE_DECISION", "name": f"FOMC {d}",
+       "source": "FOMC"} for d in ("2024-12-18", "2025-01-29", "2025-03-19", "2025-05-07", "2025-06-18", "2025-07-30",
+                                    "2025-09-17", "2025-10-29", "2025-12-10", "2026-01-28", "2026-03-18", "2026-04-29")),
+]
+
+
+def _load_window(root: Path, symbols: list[str], start: date, end: date) -> dict[str, list[Bar]]:
+    """One-minute bars for [start, end] from the month chunks (history_cache) and the original Jun-Oct 2026 cache
+    files, de-duplicated by timestamp. Rows are turned into Bars one symbol at a time to keep memory down."""
+    from .history_cache import iter_rows
+    out: dict[str, list[Bar]] = {}
+    lo, hi = start.isoformat(), end.isoformat()
+    for symbol in symbols:
+        rows: dict[str, dict] = {}
+        for row in iter_rows(root, symbol, start, end):
+            rows[row["timestamp"]] = row
+        legacy = root / f"data/backtest_cache/massive-{symbol}-20260601T0000-20261010T0000.json"
+        if legacy.is_file() and hi >= "2026-06-01" and lo <= "2026-10-10":
+            for row in json.loads(legacy.read_text(encoding="utf-8")):
+                if lo <= row["timestamp"][:10] <= hi:
+                    rows[row["timestamp"]] = row
+        if rows:
+            out[symbol] = _bars([rows[k] for k in sorted(rows)])
+    return out
+
+
+def _daily_closes_all(root: Path, symbols: list[str], start: date, end: date) -> dict[str, list[tuple[str, float]]]:
+    """Last regular-session close per ET date for every symbol over the whole range (for correlation)."""
+    closes: dict[str, list[tuple[str, float]]] = {}
+    for month_start in sorted({date(d.year, d.month, 1) for d in (start + timedelta(days=k) for k in range((end - start).days + 1))}):
+        month_end = (date(month_start.year + (month_start.month == 12), 1 if month_start.month == 12 else month_start.month + 1, 1)
+                     - timedelta(days=1))
+        bars = _load_window(root, symbols, max(start, month_start), min(end, month_end))
+        for symbol, series in bars.items():
+            rth, _ = _split(series)
+            closes.setdefault(symbol, []).extend((d.isoformat(), b[-1].close) for d, b in sorted(rth.items()))
+    return {s: sorted(dict(v).items()) for s, v in closes.items()}
+
+
+def _in_play_pick(rth: dict[str, dict[date, list[Bar]]], universe: list[str], day: date, cfg: dict[str, Any]) -> list[dict]:
+    """The 2.9 stocks-in-play choice for one replay day, from the same bars: today's opening volume against the
+    average of the previous lookback_sessions sessions (no later bar is used)."""
+    from .in_play import opening_from_bars, rank
+    minutes, lookback = int(cfg["opening_minutes"]), int(cfg["lookback_sessions"])
+    today, averages = {}, {}
+    for s in universe:
+        sessions = rth.get(s) or {}
+        if day not in sessions:
+            continue
+        now = opening_from_bars(sessions[day], minutes)
+        prior = [opening_from_bars(sessions[d], minutes) for d in sorted(d for d in sessions if d < day)[-lookback:]]
+        prior = [p for p in prior if p and p["bars"] >= minutes * 0.6]
+        if now and prior:
+            today[s] = now
+            averages[s] = {"avg_open_volume": sum(p["volume"] for p in prior) / len(prior), "sessions": len(prior)}
+    return rank(today, averages, cfg)["selected"]
+
+
+def run_long_replay(root: Path, cfg, *, start: date, end: date, out: Path, variants: list[str] | None = None,
+                    window_months: int = 3, warmup_days: int = 35, log=print, config_path: str | Path | None = None,
+                    contract: str = "standard_7_21_dte") -> dict[str, Any]:
+    """The replay over a long history, one window of a few months at a time (each window loads only its own bars
+    plus warmup_days before it for the prior-day levels and 14-day ranges). Decisions inside a window are identical
+    to run_replay; one-day state does not carry over between days in either. Results are reported gross (stock move,
+    as always) and net of the measured option cost (trader.cost_model), by quarter and by symbol.
+
+    config_path: replay a saved version instead of the active one (2.9.0 side test). With in_play enabled, each day
+    trades only that day's stocks in play from the in_play universe (chosen from the opening bars, as live), and
+    unmeasured symbols are charged the median measured option cost."""
+    config = load_v2_config(root, config_path) if config_path else load_v2_config(root)
+    variants = variants or ["v2"]
+    in_play_cfg = config.data.get("in_play") or {}
+    if in_play_cfg.get("enabled"):
+        from .config import in_play_universe
+        trade_symbols = in_play_universe(root, config.data)
+    else:
+        trade_symbols = list(config.base.universe)
+    broad = list(config.data["context"]["broad_symbols"])
+    symbols = list(dict.fromkeys(trade_symbols + list(config.context_symbols())))
+    picks_log: list[dict] = []
+    notes = ["option costs: per-symbol cost table measured on recorded quotes from Oct-Nov 2026, applied to every "
+             "period (spreads in earlier periods may have differed)",
+             "FOMC windows before June 2026 from the published calendar as recalled (unverified); earnings, IV and option "
+             "selection are not replayed (as in every replay)"]
+    log(f"daily closes {start}..{end}")
+    daily_closes = _daily_closes_all(root, symbols, start - timedelta(days=100), end)
+    vix_daily: dict[date, float] = {}
+    try:
+        from ..tastytrade_client import TastytradeClient
+        from .datahub import history_batch
+        client = TastytradeClient(cfg.client_id, cfg.client_secret, cfg.refresh_token, base_url=cfg.production_base_url)
+        token = client.quote_token().get("data", {})
+        got, _ = asyncio.run(history_batch(dxlink_url=token["dxlink-url"], quote_token=token["token"],
+                                           series={"VIX": "VIX{=1d}"},
+                                           start=datetime.combine(start - timedelta(days=10), time(0), timezone.utc)))
+        vix_daily, _ = _vix_lookup(got.get("VIX", []))
+        notes.append(f"VIX: prior-session daily closes ({len(vix_daily)} sessions)")
+    except Exception as exc:
+        notes.append(f"VIX daily history unavailable ({type(exc).__name__}); regime used SPY ATR only")
+    global HISTORICAL_FOMC
+    saved_fomc = HISTORICAL_FOMC
+    HISTORICAL_FOMC = HISTORICAL_FOMC_LONG + saved_fomc
+    results: dict[str, list[dict]] = {name: [] for name in variants}
+    replayed_days: list[date] = []
+    try:
+        window_start = start
+        while window_start <= end:
+            month = window_start.month - 1 + window_months
+            window_end = min(end, date(window_start.year + month // 12, month % 12 + 1, 1) - timedelta(days=1))
+            rth, premarket = {}, {}
+            for s in symbols:        # one symbol at a time: only regular-session bars are kept
+                raw = _load_window(root, [s], window_start - timedelta(days=warmup_days), window_end)
+                if s in raw:
+                    rth[s], pre = _split(raw[s])
+                    if s in broad:
+                        premarket[s] = pre
+                del raw
+            days = sorted(d for d in set().union(*[set(rth[s]) for s in trade_symbols if s in rth])
+                          if window_start <= d <= window_end)
+            if in_play_cfg.get("enabled"):
+                part = {name: [] for name in variants}
+                for day in days:
+                    if "SPY" not in rth or day not in rth["SPY"]:
+                        continue
+                    chosen = _in_play_pick(rth, trade_symbols, day, in_play_cfg)
+                    picks_log.append({"day": day.isoformat(), "picked": [(c["symbol"], c["relative_volume"]) for c in chosen]})
+                    replayed_days.append(day)
+                    if not chosen:
+                        continue
+                    got = replay_days(config=config, trade_symbols=[c["symbol"] for c in chosen], rth=rth,
+                                      premarket=premarket, vix_daily=vix_daily, vix_minutes=[], daily_closes=daily_closes,
+                                      days=[day], variants=variants, trend_closes=daily_closes)
+                    for name, trades in got.items():
+                        part[name].extend(trades)
+            else:
+                part = replay_days(config=config, trade_symbols=trade_symbols, rth=rth, premarket=premarket,
+                                   vix_daily=vix_daily, vix_minutes=[], daily_closes=daily_closes, days=days,
+                                   variants=variants, trend_closes=daily_closes)
+                replayed_days += [d for d in days if all(d in rth.get(s, {}) for s in trade_symbols)]
+            for name, trades in part.items():
+                results[name].extend(trades)
+            log(f"window {window_start}..{window_end}: {len(days)} days, "
+                + ", ".join(f"{n} {len(t)} trades" for n, t in part.items()))
+            del rth, premarket
+            window_start = window_end + timedelta(days=1)
+    finally:
+        HISTORICAL_FOMC = saved_fomc
+    from ..cost_model import load_table
+    table = load_table(root)
+
+    def quarter(t: dict) -> str:
+        d = datetime.fromisoformat(t["entry_time"]).astimezone(ET).date()
+        return f"{d.year}-Q{(d.month - 1) // 3 + 1}"
+
+    wide = bool(in_play_cfg.get("enabled"))
+    summary: dict[str, Any] = {"source": "massive month chunks + Jun-Oct 2026 cache", "first_day": start.isoformat(),
+                               "last_day": end.isoformat(), "days_replayed": len(replayed_days),
+                               "trade_symbols": trade_symbols, "strategy_version": config.version, "notes": notes,
+                               "option_cost_contract": contract,
+                               "model": __doc__.split("\n\n")[1].strip(), "variants": {}}
+    if wide:
+        counts = [len(p["picked"]) for p in picks_log]
+        summary["in_play"] = {"days": len(picks_log), "days_with_picks": sum(1 for c in counts if c),
+                              "average_picks": round(sum(counts) / len(counts), 2) if counts else 0,
+                              "most_picked": Counter(s for p in picks_log for s, _ in p["picked"]).most_common(15)}
+        notes.append("2.9 in_play: symbols without recorded option quotes are charged the median measured option cost")
+    for name, trades in results.items():
+        groups: dict[str, list[dict]] = defaultdict(list)
+        for t in trades:
+            groups[quarter(t)].append(t)
+        summary["variants"][name] = {
+            "all": _metrics(trades), "net_of_option_cost": _net_of_option_cost(trades, table, contract, wide),
+            "by_quarter": {q: {"gross": _metrics(v), "net": _net_of_option_cost(v, table, contract, wide)}
+                           for q, v in sorted(groups.items())},
+            "by_symbol": _breakdown(trades, "symbol"), "by_side": _breakdown(trades, "side"),
+            "by_hour_et": _breakdown(trades, "hour_et")}
+    out = out if out.is_absolute() else root / out
+    out.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    (out / f"long-{stamp}-summary.json").write_text(json.dumps(summary, indent=2, default=str), encoding="utf-8")
+    (out / f"long-{stamp}-trades.json").write_text(json.dumps(results, indent=1, default=str), encoding="utf-8")
+    if picks_log:
+        (out / f"long-{stamp}-picks.json").write_text(json.dumps(picks_log, indent=0), encoding="utf-8")
+    summary["files"] = [str(out / f"long-{stamp}-summary.json"), str(out / f"long-{stamp}-trades.json")]
+    return summary
 
 
 async def load_tastytrade(cfg, symbols: list[str], broad: list[str]) -> tuple[dict[str, list[Bar]], dict[str, list[Bar]], dict]:
@@ -149,6 +338,44 @@ def _metrics(trades: list[dict]) -> dict[str, Any]:
             "profit_factor": round(gross_win / gross_loss, 3) if gross_loss else None,
             "net_pnl_100sh": round(sum(t["net"] for t in trades), 2), "fees": round(FEE_PER_TRADE * len(r), 2),
             "slippage": round(SLIPPAGE_PER_SHARE * 200 * len(r), 2)}
+
+
+def _net_of_option_cost(trades: list[dict], table: dict | None, contract: str = "standard_7_21_dte",
+                        fallback_to_median: bool = False) -> dict[str, Any]:
+    """The same trades after the measured round-trip option cost (trader.cost_model; review 2026-11-11). The replay
+    trades the stock move, so its R leaves out what the option costs to trade. Symbols without recorded option quotes
+    have no measured cost and are left out; "coverage" says how many trades the net figures stand on.
+    fallback_to_median (2.9 wide list): an unmeasured symbol is charged the median measured cost (in bps of the
+    stock price) of the measured symbols; "estimated" says how many trades that applies to."""
+    from ..cost_model import net_r, symbol_cost_bps
+    if not table:
+        return {"available": False, "reason": "no data/option_cost_table.json (python -m trader.cost_model build)"}
+    measured = sorted(v for v in (symbol_cost_bps(table, s, contract) for s in (table.get("symbols") or {})) if v is not None)
+    median_bps = measured[len(measured) // 2] if measured else None
+    priced, estimated = [], 0
+    for t in trades:
+        bps = symbol_cost_bps(table, t["symbol"], contract)
+        if bps is None and fallback_to_median:
+            bps, estimated = median_bps, estimated + 1
+        value = net_r(t["r"], cost_bps=bps, stop_fraction=t.get("stop_fraction"))
+        if value is not None:
+            priced.append({**t, "gross_r": t["r"], "r": value, "cost_r": t["r"] - value})
+    if not priced:
+        return {"available": False, "reason": "no trade is in a symbol with a measured option cost"}
+    by_symbol: dict[str, list[dict]] = defaultdict(list)
+    for t in priced:
+        by_symbol[t["symbol"]].append(t)
+    gross = sum(t["gross_r"] for t in priced)
+    net = _metrics(priced)
+    return {"available": True, "coverage": f"{len(priced)} of {len(trades)} trades", "contract": contract,
+            "estimated_with_median_cost": estimated, "median_cost_bps_used": median_bps,
+            "gross_total_r": round(gross, 2), "cost_total_r": round(sum(t["cost_r"] for t in priced), 2),
+            "net_total_r": net["total_r"], "net_expectancy_r": net["expectancy_r"], "net_win_rate": net["win_rate"],
+            "net_profit_factor": net["profit_factor"],
+            "median_cost_r": round(sorted(t["cost_r"] for t in priced)[len(priced) // 2], 3),
+            "by_symbol": {s: {"trades": len(v), "gross_r": round(sum(t["gross_r"] for t in v), 2),
+                              "cost_r": round(sum(t["cost_r"] for t in v), 2), "net_r": round(sum(t["r"] for t in v), 2)}
+                          for s, v in sorted(by_symbol.items())}}
 
 
 def _bucket(value: Any, edges: tuple[float, ...]) -> str:
@@ -297,10 +524,16 @@ def replay_days(*, config: V2Config, trade_symbols: list[str], rth: dict[str, di
         growing: dict[str, list[Bar]] = {s: [] for s in day_bars}
         for s in growing:
             ctx.register(s, growing[s])
+        # entry_guard inputs (replay research only): average daily range over the 14 prior sessions
+        adr = {}
+        for s in trade_symbols:
+            prior = sorted(d for d in rth.get(s, {}) if d < day)[-14:]
+            if prior:
+                adr[s] = sum(max(b.high for b in rth[s][d]) - min(b.low for b in rth[s][d]) for d in prior) / len(prior)
         index_of = {s: {b.timestamp: i for i, b in enumerate(bars)} for s, bars in day_bars.items()}
         minutes = sorted({b.timestamp for s in trade_symbols for b in day_bars[s]})
         trackers = {s: BreakoutTracker(cfg["confirmation"], int(rules["breakout_lookback_bars"])) for s in trade_symbols}
-        books = {name: {"open": [], "closed": [], "entries": 0, "consecutive": 0} for name in selected}
+        books = {name: {"open": [], "closed": [], "closed_today": [], "entries": 0, "consecutive": 0} for name in selected}
         last_minute = minutes[-1]
         for minute in minutes:
             now = minute + timedelta(minutes=1)
@@ -340,6 +573,7 @@ def replay_days(*, config: V2Config, trade_symbols: list[str], rth: dict[str, di
                             continue
                         side, stop_d, target_d = signal.side, float(metrics["stop_distance"]), float(metrics["target_distance"])
                         setup_type = "ORIGINAL_SIGNAL"
+                        diag = {}
                     else:
                         tracker = tracked[s]
                         if entry_rule == "v2_noconf":
@@ -368,10 +602,19 @@ def replay_days(*, config: V2Config, trade_symbols: list[str], rth: dict[str, di
                         else:
                             side, stop_d, target_d = setup["side"], float(setup["stop_distance"]), float(setup["target_distance"])
                             setup_type = tracker["state"]
+                        stop_d, target_d = stop_and_target(vcfg, growing[s][-1].close, stop_d, target_d)   # 2.9 stop_policy
+                        diag = _entry_diagnostics(growing[s], setup, side, stop_d, adr.get(s), minute, session_open)
+                        guard = vcfg.get("entry_guard") or {}
+                        if guard and _guard_blocks(guard, diag, s, book):
+                            continue
+                        if guard.get("stop_below_level_atr") is not None and setup and setup.get("level") is not None:
+                            direction = 1 if side == "CALL" else -1
+                            wide = abs(growing[s][-1].close - (float(setup["level"]) - direction * float(guard["stop_below_level_atr"]) * float(setup["atr_at_trigger"])))
+                            stop_d = max(stop_d, wide)
                     candidates.append((float(metrics.get("trend_efficiency") or 0.0), s, side, stop_d, target_d, setup_type,
-                                       metrics.get("relative_volume")))
+                                       metrics.get("relative_volume"), diag))
                 candidates.sort(key=lambda c: (c[0], c[1]), reverse=True)
-                for eff, s, side, stop_d, target_d, setup_type, rel_volume in candidates:
+                for eff, s, side, stop_d, target_d, setup_type, rel_volume, diag in candidates:
                     if len(book["open"]) >= int(strategy.risk["max_open_positions"]) or book["entries"] >= int(strategy.risk["max_trades_per_day"]):
                         break
                     if book["consecutive"] >= int(strategy.risk["max_consecutive_losses"]):
@@ -394,7 +637,8 @@ def replay_days(*, config: V2Config, trade_symbols: list[str], rth: dict[str, di
                                          "side": side, "setup_type": setup_type, "regime": regime.regime,
                                          "scorecard": {"hour_et": minute.astimezone(ET).strftime("%H:00"),
                                                        "daily_trend_aligned": aligned,
-                                                       "relative_volume": _bucket(rel_volume, (1.5, 2.5, 4.0))}})
+                                                       "relative_volume": _bucket(rel_volume, (1.5, 2.5, 4.0))},
+                                         "diagnostics": diag})
         for name in selected:
             results[name].extend(books[name]["closed"])
     return results
@@ -402,6 +646,38 @@ def replay_days(*, config: V2Config, trade_symbols: list[str], rth: dict[str, di
 
 def _no_options():
     raise _NoOptionsInReplay("option chain not available in replay")
+
+
+def _entry_diagnostics(bars, setup, side, stop_d, adr, minute, session_open) -> dict:
+    """How stretched an entry is (replay research only): distance past the breakout level in 1-minute ATRs and in
+    stop distances, the run since the session's opposite extreme in average daily ranges, and minutes since the open."""
+    direction = 1 if side == "CALL" else -1
+    price = bars[-1].close
+    out = {"minutes_since_open": int((minute - session_open).total_seconds() // 60)}
+    if setup and setup.get("level") is not None:
+        past = (price - float(setup["level"])) * direction
+        atr = float(setup.get("atr_at_trigger") or 0)
+        out["ext_atr"] = round(past / atr, 3) if atr > 0 else None
+        out["ext_stop"] = round(past / stop_d, 3) if stop_d > 0 else None
+    extreme = min(b.low for b in bars) if direction == 1 else max(b.high for b in bars)
+    run = (price - extreme) * direction
+    out["run_pct"] = round(100 * run / extreme, 3) if extreme else None
+    out["run_adr"] = round(run / adr, 3) if adr else None
+    return out
+
+
+def _guard_blocks(guard: dict, diag: dict, symbol: str, book: dict) -> bool:
+    """entry_guard (replay research only; not a live config key). Any limit left out is not applied."""
+    def over(key, limit_key):
+        v, lim = diag.get(key), guard.get(limit_key)
+        return lim is not None and v is not None and v > lim
+    if over("ext_atr", "max_ext_atr") or over("ext_stop", "max_ext_stop") or over("run_adr", "max_run_adr"):
+        return True
+    if guard.get("no_entry_before_minutes") is not None and diag.get("minutes_since_open", 999) < guard["no_entry_before_minutes"]:
+        return True
+    if guard.get("no_reentry_after_loss") and any(c["symbol"] == symbol and c["net"] < 0 for c in book["closed_today"]):
+        return True
+    return False
 
 
 def _manage_exits(book, minute, now, growing, core, cfg, rules, managed, last_minute, regime) -> None:
@@ -440,8 +716,11 @@ def _manage_exits(book, minute, now, growing, core, cfg, rules, managed, last_mi
         book["open"].remove(p)
         book["closed"].append({"symbol": s, "side": p["side"], "entry_time": p["entry_time"], "exit_time": now.isoformat(),
                                "entry": p["entry_underlying"], "exit": close, "exit_reason": why, "net": net, "r": net / risk,
-                               "setup_type": p["setup_type"], "regime": p["regime"], **p.get("scorecard", {})})
+                               "stop_fraction": abs(p["entry_underlying"] - p["stop_underlying"]) / p["entry_underlying"],
+                               "setup_type": p["setup_type"], "regime": p["regime"], **p.get("scorecard", {}),
+                               **({"diagnostics": p["diagnostics"]} if p.get("diagnostics") else {})})
         book["consecutive"] = book["consecutive"] + 1 if net < 0 else 0
+        book["closed_today"].append(book["closed"][-1])
 
 
 def load_trend_closes(cfg, symbols: list[str]) -> dict[str, list[tuple[str, float]]]:
@@ -515,10 +794,17 @@ def run_replay(root: Path, cfg, *, source: str, in_sample_end: str, out: Path,
                                "last_day": days[-1].isoformat() if days else None, "in_sample_end": in_sample_end,
                                "trade_symbols": trade_symbols, "notes": notes, "model": __doc__.split("\n\n")[1].strip(),
                                "variants": {}}
+    from ..cost_model import load_table
+    cost_table = load_table(root)
+    summary["option_cost_table"] = None if not cost_table else {k: cost_table.get(k) for k in
+                                                                ("generated_at_utc", "first_session", "last_session", "sessions")}
     for name, trades in results.items():
         ins = [t for t in trades if datetime.fromisoformat(t["entry_time"]).astimezone(ET).date() <= split]
         oos = [t for t in trades if datetime.fromisoformat(t["entry_time"]).astimezone(ET).date() > split]
         summary["variants"][name] = {"all": _metrics(trades), "in_sample": _metrics(ins), "out_of_sample": _metrics(oos),
+                                     "net_of_option_cost": {"all": _net_of_option_cost(trades, cost_table),
+                                                            "in_sample": _net_of_option_cost(ins, cost_table),
+                                                            "out_of_sample": _net_of_option_cost(oos, cost_table)},
                                      "by_regime": _breakdown(trades, "regime"), "by_setup_type": _breakdown(trades, "setup_type"),
                                      "by_exit": _breakdown(trades, "exit_reason"),
                                      # scorecard: which conditions win (compare across periods before acting on one)

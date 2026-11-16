@@ -5,6 +5,7 @@ import asyncio
 import hashlib
 import json
 import tempfile
+import time
 import types
 import unittest
 from dataclasses import replace
@@ -581,16 +582,21 @@ class SharedLoopTests(unittest.TestCase):
         bars.append(Bar(start + timedelta(minutes=22), 100.0, 100.42, 99.98, 100.4, 2000))
         return bars
 
-    def _run(self, root: Path, *, live: bool, history_gap: bool = False):
+    def _run(self, root: Path, *, live: bool, history_gap: bool = False, first_minute_no_opening_bar: bool = False):
         from trader import paper_runner
         now = datetime.now(timezone.utc)
-        open_utc = now.replace(second=0, microsecond=0) - timedelta(minutes=22)
+        if first_minute_no_opening_bar and now.second >= 50:   # the start must stay in the minute after the open
+            time.sleep(61 - now.second)
+            now = datetime.now(timezone.utc)
+        open_utc = now.replace(second=0, microsecond=0) - timedelta(minutes=1 if first_minute_no_opening_bar else 22)
         template = self._bars()
         shift = open_utc - template[0].timestamp
         session = [Bar(b.timestamp + shift, b.open, b.high, b.low, b.close, b.volume) for b in template]
         history, breakout = session[:-1], session[-1]
         if history_gap:
             history = history[:5] + history[6:]
+        if first_minute_no_opening_bar:
+            history, breakout = session[1:2], session[2]
 
         class FakeCalendar:
             def session_bounds(self, day):
@@ -646,6 +652,8 @@ class SharedLoopTests(unittest.TestCase):
                 patch.object(paper_runner, "create_history_provider", lambda *a, **k: FakeHistory()), \
                 patch.object(paper_runner, "live_minute_bars", fake_live), \
                 patch.object(paper_runner, "fetch_option_quotes", fake_options), \
+                patch.object(paper_runner, "GAP_RECOVERY_RETRY_SECONDS",
+                             0.01 if first_minute_no_opening_bar else paper_runner.GAP_RECOVERY_RETRY_SECONDS), \
                 patch.object(paper_runner, "ENTRY_ARBITRATION_SECONDS", 0.05):
             try:
                 asyncio.run(paper_runner._run(root=root, cfg=cfg, strategy=no_flat, symbols=("SPY", "IWM"), live=trader))
@@ -691,6 +699,17 @@ class SharedLoopTests(unittest.TestCase):
             decisions, broker, _ = self._run(Path(live_dir), live=True, history_gap=True)
             self.assertEqual(broker.submitted, [])
             self.assertEqual(broker.dry_runs, [])
+
+    def test_live_first_minute_start_without_the_opening_bar_refuses_the_symbol(self):
+        with tempfile.TemporaryDirectory() as live_dir:
+            decisions, broker, _ = self._run(Path(live_dir), live=True, first_minute_no_opening_bar=True)
+            self.assertEqual(broker.submitted, [])
+            self.assertEqual(broker.dry_runs, [])
+            reports = [json.loads(path.read_text()) for path in Path(live_dir).rglob("recovery_reports/*.json")]
+            self.assertTrue(reports)
+            for report in reports:   # refused by history validation, not merely short of a signal
+                self.assertEqual(report["final_readiness"], "SYMBOL_DISABLED", report["symbol"])
+                self.assertEqual(report["filled_candle_count"], 0, report["symbol"])
 
     def test_live_kill_switch_blocks_strategy_entries(self):
         with tempfile.TemporaryDirectory() as live_dir:

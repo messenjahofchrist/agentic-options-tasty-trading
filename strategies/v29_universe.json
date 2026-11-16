@@ -1,0 +1,12 @@
+{
+  "description": "V2 2.9.0 wide scan list (2026-11-12): liquid US-listed stocks with weekly options. Each morning 2.9 trades only the few that are 'in play' (unusual opening volume); see in_play in professional_v2_2.9.0.json. ETFs are left out on purpose: they are market context, rarely in play.",
+  "symbols": [
+    "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "AVGO", "AMD", "NFLX", "ORCL", "CRM", "ADBE", "QCOM",
+    "MU", "INTC", "AMAT", "LRCX", "MRVL", "ARM", "SMCI", "TSM", "PLTR", "UBER", "SHOP", "SNOW", "CRWD", "PANW",
+    "NET", "DDOG", "ZS", "MDB", "COIN", "HOOD", "MSTR", "SOFI", "PYPL", "AFRM", "UPST", "MARA", "RIOT", "ABNB",
+    "DASH", "NKE", "SBUX", "MCD", "DIS", "WMT", "COST", "TGT", "HD", "LOW", "CMG", "LULU", "ROKU", "SPOT", "DKNG",
+    "CVNA", "BABA", "PDD", "JD", "NIO", "F", "GM", "RIVN", "LCID", "BA", "CAT", "DE", "GE", "LMT", "RTX", "JPM",
+    "BAC", "C", "WFC", "GS", "MS", "SCHW", "V", "MA", "AXP", "UNH", "LLY", "JNJ", "PFE", "MRK", "ABBV", "MRNA",
+    "CVS", "XOM", "CVX", "OXY", "SLB", "FCX", "DAL", "UAL", "AAL", "CCL", "RCL", "T", "VZ", "CMCSA", "KO", "PEP"
+  ]
+}

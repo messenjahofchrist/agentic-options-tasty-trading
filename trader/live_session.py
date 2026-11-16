@@ -35,13 +35,41 @@ def live_data_dir(cfg: AppConfig) -> Path:
     return cfg.data_dir / LIVE_DIR_NAME
 
 
+def live_plan(root: Path, strategy: Strategy, v2: Any = None, profile_name: str | None = None):
+    """(strategy the session runs, account profile policy or None) for a LIVE session.
+
+    v2 None: the original strategy, exactly as before. v2 set: the ACTIVE PROFESSIONAL_STRATEGY_V2 configuration,
+    which must be activated (manifest) and must use only features the broker path can execute. profile_name
+    ("small") adds the small-account rules for a real account of about $1,000."""
+    if profile_name and v2 is None:
+        raise RuntimeError("--account-profile runs LIVE only with --strategy v2")
+    if v2 is None:
+        return strategy, None
+    from .v2.config import verify_v2_manifest
+    from .v2.live_support import unsupported_for_live
+    verify_v2_manifest(root, v2)
+    if v2.base.sha256 != strategy.sha256:
+        raise RuntimeError("the V2 configuration was built on a different strategy.txt than the active one")
+    unsupported = unsupported_for_live(v2)
+    if unsupported:
+        raise RuntimeError("LIVE blocked: this V2 version uses features LIVE cannot execute: " + "; ".join(unsupported))
+    if not profile_name:
+        return strategy, None
+    from .account_profiles import live_profile_runtime
+    return live_profile_runtime(root, strategy, profile_name)
+
+
 def authorize_live(*, root: Path, cfg: AppConfig, strategy_hash: str, account_suffix: str, statement: str,
-                   note: str = "") -> Path:
-    """Owner action: bind LIVE execution to this exact strategy hash and configured account."""
+                   note: str = "", v2: Any = None, profile_name: str | None = None) -> Path:
+    """Owner action: bind LIVE execution to this exact strategy hash and configured account. With v2 the hash is
+    the V2 configuration hash (shown by `v2-validate`), and the account profile is bound too."""
     strategy = parse_strategy(root / "strategy.txt")
     verify_manifest(root / "strategy.txt", root / "active_strategy.json")
-    if strategy_hash != strategy.sha256:
-        raise RuntimeError(f"--strategy-hash does not match the active strategy hash {strategy.sha256}")
+    _, policy = live_plan(root, strategy, v2, profile_name)
+    expected = v2.sha256 if v2 is not None else strategy.sha256
+    if strategy_hash != expected:
+        raise RuntimeError(f"--strategy-hash does not match the active {'V2 ' + v2.version if v2 is not None else 'strategy'} "
+                           f"hash {expected}")
     if not cfg.account_number or not cfg.account_number.endswith(account_suffix) or len(account_suffix) < 4:
         raise RuntimeError("--account-suffix must be the last 4+ characters of TASTYTRADE_ACCOUNT_NUMBER")
     if statement != LIVE_AUTHORIZATION_STATEMENT:
@@ -51,6 +79,14 @@ def authorize_live(*, root: Path, cfg: AppConfig, strategy_hash: str, account_su
               "account_masked": mask_account(cfg.account_number), "statement": statement, "note": note,
               "authorized_at_utc": datetime.now(timezone.utc).isoformat(),
               "scope": "LIVE execution of the unchanged strategy; strategy.txt and active_strategy.json are not modified"}
+    if v2 is not None:
+        record.update({"v2_strategy_id": v2.strategy_id, "v2_version": v2.version, "v2_sha256": v2.sha256,
+                       "account_profile": policy.name if policy is not None else None,
+                       "account_profile_rules_at_authorization": None if policy is None else {
+                           "max_aggregate_allocation_fraction": policy.allocation_fraction,
+                           "max_per_trade_dollars": policy.per_trade_cap_dollars},
+                       "scope": "LIVE execution of this exact PROFESSIONAL_STRATEGY_V2 configuration hash; a new "
+                                "version needs a new authorization"})
     path = root / LIVE_AUTHORIZATION_FILE
     temporary = path.with_suffix(".json.tmp")
     temporary.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
@@ -77,14 +113,25 @@ def _optional_float(value: Any) -> float | None:
 
 
 def live_readiness(*, root: Path, cfg: AppConfig, symbols: tuple[str, ...] | None = None,
-                   market_data: bool = True, client: TastytradeClient | None = None) -> dict:
+                   market_data: bool = True, client: TastytradeClient | None = None, v2: Any = None,
+                   profile_name: str | None = None) -> dict:
     """Read-only LIVE readiness check. Never submits, dry-runs or cancels an order."""
     now = datetime.now(timezone.utc)
     report: dict[str, Any] = {"checked_at_utc": now.isoformat(), "checks": [], "blockers": [], "warnings": [],
                               "account": mask_account(cfg.account_number), "orders_submitted": 0}
-    strategy = parse_strategy(root / "strategy.txt")
+    base_strategy = parse_strategy(root / "strategy.txt")
+    strategy, policy = base_strategy, None   # `strategy` below is what the session would run (profile rules applied)
+    report["strategy"] = {"id": base_strategy.strategy_id, "version": base_strategy.version, "sha256": base_strategy.sha256}
+    if v2 is not None or profile_name:
+        report["strategy"]["v2"] = None if v2 is None else {"id": v2.strategy_id, "version": v2.version, "sha256": v2.sha256}
+        try:
+            strategy, policy = live_plan(root, base_strategy, v2, profile_name)
+            _check(report, "v2_version_ready_for_live", True,
+                   f"V2 {v2.version} is activated and every feature it uses can run LIVE; "
+                   f"account profile {policy.name if policy is not None else 'none (original account rules)'}")
+        except Exception as exc:
+            _check(report, "v2_version_ready_for_live", False, str(exc))
     chosen = _session_symbols(strategy, symbols)
-    report["strategy"] = {"id": strategy.strategy_id, "version": strategy.version, "sha256": strategy.sha256}
     try:
         verify_manifest(root / "strategy.txt", root / "active_strategy.json")
         _check(report, "strategy_manifest_verified", True, "manifest matches strategy.txt (PAPER designation unchanged)")
@@ -95,7 +142,8 @@ def live_readiness(*, root: Path, cfg: AppConfig, symbols: tuple[str, ...] | Non
     _check(report, "live_start_confirmation_phrase", cfg.live_confirmation == "I UNDERSTAND LIVE TRADING USES REAL MONEY",
            "LIVE_START_CONFIRMATION set" if cfg.live_confirmation else "LIVE_START_CONFIRMATION empty")
     try:
-        record = verify_live_authorization(root, strategy, cfg.account_number)
+        record = verify_live_authorization(root, base_strategy, cfg.account_number, v2=v2,
+                                           profile=policy.name if policy is not None else None)
         _check(report, "owner_live_authorization", True, f"authorized {record.get('authorized_at_utc')}")
     except Exception as exc:
         _check(report, "owner_live_authorization", False, str(exc))
@@ -144,6 +192,18 @@ def live_readiness(*, root: Path, cfg: AppConfig, symbols: tuple[str, ...] | Non
     _check(report, "balances_retrieved", True, f"net liq ${net_liq:,.2f}, derivative buying power ${dbp:,.2f}")
     risk_fraction = min(float(strategy.risk["max_risk_per_trade_fraction"]), float(strategy.risk["hard_max_risk_per_trade_fraction"]))
     budget = net_liq * risk_fraction
+    if policy is not None:
+        # The profile's per-trade budget: the aggregate allocation, at most its per-trade dollar cap.
+        budget = policy.allocation_cap(net_liq) or 0.0
+        if policy.per_trade_cap_dollars is not None:
+            budget = min(budget, policy.per_trade_cap_dollars)
+        risk_fraction = budget / net_liq if net_liq > 0 else 0.0
+        report["account_profile"]["rules"] = {
+            "name": policy.name, "max_aggregate_allocation_fraction": policy.allocation_fraction,
+            "max_per_trade_dollars": policy.per_trade_cap_dollars,
+            "max_open_positions": int(strategy.risk["max_open_positions"]),
+            "max_daily_loss_fraction": float(strategy.risk["max_daily_loss_fraction"]),
+            "max_weekly_loss_fraction": float(strategy.risk["max_weekly_loss_fraction"]), "symbols": len(strategy.universe)}
     report["strategy_risk_budget_per_trade"] = budget
     if str(info.get("margin-or-cash")).lower() != "margin":
         settled = report["balances"]["settled_cash"]
@@ -247,11 +307,15 @@ def live_readiness(*, root: Path, cfg: AppConfig, symbols: tuple[str, ...] | Non
     in_band_streamer = None
     fees = FeeSchedule(float(strategy.execution["commission_per_contract"]), float(strategy.execution["exchange_fee_per_contract"]))
     costs = 2 * float(strategy.execution["slippage_per_contract"]) + fees.estimate(1, legs=2)
+    min_dte, max_dte = int(strategy.rules["min_dte"]), int(strategy.rules["max_dte"])
+    if v2 is not None:
+        from .v2.pipeline import contract_range
+        min_dte, max_dte = contract_range(v2.data, strategy)[:2]
     for symbol in chosen:
         spot = next(((q.bid + q.ask) / 2 for q in underlying if q.symbol == symbol and q.bid > 0), spots.get(symbol))
         try:
             chain = fetch_option_quotes(client, underlying=symbol, spot=spot, now=now,
-                                        min_dte=int(strategy.rules["min_dte"]), max_dte=int(strategy.rules["max_dte"]))
+                                        min_dte=min_dte, max_dte=max_dte)
         except Exception as exc:
             options[symbol] = {"ok": False, "error": f"{type(exc).__name__}: {str(exc)[:200]}"}
             continue
@@ -282,7 +346,7 @@ def live_readiness(*, root: Path, cfg: AppConfig, symbols: tuple[str, ...] | Non
     affordable_any = any(side["affordable_within_strategy_budget"] for row in options.values() if row.get("ok")
                          for side in row["eligible"].values())
     _check(report, "strategy_can_afford_a_contract", affordable_any,
-           f"strategy per-trade budget = {risk_fraction:.0%} x net liq ${net_liq:,.2f} = ${budget:,.2f}; "
+           f"per-trade budget = {risk_fraction:.0%} x net liq ${net_liq:,.2f} = ${budget:,.2f}; "
            + ("at least one eligible contract fits" if affordable_any else
               "no eligible contract fits, so LIVE entries will always be rejected by the strategy's own risk gate"))
     subscriptions = [{"type": "Trade", "symbol": chosen[0]}, {"type": "Quote", "symbol": chosen[0]}]
@@ -305,14 +369,16 @@ def write_readiness_report(cfg: AppConfig, report: dict) -> Path:
     return path
 
 
-def confirm_live_start(cfg: AppConfig, *, prompt: Callable[[str], str] = input, interactive: bool | None = None) -> None:
+def confirm_live_start(cfg: AppConfig, *, prompt: Callable[[str], str] = input, interactive: bool | None = None,
+                       running: str = "") -> None:
     """A deliberate, per-start human confirmation; .env settings alone never start LIVE."""
     if interactive is None:
         interactive = sys.stdin.isatty()
     if not interactive:
         raise RuntimeError("LIVE blocked: live-session needs an interactive terminal for the startup confirmation")
     expected = f"LIVE {cfg.account_number[-4:]}"
-    answer = prompt(f"REAL-MONEY LIVE session on tastytrade account {mask_account(cfg.account_number)}.\n"
+    answer = prompt(f"REAL-MONEY LIVE session on tastytrade account {mask_account(cfg.account_number)}"
+                    f"{' running ' + running if running else ''}.\n"
                     f"Type '{expected}' to start, anything else to abort: ")
     if answer.strip() != expected:
         raise RuntimeError("LIVE start aborted: confirmation did not match")
@@ -320,23 +386,28 @@ def confirm_live_start(cfg: AppConfig, *, prompt: Callable[[str], str] = input, 
 
 def run_live_session(*, root: Path, cfg: AppConfig, symbols: tuple[str, ...] | None = None,
                      max_restarts: int = MAX_ENGINE_RESTARTS, prompt: Callable[[str], str] = input,
-                     interactive: bool | None = None) -> None:
-    """LIVE: verify gates, confirm with the operator, then run the shared strategy loop with broker execution."""
+                     interactive: bool | None = None, v2: Any = None, profile_name: str | None = None) -> None:
+    """LIVE: verify gates, confirm with the operator, then run the shared strategy loop with broker execution.
+    With v2 it runs the active PROFESSIONAL_STRATEGY_V2 version (and the small-account rules with profile_name)."""
     if cfg.mode is not Mode.LIVE:
         raise RuntimeError("live-session requires TRADING_MODE=LIVE (and ENABLE_LIVE_TRADING=true plus the confirmation phrase)")
     cfg.validate_startup()
-    strategy = parse_strategy(root / "strategy.txt")
+    base_strategy = parse_strategy(root / "strategy.txt")
     verify_manifest(root / "strategy.txt", root / "active_strategy.json")
-    verify_live_authorization(root, strategy, cfg.account_number)
+    strategy, policy = live_plan(root, base_strategy, v2, profile_name)
+    verify_live_authorization(root, base_strategy, cfg.account_number, v2=v2,
+                              profile=policy.name if policy is not None else None)
     symbols = _session_symbols(strategy, symbols)
-    confirm_live_start(cfg, prompt=prompt, interactive=interactive)
+    running = "" if v2 is None else (f"PROFESSIONAL_STRATEGY_V2 {v2.version}"
+                                     + (f" with the {policy.name} account rules" if policy is not None else ""))
+    confirm_live_start(cfg, prompt=prompt, interactive=interactive, running=running)
     live_cfg = replace(cfg, data_dir=live_data_dir(cfg))
     live_cfg.data_dir.mkdir(parents=True, exist_ok=True)
     restarts = 0
     label = ",".join(symbols)
     while True:
         try:
-            _run_live_once(root=root, cfg=live_cfg, strategy=strategy, symbols=symbols)
+            _run_live_once(root=root, cfg=live_cfg, strategy=strategy, symbols=symbols, v2=v2, profile=policy)
             return
         except Exception as exc:
             now = datetime.now(timezone.utc)
@@ -352,7 +423,8 @@ def run_live_session(*, root: Path, cfg: AppConfig, symbols: tuple[str, ...] | N
             time.sleep(delay)
 
 
-def _run_live_once(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple[str, ...]) -> None:
+def _run_live_once(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple[str, ...], v2: Any = None,
+                   profile: Any = None) -> None:
     logger = _session_logger(cfg.data_dir)
     label = ",".join(symbols)
     heartbeat = cfg.data_dir / "engine_heartbeat.json"
@@ -371,7 +443,14 @@ def _run_live_once(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: t
             print("LIVE entries blocked until resolved: " + json.dumps(report["entry_block_reasons"]), flush=True)
         _set_engine_expected(cfg.data_dir, expected=True, state="STARTING", symbol=label)
         _write_heartbeat(heartbeat, status="starting", symbol=label, mode="LIVE")
-        asyncio.run(_run(root=root, cfg=cfg, strategy=strategy, symbols=symbols, live=trader))
+        if v2 is not None:
+            from .v2.config import verify_v2_manifest
+            verify_v2_manifest(root, v2)   # re-checked on every (re)start, like the PAPER engine
+            logger.info("LIVE PROFESSIONAL_STRATEGY_V2 version=%s hash=%s profile=%s", v2.version, v2.sha256,
+                        profile.name if profile is not None else None)
+            print(f"LIVE runs PROFESSIONAL_STRATEGY_V2 {v2.version}"
+                  + (f" with the {profile.name} account rules" if profile is not None else ""), flush=True)
+        asyncio.run(_run(root=root, cfg=cfg, strategy=strategy, symbols=symbols, live=trader, profile=profile, v2=v2))
     except KeyboardInterrupt:
         logger.info("LIVE session stopped by operator symbols=%s", label)
         _set_engine_expected(cfg.data_dir, expected=False, state="STOPPED", symbol=label)

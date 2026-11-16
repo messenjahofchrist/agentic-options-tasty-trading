@@ -97,11 +97,28 @@ def _event_types(value: Any, where: str) -> None:
         raise V2ConfigError(f"{where} must list event types from {', '.join(EVENT_TYPES)}")
 
 
+class _Optional:
+    """A schema section that may be left out (saved versions written before it existed stay valid)."""
+
+    def __init__(self, rule: Any) -> None:
+        self.rule = rule
+
+
 def _fractions_by_profile(value: Any, where: str) -> None:
     if not isinstance(value, dict) or set(value) != set(PROFILES):
         raise V2ConfigError(f"{where} must define exactly {', '.join(PROFILES)}")
     for key, item in value.items():
         _num(0, 1, lo_open=True)(item, f"{where}.{key}")
+
+
+def _by_profile(rule):
+    """Exactly one value per account profile, each checked by rule."""
+    def check(value: Any, where: str) -> None:
+        if not isinstance(value, dict) or set(value) != set(PROFILES):
+            raise V2ConfigError(f"{where} must define exactly {', '.join(PROFILES)}")
+        for key, item in value.items():
+            rule(item, f"{where}.{key}")
+    return check
 
 
 SCHEMA: dict[str, Any] = {
@@ -117,7 +134,11 @@ SCHEMA: dict[str, Any] = {
                "strong_min_index_bias": _num(1, 3, integer=True), "strong_min_spy_efficiency": _num(0, 1),
                "strong_min_breadth": _num(0, 1), "weak_min_market_score": _num(1, 9, integer=True),
                "weak_min_spy_bias": _num(0, 3, integer=True), "efficiency_window_bars": _num(5, 120, integer=True),
-               "allowed_directions": _directions},
+               "allowed_directions": _directions,
+               "high_volatility_lean": _Optional({"enabled": _bool, "min_index_bias": _num(1, 3, integer=True),
+                                                  "min_indexes": _num(1, 3, integer=True),
+                                                  "min_sectors": _num(0, 11, integer=True),
+                                                  "require_spy_vs_prior_close": _bool})},
     "sector": {"enabled": _bool, "min_sector_bias": _num(-3, 3, integer=True)},
     "vwap_alignment": {"enabled": _bool},
     "confirmation": {"enabled": _bool, "confirm_closes": _num(1, 10, integer=True), "min_distance_atr": _num(0, 10),
@@ -148,8 +169,11 @@ SCHEMA: dict[str, Any] = {
                "max_fraction_of_open_interest": _num(0, 1, lo_open=True), "quality_score_affects_size": _bool},
     "daily_trend": {"enabled": _bool, "sma_sessions": _num(5, 200, integer=True)},
     "entry_filters": {"enabled": _bool, "exclude_symbols": _ticker_list, "skip_from_et": _hhmm, "skip_until_et": _hhmm},
+    "favorites": _Optional({"enabled": _bool, "symbols": _tickers, "others_min_expected_net_r": _num(0, 10)}),
     "trade_limits": {"enabled": _bool, "max_entries_per_session": _num(1, 20, integer=True)},
     "late_entry_cutoff": {"enabled": _bool, "no_entries_final_minutes": _num(1, 390, integer=True)},
+    "failed_level_reentry": _Optional({"enabled": _bool, "lookback_minutes": _num(1, 390, integer=True)}),
+    "time_to_target": _Optional({"enabled": _bool, "reach_multiple": _num(0, 10, lo_open=True)}),
     "loss_streak": {"reset_each_session": _bool},
     "min_opening_range": {"enabled": _bool, "etf_fraction": _num(0, 0.1), "equity_fraction": _num(0, 0.1)},
     "management": {"breakeven": {"enabled": _bool, "trigger_r": _num(0, lo_open=True),
@@ -160,19 +184,53 @@ SCHEMA: dict[str, Any] = {
                    "time_stop": {"enabled": _bool, "after_minutes": _num(1, 390, integer=True), "min_progress_r": _num(0, 10)},
                    "partial_profit": {"enabled": _bool, "trigger_r": _num(0, lo_open=True), "fraction": _num(0, 1, lo_open=True)}},
     "shadow_benchmark": {"enabled": _bool},
+    # 2.8.0 (owner, 2026-11-11): round-trip option cost as a fraction of the trade's own planned risk, per profile.
+    # enforce false = measured and logged on every approved candidate, never blocks.
+    "cost_gate": _Optional({"enabled": _bool, "max_cost_r": _by_profile(_num(0, 5, lo_open=True)),
+                            "enforce": _by_profile(_bool), "replaces_expected_net_r_gate": _bool}),
+    # Contract choice (review 2026-11-11): which expirations V2 buys. Absent or enabled false = strategy.txt's
+    # min_dte/max_dte. nearest_expiry_first = use the first expiration in the range that has an eligible contract.
+    "contract_policy": _Optional({"enabled": _bool, "min_dte": _num(1, 60, integer=True), "max_dte": _num(1, 60, integer=True),
+                                  "nearest_expiry_first": _bool}),
+    # 2.8.0 (owner, 2026-11-11): the advisor's symbol vetoes (data/advisor/vetoes.json). Block-only.
+    "ai_veto": _Optional({"enabled": _bool, "enforce": _bool, "max_age_minutes": _num(1, 1440, integer=True)}),
+    # 2.9.0 (owner, 2026-11-12): trade only the stocks that are "in play" today. At scan_at_et the opening
+    # opening_minutes of volume of every symbol in universe_file is compared with its own average for the same
+    # minutes over lookback_sessions; the max_symbols highest at or above min_relative_volume are traded.
+    "in_play": _Optional({"enabled": _bool, "universe_file": _string, "scan_at_et": _hhmm,
+                          "opening_minutes": _num(1, 60, integer=True), "lookback_sessions": _num(5, 60, integer=True),
+                          "min_relative_volume": _num(0, lo_open=True), "max_symbols": _num(1, 20, integer=True),
+                          "min_price": _num(0)}),
+    # 2.9.0 (owner, 2026-11-12): a stop at least min_stop_fraction of the price away, and a target at least
+    # min_target_multiple stops away, so the option's round-trip cost is a smaller share of the risk.
+    "stop_policy": _Optional({"enabled": _bool, "min_stop_fraction": _num(0, 0.1), "min_target_multiple": _num(0, 10)}),
 }
+
+
+def stop_and_target(cfg: dict[str, Any], price: float, stop_distance: float, target_distance: float) -> tuple[float, float]:
+    """The stop and target distances after stop_policy (unchanged when it is absent or off)."""
+    policy = cfg.get("stop_policy") or {}
+    if not policy.get("enabled"):
+        return stop_distance, target_distance
+    stop = max(stop_distance, float(policy["min_stop_fraction"]) * price)
+    return stop, max(target_distance, float(policy["min_target_multiple"]) * stop)
 
 
 def _validate(data: Any, schema: dict[str, Any], where: str) -> None:
     if not isinstance(data, dict):
         raise V2ConfigError(f"{where or 'config'} must be an object")
-    unknown, missing = set(data) - set(schema), set(schema) - set(data)
+    unknown = set(data) - set(schema)
+    missing = {key for key in set(schema) - set(data) if not isinstance(schema[key], _Optional)}
     if unknown:
         raise V2ConfigError(f"Unknown {where or 'config'} keys: {', '.join(sorted(unknown))}")
     if missing:
         raise V2ConfigError(f"Missing {where or 'config'} keys: {', '.join(sorted(missing))}")
     for key, rule in schema.items():
         path = f"{where}.{key}" if where else key
+        if isinstance(rule, _Optional):
+            if key not in data:
+                continue
+            rule = rule.rule
         if isinstance(rule, dict):
             _validate(data[key], rule, path)
         else:
@@ -262,19 +320,46 @@ def load_v2_config(root: Path, path: str | Path = CONFIG_FILE) -> V2Config:
                             f"but {base_info['filename']} is {base.version} {base.sha256[:12]}")
     if data["correlation"]["min_observations"] > data["correlation"]["lookback_sessions"]:
         raise V2ConfigError("correlation.min_observations cannot exceed lookback_sessions")
+    policy = data.get("contract_policy") or {}
+    if policy and policy["min_dte"] > policy["max_dte"]:
+        raise V2ConfigError("contract_policy.min_dte cannot exceed max_dte")
+    in_play = data.get("in_play") or {}
+    if in_play.get("enabled"):
+        universe = in_play_universe(root, data)
+        if not universe:
+            raise V2ConfigError(f"in_play universe {in_play['universe_file']} is empty")
     fomc = data["events"]["economic"]["FOMC_RATE_DECISION"]
     if time.fromisoformat(fomc["block_entries_from_et"]) >= time.fromisoformat(fomc["block_entries_until_et"]):
         raise V2ConfigError("FOMC block window must start before it ends")
     sector_map = _load_json(root / data["sector_map_file"])
     validate_sector_map(sector_map, data["context"]["sector_etfs"])
+    if in_play.get("enabled"):
+        unmapped = [s for s in in_play_universe(root, data) if s not in sector_map["symbols"]]
+        if unmapped:
+            raise V2ConfigError("in_play universe symbols missing from the sector map: " + ", ".join(unmapped))
     calendar = _load_json(root / data["economic_calendar_file"])
     validate_calendar(calendar)
     combined = {"config": data, "sector_map": sector_map, "calendar": calendar}
     return V2Config(data, _canonical_hash(combined), file, base, sector_map, calendar)
 
 
-def write_v2_manifest(root: Path, config: V2Config, *, approved_by: str, note: str) -> Path:
-    path = root / MANIFEST_FILE
+def in_play_universe(root: Path, data: dict[str, Any]) -> list[str]:
+    """The in_play scan list (tickers only, de-duplicated, order kept)."""
+    listed = _load_json(root / data["in_play"]["universe_file"])
+    symbols = listed.get("symbols") if isinstance(listed, dict) else None
+    if not isinstance(symbols, list):
+        raise V2ConfigError(f"{data['in_play']['universe_file']} needs a 'symbols' list")
+    _tickers(symbols, "in_play.universe")
+    return list(dict.fromkeys(symbols))
+
+
+def side_manifest_path(config_path: Path) -> Path:
+    """A version run beside the active one (2.9.0 from 2026-11-12) keeps its own manifest next to its config file."""
+    return config_path.with_name("manifest_" + config_path.name)   # not matched by the professional_v2_*.json listing
+
+
+def write_v2_manifest(root: Path, config: V2Config, *, approved_by: str, note: str, path: Path | None = None) -> Path:
+    path = path or root / MANIFEST_FILE
     payload = {"strategy_id": config.strategy_id, "version": config.version, "status": "research_test", "mode": "PAPER",
                "live_enabled": False, "configuration_hash": config.sha256,
                "base_strategy_hash": config.base.sha256, "base_strategy_version": config.base.version,
@@ -285,8 +370,8 @@ def write_v2_manifest(root: Path, config: V2Config, *, approved_by: str, note: s
     return path
 
 
-def verify_v2_manifest(root: Path, config: V2Config) -> dict[str, Any]:
-    path = root / MANIFEST_FILE
+def verify_v2_manifest(root: Path, config: V2Config, path: Path | None = None) -> dict[str, Any]:
+    path = path or root / MANIFEST_FILE
     try:
         manifest = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:

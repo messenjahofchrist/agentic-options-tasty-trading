@@ -198,6 +198,28 @@ class RegimeTests(unittest.TestCase):
         self.assertEqual(classify(snapshot(), self.r).allowed, ("CALL",))
         self.assertEqual(classify(snapshot(spy=1, qqq=-1, iwm=1), self.r).allowed, ())
 
+    def test_high_volatility_allows_the_side_most_of_the_market_leans(self):
+        def volatile(spy, qqq, iwm, sectors_down, spy_change):
+            snap = snapshot(spy=spy, qqq=qqq, iwm=iwm, vix=31)
+            snap["broad"]["SPY"]["change_from_prior_close"] = spy_change
+            snap["sectors"] = {f"S{i}": {"bias": -1 if i < sectors_down else 1} for i in range(11)}
+            return snap
+        lean = json.loads(json.dumps(self.r))
+        lean["high_volatility_lean"] = {"enabled": True, "min_index_bias": 1, "min_indexes": 2, "min_sectors": 6,
+                                        "require_spy_vs_prior_close": True}
+        self.assertEqual(classify(volatile(-2, -1, 1, 8, -0.01), self.r).allowed, ())          # active config: nothing
+        off = json.loads(json.dumps(lean)); off["high_volatility_lean"]["enabled"] = False
+        self.assertEqual(classify(volatile(-2, -1, 1, 8, -0.01), off).allowed, ())             # switch off: nothing
+        self.r = lean
+        result = classify(volatile(-2, -1, 1, 8, -0.01), self.r)                               # 2 of 3 down, 8 sectors
+        self.assertEqual((result.regime, result.allowed), ("HIGH_VOLATILITY", ("PUT",)))
+        self.assertTrue(any("PUT allowed" in n for n in result.notes))
+        self.assertEqual(classify(volatile(-2, 0, 1, 8, -0.01), self.r).allowed, ())           # only 1 index down
+        self.assertEqual(classify(volatile(-2, -1, 1, 5, -0.01), self.r).allowed, ())          # only 5 sectors down
+        self.assertEqual(classify(volatile(-2, -1, 1, 8, 0.004), self.r).allowed, ())          # SPY above yesterday
+        self.assertEqual(classify(volatile(2, 1, -1, 2, 0.01), self.r).allowed, ("CALL",))     # mirror image
+        self.assertEqual(classify(volatile(-2, -1, 1, 8, None), self.r).allowed, ())           # prior close unknown
+
 
 class SectorTests(unittest.TestCase):
     def setUp(self):
@@ -266,6 +288,19 @@ class ConfirmationTests(unittest.TestCase):
         t = BreakoutTracker(self.c, 15)
         r = self.feed(t, [101.02] + [101.03] * 16, lows=[101.0] + [101.0] * 16)
         self.assertEqual(r["state"], "EXPIRED")
+
+    def test_failed_breakouts_are_remembered_for_the_session(self):
+        t = BreakoutTracker(self.c, 15)
+        r = self.feed(t, [101.02, 100.8])                       # rejected on the first bar back inside
+        self.assertEqual([f["state"] for f in r["failures"]], ["REJECTED_BREAKOUT"])
+        start = OPEN + timedelta(minutes=5)
+        for i, close in enumerate([101.02, 101.08, 101.1, 100.7]):
+            r = t.update(bar(start + timedelta(minutes=i), close, low=close - 0.02, high=close + 0.02),
+                         _Sig("CALL") if i == 0 else None, metrics())
+        self.assertEqual(r["state"], "FAILED_BREAKOUT")
+        self.assertEqual([f["state"] for f in r["failures"]], ["REJECTED_BREAKOUT", "FAILED_BREAKOUT"])
+        self.assertEqual(r["failures"][0]["side"], "CALL")
+        self.assertEqual(r["failures"][1]["at"], (start + timedelta(minutes=3)).isoformat())
 
     def test_out_of_order_bar_refused(self):
         t = BreakoutTracker(self.c, 15)
@@ -705,6 +740,20 @@ class PipelineTests(unittest.TestCase):
                          "APPROVED")
         self.assertEqual(self.calls, 1)          # rejected candidates never requested an option chain
 
+    def test_symbols_off_the_favorites_list_need_a_higher_expected_net_r(self):
+        data = json.loads(json.dumps(self.c.data))
+        self.assertEqual(pipeline.evaluate_candidate(self.inputs(v2=data)).outcome, "APPROVED")   # no favorites section
+        data["favorites"] = {"enabled": True, "symbols": ["SPY"], "others_min_expected_net_r": 0.0}
+        self.assertEqual(pipeline.evaluate_candidate(self.inputs(v2=data)).outcome, "APPROVED")
+        data["favorites"]["others_min_expected_net_r"] = 9.0
+        other = pipeline.evaluate_candidate(self.inputs(v2=data))
+        self.assertEqual(other.outcome, "REJECTED")
+        self.assertIn("not a favorite", other.reasons[0])
+        data["favorites"]["symbols"] = ["SPY", "NVDA"]                                          # a favorite: normal minimum
+        self.assertEqual(pipeline.evaluate_candidate(self.inputs(v2=data)).outcome, "APPROVED")
+        data["favorites"].update(enabled=False, symbols=["SPY"])
+        self.assertEqual(pipeline.evaluate_candidate(self.inputs(v2=data)).outcome, "APPROVED")
+
     def test_late_entry_cutoff_stops_entries_near_the_close(self):
         data = json.loads(json.dumps(self.c.data)); data["late_entry_cutoff"].update(enabled=True, no_entries_final_minutes=30)
         et = lambda hh, mm, ss=0: datetime(2026, 10, 26, hh, mm, ss, tzinfo=ZoneInfo("America/New_York"))
@@ -720,6 +769,40 @@ class PipelineTests(unittest.TestCase):
         data["late_entry_cutoff"]["enabled"] = False
         self.assertEqual(run(session_close=et(11, 0)).outcome, "APPROVED")
         self.assertEqual(self.calls, 3)          # rejected candidates never requested an option chain
+
+    def test_failed_level_reentry_skips_a_breakout_that_just_failed(self):
+        data = json.loads(json.dumps(self.c.data))
+        data["failed_level_reentry"] = {"enabled": True, "lookback_minutes": 60}
+        trigger = datetime.fromisoformat(self.tracker["setup"]["trigger_time"])
+        def with_failure(minutes_before, side="CALL"):
+            at = (trigger - timedelta(minutes=minutes_before)).isoformat()
+            return {**self.tracker, "failures": [{"side": side, "level": 101.0, "at": at, "state": "FAILED_BREAKOUT"}]}
+        blocked = pipeline.evaluate_candidate(self.inputs(v2=data, tracker=with_failure(20)))
+        self.assertEqual(blocked.outcome, "REJECTED")
+        self.assertIn("failed_level_reentry", blocked.reasons[0])
+        self.assertEqual(pipeline.evaluate_candidate(self.inputs(v2=data, tracker=with_failure(90))).outcome, "APPROVED")
+        self.assertEqual(pipeline.evaluate_candidate(self.inputs(v2=data, tracker=with_failure(20, "PUT"))).outcome, "APPROVED")
+        later = {**self.tracker, "failures": [{"side": "CALL", "level": 101.0, "at": self.now.isoformat(),
+                                               "state": "FAILED_BREAKOUT"}]}   # after this setup's breakout bar
+        self.assertEqual(pipeline.evaluate_candidate(self.inputs(v2=data, tracker=later)).outcome, "APPROVED")
+        data["failed_level_reentry"]["enabled"] = False
+        self.assertEqual(pipeline.evaluate_candidate(self.inputs(v2=data, tracker=with_failure(20))).outcome, "APPROVED")
+
+    def test_time_to_target_needs_enough_session_left(self):
+        data = json.loads(json.dumps(self.c.data))
+        data["time_to_target"] = {"enabled": True, "reach_multiple": 1.0}
+        data["late_entry_cutoff"]["enabled"] = False
+        et = lambda hh, mm, ss=0: datetime(2026, 10, 26, hh, mm, ss, tzinfo=ZoneInfo("America/New_York"))
+        now = et(10, 30, 30)
+        run = lambda **kw: pipeline.evaluate_candidate(self.inputs(v2=data, now=now, clock=lambda: now, **kw))
+        # target 0.8, ATR 0.1: reachable = 0.1 x sqrt(minutes left), so 64 minutes are needed
+        self.assertEqual(run(session_close=et(11, 40)).outcome, "APPROVED")      # 69.5 minutes left
+        short = run(session_close=et(11, 30))                                    # 59.5 minutes left
+        self.assertEqual(short.outcome, "REJECTED")
+        self.assertIn("time_to_target", short.reasons[0])
+        self.assertEqual(run(core_metrics={**self.core, "atr": None}).outcome, "INSUFFICIENT_DATA")
+        data["time_to_target"]["reach_multiple"] = 2.0                           # 16 minutes needed
+        self.assertEqual(run(session_close=et(11, 30)).outcome, "APPROVED")
 
     def test_min_opening_range_skips_narrow_ranges_by_instrument_type(self):
         data = json.loads(json.dumps(self.c.data)); data["min_opening_range"].update(enabled=True, etf_fraction=0.003,

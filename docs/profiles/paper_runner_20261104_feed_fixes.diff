@@ -1,0 +1,166 @@
+--- a/trader/paper_runner.py
++++ b/trader/paper_runner.py
+@@ -38,4 +38,15 @@
+ GAP_RECOVERY_ATTEMPTS = 3
+ GAP_RECOVERY_RETRY_SECONDS = 5.0
++# A traded symbol's history may lack a minute in which it did not trade (DXLink publishes no candle for it). Runs of
++# up to this many missing minutes are filled with flat zero-volume bars at the previous close instead of disabling
++# the symbol (2026-11-04: 53 of the 72 symbol disables on the $1K ledger since 10/26 were one missing minute, and
++# one forced a held position out). The opening minute itself is never invented; longer runs still fail as before.
++MAX_FILLED_GAP_MINUTES = 3
++# tastytrade caps concurrent DXLink sessions per user ("The number of user sessions has exceeded the configured
++# limit", eight engine failures on 2026-11-02). History fetches now wait for one of these slots, and that rejection
++# is retried after a longer pause instead of failing the symbol (and the session) on the third quick attempt.
++HISTORY_FETCH_CONCURRENCY = 4
++SESSION_LIMIT_RETRY_SECONDS = 20.0
++SESSION_LIMIT_ATTEMPTS = 6
+ # V2 sessions retry a failed startup history request (validation unchanged); the original engine does not.
+ BOOTSTRAP_ATTEMPTS = 3
+@@ -145,10 +156,17 @@
+ def _validated_session_history(rows: list[dict], *, session_open: datetime,
+                                last_completed_bar: datetime, audit: dict | None = None,
+-                               allow_missing_minutes: bool = False) -> list[Bar]:
++                               allow_missing_minutes: bool = False, fill_missing_up_to: int = 0,
++                               previous_close: float | None = None) -> list[Bar]:
+     """Convert and validate a complete, contiguous session history for a late PAPER start.
+ 
+     allow_missing_minutes is used only for V2 market-context symbols that are never traded (thin sector ETFs can
+     have minutes with no trades, which DXLink reports as no candle). Missing minutes are then counted in the audit
+-    instead of refused; nothing is filled in, and every other check (order, conflicts, OHLCV bounds) still applies."""
++    instead of refused; nothing is filled in, and every other check (order, conflicts, OHLCV bounds) still applies.
++
++    fill_missing_up_to (traded symbols, 2026-11-04): a run of at most this many consecutive missing minutes is
++    filled with flat zero-volume bars at the close before it, which is what a minute without a trade looks like.
++    previous_close is the close before the first expected minute (the last bar a live-feed gap follows). The filled
++    minutes are listed in the audit. A longer run, or a run with no earlier close (the session's opening minute),
++    is refused exactly as before."""
+     if session_open.tzinfo is None or last_completed_bar.tzinfo is None:
+         raise ValueError("Historical session bounds must be timezone-aware")
+@@ -196,11 +214,32 @@
+ 
+     missing = [stamp for stamp in expected if stamp not in parsed]
++    received = len(parsed)
++    filled: list[datetime] = []
++    if missing and not allow_missing_minutes and fill_missing_up_to > 0:
++        runs: list[list[datetime]] = []
++        for stamp in missing:
++            if runs and stamp - runs[-1][-1] == timedelta(minutes=1):
++                runs[-1].append(stamp)
++            else:
++                runs.append([stamp])
++        def close_before(run: list[datetime]) -> float | None:
++            before = parsed.get(run[0] - timedelta(minutes=1))
++            return before.close if before is not None else previous_close if run[0] == expected[0] else None
++        if all(len(run) <= fill_missing_up_to and close_before(run) is not None for run in runs):
++            for run in runs:
++                close = close_before(run)
++                for stamp in run:
++                    parsed[stamp] = Bar(stamp, close, close, close, close, 0.0)
++                    filled.append(stamp)
++            missing = []
+     if audit is not None:
+-        audit.update({"expected_candle_count": len(expected), "received_candle_count": len(parsed),
++        audit.update({"expected_candle_count": len(expected), "received_candle_count": received,
+                       "missing_candle_count": len(missing),
+                       "first_missing_timestamp_utc": missing[0].isoformat() if missing else None,
+                       "duplicate_candle_count": int(audit.get("duplicate_candle_count", 0)) + duplicates,
+                       "out_of_order_count": int(audit.get("out_of_order_count", 0)) + out_of_order,
+-                      "missing_timestamps_utc": [stamp.isoformat() for stamp in missing]})
++                      "missing_timestamps_utc": [stamp.isoformat() for stamp in missing],
++                      "filled_candle_count": len(filled),
++                      "filled_timestamps_utc": [stamp.isoformat() for stamp in filled]})
+     if missing and not allow_missing_minutes:
+         raise RuntimeError(
+@@ -252,4 +291,16 @@
+     return (left.timestamp == right.timestamp and left.open == right.open and left.high == right.high and
+             left.low == right.low and left.close == right.close and left.volume == right.volume)
++
++
++def _is_session_limit(exc: BaseException) -> bool:
++    """True when DXLink refused a new connection because the account's concurrent-session limit is reached."""
++    seen: set[int] = set()
++    current: BaseException | None = exc
++    while current is not None and id(current) not in seen:
++        if "number of user sessions" in str(current).lower():
++            return True
++        seen.add(id(current))
++        current = current.__cause__
++    return False
+ 
+ 
+@@ -526,4 +577,5 @@
+         cfg.historical_data_provider, dxlink_url=token_data["dxlink-url"], quote_token=token_data["token"],
+         massive_api_key=cfg.massive_api_key)
++    history_gate = asyncio.Semaphore(HISTORY_FETCH_CONCURRENCY)   # at most this many history connections at once
+     v2s = None
+     context_symbols: tuple[str, ...] = ()
+@@ -625,6 +677,7 @@
+             for attempt in range(1, attempts + 1):
+                 try:
+-                    history_batch = await history_provider.fetch(
+-                        symbol=symbol, start=session_open.astimezone(timezone.utc), end=last_completed_bar)
++                    async with history_gate:
++                        history_batch = await history_provider.fetch(
++                            symbol=symbol, start=session_open.astimezone(timezone.utc), end=last_completed_bar)
+                     break
+                 except Exception as exc:
+@@ -645,5 +698,6 @@
+             state.bars = _validated_session_history(list(history_batch.candles), session_open=session_open,
+                                                     last_completed_bar=last_completed_bar, audit=history_audit,
+-                                                    allow_missing_minutes=context_only)
++                                                    allow_missing_minutes=context_only,
++                                                    # PAPER only: LIVE keeps refusing incomplete history.
++                                                    fill_missing_up_to=0 if context_only or live is not None else MAX_FILLED_GAP_MINUTES)
+             if state.bars:
+                 _write_recovery_checkpoint(cfg.data_dir, symbol=symbol,
+@@ -793,4 +847,10 @@
+                 report["duplicate_candle_count"] = int(report.get("duplicate_candle_count", 0)) + 1
+                 return
++            if (matching is not None and matching.volume == 0 and
++                    matching.open == matching.high == matching.low == matching.close):
++                # The real candle for a minute we filled as "no trade" arrived late: it replaces the placeholder.
++                bars[bars.index(matching)] = bar
++                report["late_candle_replaced_fill_count"] = int(report.get("late_candle_replaced_fill_count", 0)) + 1
++                return
+             state.data_valid = False
+             report.update({"historical_to_live_transition_status": "FAILED", "final_readiness": "BLOCKED",
+@@ -818,19 +878,31 @@
+                 # result back to [gap_start, gap_end], so the extra trailing minute is dropped.
+                 # The provider often publishes a just-missed minute a few seconds later, so retry briefly.
+-                for attempt in range(1, GAP_RECOVERY_ATTEMPTS + 1):
++                attempt = 0
++                while True:
++                    attempt += 1
+                     try:
+                         gap_audit = {"gap_recovery_attempts": attempt}
+-                        recovered_batch = await history_provider.fetch(symbol=symbol, start=gap_start, end=bar.timestamp)
++                        async with history_gate:
++                            recovered_batch = await history_provider.fetch(symbol=symbol, start=gap_start, end=bar.timestamp)
+                         gap_audit.update(recovered_batch.audit)
+                         recovered = _validated_session_history(list(recovered_batch.candles), session_open=gap_start,
+                                                                last_completed_bar=gap_end, audit=gap_audit,
+-                                                               allow_missing_minutes=context_only)
++                                                               allow_missing_minutes=context_only,
++                                                               # The provider often publishes a late minute within
++                                                               # seconds, so fill only once the retries are used up.
++                                                               fill_missing_up_to=(MAX_FILLED_GAP_MINUTES if not context_only and live is None
++                                                                                   and attempt >= GAP_RECOVERY_ATTEMPTS else 0),
++                                                               previous_close=bars[-1].close if bars else None)
+                         break
+-                    except Exception:
+-                        if attempt == GAP_RECOVERY_ATTEMPTS:
++                    except Exception as exc:
++                        session_limit = _is_session_limit(exc)
++                        attempts = SESSION_LIMIT_ATTEMPTS if session_limit else GAP_RECOVERY_ATTEMPTS
++                        if attempt >= attempts:
+                             raise
+-                        logger.warning("%s: live-feed gap recovery attempt %d/%d failed; retrying",
+-                                       symbol, attempt, GAP_RECOVERY_ATTEMPTS)
+-                        await asyncio.sleep(GAP_RECOVERY_RETRY_SECONDS * attempt)
++                        wait = (SESSION_LIMIT_RETRY_SECONDS if session_limit else GAP_RECOVERY_RETRY_SECONDS) * attempt
++                        logger.warning("%s: live-feed gap recovery attempt %d/%d failed (%s); retrying in %.0fs",
++                                       symbol, attempt, attempts,
++                                       "DXLink session limit" if session_limit else type(exc).__name__, wait)
++                        await asyncio.sleep(wait)
+                 bars.extend(recovered)
+                 if recovered:

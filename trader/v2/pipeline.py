@@ -5,7 +5,9 @@ reason and the inputs that decided it):
    1 technical_signal       the core strategy signal qualified at the breakout bar, and on this bar the core's own
                             trend (EMA 9/21), ATR and volatility-spike conditions still hold; with daily_trend enabled
                             the price must also be on the trade's side of its N-session average daily close;
-                            entry_filters / late_entry_cutoff reject excluded symbols and times
+                            entry_filters / late_entry_cutoff reject excluded symbols and times;
+                            failed_level_reentry rejects a breakout whose same-side breakout already failed recently;
+                            time_to_target rejects an entry with too little session left to reach its target
    2 breakout_confirmation  confirmation.py state (WAIT until actionable)
    3 market_regime          regime.py; the trade's direction must be allowed in the current regime
    4 sector_confirmation    sectors.py
@@ -24,6 +26,8 @@ Expensive stages (8+) run only when 1-7 pass, so a candidate that is waiting or 
 """
 from __future__ import annotations
 
+import dataclasses
+import math
 from dataclasses import dataclass, field
 from datetime import datetime, time, timedelta, timezone
 from typing import Any, Callable
@@ -35,16 +39,46 @@ from ..option_selector import evaluate_options
 from ..risk_engine import RiskState, assess_entry
 from ..strategy_loader import Strategy
 from . import indicators, portfolio as portfolio_mod
+from .config import stop_and_target
 from .correlation import CorrelationModel
 from .events import EventEngine
-from .options import evaluate_option
+from .options import evaluate_option, within_friction
 from .regime import RegimeResult
 from .sectors import SectorMap, sector_confirmation
 from .sizing import size_long_option
+from .vetoes import active_veto
 
 ET = ZoneInfo("America/New_York")
 STAGES = ("technical_signal", "breakout_confirmation", "market_regime", "sector_confirmation", "volume_confirmation",
           "events", "portfolio_correlation", "option_pricing", "implied_volatility", "liquidity", "position_sizing", "final")
+
+
+def contract_range(cfg: dict[str, Any], strategy: Strategy) -> tuple[int, int, bool]:
+    """(min_dte, max_dte, nearest_expiry_first) for the contracts V2 buys: contract_policy when enabled, else
+    strategy.txt's own range (today's behaviour)."""
+    policy = cfg.get("contract_policy") or {}
+    if policy.get("enabled"):
+        return int(policy["min_dte"]), int(policy["max_dte"]), bool(policy["nearest_expiry_first"])
+    return int(strategy.rules["min_dte"]), int(strategy.rules["max_dte"]), False
+
+
+def select_contract(chain: list[OptionQuote], side: str, now: datetime, strategy: Strategy, cfg: dict[str, Any], *,
+                    budget: float, costs: float):
+    """The original contract rules (option_selector.evaluate_options), within contract_policy's expirations. With
+    nearest_expiry_first, expirations are tried nearest first and the first that yields an eligible contract wins."""
+    min_dte, max_dte, nearest = contract_range(cfg, strategy)
+    if (min_dte, max_dte) != (int(strategy.rules["min_dte"]), int(strategy.rules["max_dte"])):
+        strategy = dataclasses.replace(strategy, rules={**strategy.rules, "min_dte": min_dte, "max_dte": max_dte})
+    if not nearest:
+        return evaluate_options(chain, side, now, strategy, max_risk_dollars_per_contract=budget, costs_per_contract=costs)
+    audit: list[dict] = []
+    for expiration in sorted({q.expiration for q in chain}):
+        selected, rows = evaluate_options([q for q in chain if q.expiration == expiration], side, now, strategy,
+                                          max_risk_dollars_per_contract=budget, costs_per_contract=costs)
+        audit += rows
+        if selected is not None:
+            return selected, audit
+    return None, audit
 
 
 def greek_projection(option: OptionQuote, *, price: float, target: float, stop: float, quantity: int,
@@ -100,6 +134,7 @@ class CandidateInputs:
     core_signal_now: bool = True           # the core signal qualified on THIS bar (required when confirmation is off)
     daily_closes: list[float] | None = None  # completed prior sessions' closes, oldest first (daily_trend stage-1 check)
     session_close: datetime | None = None    # today's actual close (early closes); None = 16:00 ET (late_entry_cutoff)
+    vetoes: dict[str, Any] | None = None     # the advisor's veto file (ai_veto); None = no advisor / replay
 
 
 @dataclass
@@ -167,6 +202,18 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
             report.set("technical_signal", "REJECT", f"no new entries {filters['skip_from_et']}-{filters['skip_until_et']} ET "
                        "(entry_filters)", decision_time_et=local.isoformat(timespec="minutes"))
             return _finish(report)
+    veto_cfg = cfg.get("ai_veto") or {}
+    veto_hit = None
+    if veto_cfg.get("enabled") and side:
+        # 2.8.0 (owner, 2026-11-11): the advisor may block a symbol (company news, a pending ruling, a halt). It can
+        # never add a trade or change its size. With enforce false the veto is only recorded on the candidate.
+        veto_hit = active_veto(inp.vetoes, inp.symbol, side, inp.now, int(veto_cfg["max_age_minutes"]))
+        if veto_hit and veto_cfg["enforce"]:
+            report.set("technical_signal", "REJECT", f"advisor veto on {inp.symbol}"
+                       f"{' ' + veto_hit['side'] if veto_hit['side'] else ''} until "
+                       f"{datetime.fromisoformat(veto_hit['until_utc']).astimezone(ET).strftime('%H:%M')} ET: "
+                       f"{veto_hit['reason'][:160]} (ai_veto)", ai_veto=veto_hit)
+            return _finish(report)
     late = cfg.get("late_entry_cutoff") or {}
     if late.get("enabled"):
         close = inp.session_close or datetime.combine(inp.now.astimezone(ET).date(), time(16, 0), ET)
@@ -175,6 +222,40 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
             report.set("technical_signal", "REJECT", f"no new entries in the last {late['no_entries_final_minutes']} "
                        "minutes before the close (late_entry_cutoff)",
                        cutoff_et=cutoff.astimezone(ET).isoformat(timespec="minutes"))
+            return _finish(report)
+    reentry = cfg.get("failed_level_reentry") or {}
+    if reentry.get("enabled") and side:
+        # 2.7.0 (owner, 2026-11-10): after a breakout closes back inside the opening range, the same-side breakout of
+        # the same range is not traded again for lookback_minutes (IWM 11/10: failed at 14:11 and 14:55 ET, bought at
+        # 14:52 and 15:29). Only failures before this setup's breakout bar count.
+        window_start = inp.now - timedelta(minutes=int(reentry["lookback_minutes"]))
+        trigger = setup.get("trigger_time")
+        trigger_at = datetime.fromisoformat(trigger) if trigger else inp.now
+        recent = [f for f in (inp.tracker.get("failures") or []) if f.get("side") == side
+                  and window_start <= datetime.fromisoformat(f["at"]) < trigger_at]
+        if recent:
+            last = recent[-1]
+            report.set("technical_signal", "REJECT", f"the same {side} breakout failed at "
+                       f"{datetime.fromisoformat(last['at']).astimezone(ET).strftime('%H:%M')} ET, within "
+                       f"{reentry['lookback_minutes']} minutes (failed_level_reentry)",
+                       recent_failures=recent, lookback_minutes=int(reentry["lookback_minutes"]))
+            return _finish(report)
+    reach = cfg.get("time_to_target") or {}
+    if reach.get("enabled"):
+        # 2.7.0 (owner, 2026-11-10): the target must be within reach before the close. Reach = reach_multiple x
+        # one-minute ATR x sqrt(minutes left), a random-walk estimate of how far price can travel in the time left.
+        close = inp.session_close or datetime.combine(inp.now.astimezone(ET).date(), time(16, 0), ET)
+        minutes_left = max(0.0, (close - inp.now).total_seconds() / 60)
+        atr_now, target_d = metrics.get("atr"), setup.get("target_distance")
+        if atr_now is None or target_d is None:
+            report.set("technical_signal", "INSUFFICIENT_DATA", "ATR or target distance unknown (time_to_target)")
+            return _finish(report)
+        reachable = float(reach["reach_multiple"]) * float(atr_now) * math.sqrt(minutes_left)
+        if float(target_d) > reachable:
+            report.set("technical_signal", "REJECT", f"target {float(target_d):.2f} away but only about {reachable:.2f} "
+                       f"is reachable in the {minutes_left:.0f} minutes left (time_to_target)",
+                       minutes_left=round(minutes_left, 1), target_distance=float(target_d), atr=float(atr_now),
+                       reachable=round(reachable, 4), reach_multiple=float(reach["reach_multiple"]))
             return _finish(report)
     width = cfg.get("min_opening_range") or {}
     if width.get("enabled"):
@@ -195,6 +276,8 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
     spike_ok = spike is not None and spike <= float(rules["max_atr_expansion"])
     tech = {"breakout_bar_utc": setup.get("trigger_time"), "ema_fast": fast, "ema_slow": slow, "atr": atr,
             "atr_fraction": atr / price if atr and price else None, "atr_expansion": spike}
+    if veto_hit:
+        tech["ai_veto_not_enforced"] = veto_hit
     daily = cfg.get("daily_trend") or {}
     daily_ok = True
     if daily.get("enabled"):
@@ -299,7 +382,8 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
         return _finish(report)
 
     # 8-10 option selection, pricing, volatility, liquidity ------------------------------------------
-    stop_distance, target_distance = float(setup["stop_distance"]), float(setup["target_distance"])
+    # 2.9.0: stop_policy may widen the strategy's stop and target (unchanged when absent, as in 2.8.0).
+    stop_distance, target_distance = stop_and_target(cfg, price, float(setup["stop_distance"]), float(setup["target_distance"]))
     direction = 1 if side == "CALL" else -1
     stop, target = price - direction * stop_distance, price + direction * target_distance
     try:
@@ -311,10 +395,16 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
     round_trip_fees = FeeSchedule(commission_per_contract=float(strategy.execution["commission_per_contract"]),
                                   exchange_fee_per_contract=float(strategy.execution["exchange_fee_per_contract"])).estimate(1, legs=2)
     costs = 2 * slippage_each + round_trip_fees
-    selected, audit = evaluate_options(chain, side, inp.now, strategy, max_risk_dollars_per_contract=contract_budget,
-                                       costs_per_contract=costs)
+    friction_cap = strategy.rules.get("max_friction_fraction")   # account-profile rule; strategy.txt has no such key
+    friction_skipped = 0
+    if friction_cap is not None:
+        eligible_chain = within_friction(chain, float(friction_cap), costs)
+        friction_skipped = len(chain) - len(eligible_chain)
+        chain = eligible_chain
+    selected, audit = select_contract(chain, side, inp.now, strategy, cfg, budget=contract_budget, costs=costs)
     if selected is None:
-        rejections = sorted({r for row in audit for r in row["rejection_reasons"]}) or ["no_option_contracts_returned"]
+        rejections = sorted({r for row in audit for r in row["rejection_reasons"]} |
+                            ({"friction_above_maximum"} if friction_skipped else set())) or ["no_option_contracts_returned"]
         report.set("option_pricing", "REJECT", "original contract rules found no eligible contract within budget: "
                    + ",".join(rejections), contracts_evaluated=len(audit), contract_budget=round(contract_budget, 2))
         return _finish(report)
@@ -353,10 +443,38 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
     gate = greek_projection(option, price=price, target=target, stop=stop, quantity=risk.quantity,
                             risk_dollars=risk.risk_dollars, strategy=strategy)
     sizing_inputs["economic_gate"] = gate
-    if not gate["accepted"]:
+    cost_cfg = cfg.get("cost_gate") or {}
+    cost_r, cost_enforced = None, False
+    if cost_cfg.get("enabled"):
+        # 2.8.0 (owner, 2026-11-11): what this contract costs to trade, as a fraction of the trade's own planned risk
+        # (trader/cost_model.py). No symbol is banned; a trade is skipped only when its own cost is too large for its
+        # own stop. Where enforce is false for the profile the figure is logged and nothing is blocked.
+        cost_dollars = (option.ask - option.bid) * 100 + round_trip_fees + 2 * slippage_each
+        r_dollars = abs(option.delta) * stop_distance * 100
+        cost_r = cost_dollars / r_dollars if r_dollars > 0 else None
+        limit = float(cost_cfg["max_cost_r"][inp.profile_name])
+        cost_enforced = bool(cost_cfg["enforce"][inp.profile_name])
+        over = cost_r is None or cost_r > limit
+        sizing_inputs["cost_gate"] = {"cost_r": round(cost_r, 4) if cost_r is not None else None, "max_cost_r": limit,
+                                      "round_trip_cost_dollars": round(cost_dollars, 2),
+                                      "one_r_dollars": round(r_dollars, 2), "over_limit": over, "enforced": cost_enforced}
+        if over and cost_enforced:
+            report.set("position_sizing", "REJECT", f"round-trip option cost {cost_r if cost_r is not None else float('nan'):.2f}R "
+                       f"above the {limit}R limit (cost_gate)", **sizing_inputs)
+            return _finish(report)
+    if not gate["accepted"] and not (cost_enforced and cost_cfg.get("replaces_expected_net_r_gate")):
         report.set("position_sizing", "REJECT", f"expected net R {gate['expected_net_r']:.2f} below the strategy minimum "
                    f"{strategy.execution['min_expected_net_r']}", **sizing_inputs)
         return _finish(report)
+    favorites = cfg.get("favorites") or {}
+    if favorites.get("enabled") and inp.symbol not in favorites["symbols"]:
+        # Favorites are looked at first: same-minute candidates are ranked by expected net R, so another symbol only
+        # takes a slot from a favorite by scoring higher, and on its own it must clear this higher minimum.
+        need = float(favorites["others_min_expected_net_r"])
+        if gate["expected_net_r"] < need:
+            report.set("position_sizing", "REJECT", f"{inp.symbol} is not a favorite: expected net R "
+                       f"{gate['expected_net_r']:.2f} below the non-favorite minimum {need}", **sizing_inputs)
+            return _finish(report)
     max_loss_each = risk.risk_dollars / risk.quantity
     cash_each = option.ask * 100 + slippage_each + round_trip_fees / 2
     sizing = size_long_option(max_loss_per_contract=max_loss_each, per_trade_budget=budgets.per_trade,
@@ -382,6 +500,7 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
                     "entry_underlying": price, "modeled_risk_dollars": candidate_loss,
                     "planned_risk_dollars": risk.planned_risk_dollars,
                     "premium_exposure_dollars": option.ask * 100 * quantity, "expected_net_r": gate["expected_net_r"],
+                    "cost_r": round(cost_r, 4) if cost_r is not None else None,
                     "trend_efficiency": metrics.get("trend_efficiency"), "setup_type": state, "regime": inp.regime.regime,
                     "quality": {"regime": inp.regime.regime, "confirmation": state, "expected_net_r": gate["expected_net_r"],
                                 "trend_efficiency": metrics.get("trend_efficiency"),

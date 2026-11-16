@@ -16,6 +16,19 @@ def email_configured() -> bool:
     return all(os.getenv(name, "").strip() for name in required)
 
 
+def routine_email_enabled(category: str, root: Path | None = None) -> bool:
+    """Whether a routine (non-failure) email of this kind is sent every time: notifications.json, "routine_email".
+    A missing file or key means yes, the behaviour before the file existed. Failure and CRITICAL emails never ask."""
+    import json
+    import re
+    try:
+        text = ((root or Path.cwd()) / "notifications.json").read_text(encoding="utf-8")
+        data = json.loads(re.sub(r"^\s*//.*$", "", text, flags=re.M))
+        return bool(data["routine_email"][category])
+    except (OSError, ValueError, KeyError, TypeError):
+        return True
+
+
 def send_email(subject: str, body: str) -> None:
     if not email_configured():
         raise RuntimeError("Email is not configured; set SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, REPORT_FROM, REPORT_TO")

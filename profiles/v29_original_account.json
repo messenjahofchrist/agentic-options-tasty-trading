@@ -1,0 +1,7 @@
+{
+  "ledger_id": "original_paper_v29",
+  "mode": "PAPER",
+  "description": "V2 2.9.0 side test (owner 2026-11-12): isolated $10,000 PAPER ledger with the original $10K account rules, run beside 2.8.0.",
+  "data_dir": "data/v29/original_paper",
+  "starting_balance": 10000
+}

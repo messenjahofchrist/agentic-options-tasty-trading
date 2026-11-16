@@ -232,8 +232,12 @@ class SupervisorTests(unittest.TestCase):
 
     def test_reviewer_retries_once_then_reports_failure(self):
         with tempfile.TemporaryDirectory() as directory:
-            with patch("trader.supervisor._run_codex", side_effect=RuntimeError("offline")) as invoke:
-                report = _call_reviewer("Codex", "snapshot", Path(directory), timeout=1)
+            root = Path(directory)
+            (root / "agents.json").write_text(json.dumps({"roles": {"reviewer_2": "codex"},
+                                                          "agents": {"codex": {"command": ["codex"]}}}), encoding="utf-8")
+            import trader.agents
+            with patch.object(trader.agents, "run_agent", side_effect=trader.agents.AgentError("offline")) as invoke:
+                report = _call_reviewer("Codex", "snapshot", root, timeout=1, role="reviewer_2", root=root)
         self.assertEqual(invoke.call_count, 2)
         self.assertEqual(report["status"], "failed")
         self.assertEqual(report["attempts"], 2)

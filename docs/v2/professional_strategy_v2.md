@@ -49,13 +49,13 @@ management (trailing stop, breakeven, time stop, partials); then the original un
 
 | Item | Value |
 |---|---|
-| Correlated cluster max loss | one per-trade budget ($10K ledger: 10% of equity; $1K ledger: min(remaining 40%, $150)) |
+| Correlated cluster max loss | one per-trade budget ($10K ledger: 10% of equity; $1K ledger: min(remaining 40%, $350 since 2026-11-04)) |
 | Aggregate open max loss | $10K ledger 30% of equity (new); $1K ledger 40% (existing profile) |
 | Contracts per trade | 1 (risk-based quantity computed and logged only) |
 | Partial profit-taking | off (needs ≥ 2 contracts) |
 
 All other risk limits are the original strategy's (and, for the $1K ledger, the profile's owner-authorized 20%
-daily / 40% weekly loss limits and $150 per-trade cap).
+daily / 40% weekly loss limits, $350 per-trade cap, one open position and 4% friction gate since 2026-11-04).
 
 ## Regime rules
 
@@ -123,7 +123,21 @@ simulated ledger. Signals V2 did not take get a hypothetical underlying outcome 
   is missing). V2's stage 5 supplies a real session VWAP; the original check is left unchanged.
 * The original strategy's 3-consecutive-loss block carries across sessions (`_consecutive_losses` reads the whole
   ledger). From V2 2.3.0 (`loss_streak.reset_each_session`, owner-authorized 2026-10-28) the V2 entry path counts
-  only today's trades; the original path and the shadow benchmark are unchanged.
+  only today's trades; the original path is unchanged. Since 2026-11-04 the shadow benchmark follows this switch too,
+  because the never-resetting streak left both shadow ledgers with no trades after 2026-10-26.
 * One DXLink connection per engine: the two engines each stream their own symbols (the $10K ledger's 14 are a subset
   of the $1K ledger's 47). Slow-changing data is shared through the disk cache.
 * LIVE: V2 is refused by the shared loop with LIVE execution. A separate production-readiness audit is required.
+
+## 2.5.0 (owner-authorized 2026-11-05)
+
+One change from 2.4.0: `entry_filters.exclude_symbols` adds BAC and DIA to TLT, so the $10K ledger trades 11 of its 14 symbols. Both lost in the replay in June-August and again afterward (underlying proxy, chosen after seeing the results). The $1K ledger scans the same 11.
+
+## 2.6.0 (built 2026-11-06, NOT activated)
+
+Built at the owner's request but never switched on; 2.5.0 stays active. On 2026-11-08 the owner's $1K redesign brief made 2.5.0 the baseline and allows at most one new version, so 2.6.0 stays parked (saved in `strategies/v2_versions/`; the favorites section and the 47-symbol $1K list are not in the active files). Two changes from 2.5.0, neither replayed with option prices:
+
+* **Favorites first** (`favorites`): SPY, QQQ, IWM, NVDA, AAPL, AMZN, GOOGL, PLTR, NFLX, INTC and UBER are the favorites. `entry_filters.exclude_symbols` is empty again, so TLT, BAC and DIA (the $10K ledger) and the rest of the 47-symbol list (the $1K ledger, restored in `profiles/small_account_universe.json`) can trade too, but only with an expected net R of at least `others_min_expected_net_r` (1.5; the strategy minimum is 1.0). Same-minute candidates are still ranked by expected net R, so a non-favorite takes a slot from a favorite only by scoring higher.
+* **Volatile-day lean** (`regime.high_volatility_lean`): HIGH_VOLATILITY (R2) still allows nothing by itself, but a direction is allowed when most of the market leans that way: at least 2 of SPY/QQQ/IWM with bias <= -1 (PUT) or >= +1 (CALL), at least 6 of the 11 sector ETFs leaning the same way, and SPY below (PUT) or above (CALL) the prior close. The regime notes say which side was allowed and why.
+
+Both sections are optional in the schema, so saved versions before 2.6.0 still load unchanged.

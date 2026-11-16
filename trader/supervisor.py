@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from . import agents
 from .config import load_dotenv
 from .logging_utils import append_jsonl
 from .metrics import calculate_performance
@@ -120,10 +121,11 @@ def _decision_email_summary(decisions: list[dict[str, Any]]) -> str:
 
 
 def _review_email_summary(review: dict[str, Any]) -> str:
-    """Render Claude/Codex findings and owner follow-up as a compact plain-language email."""
+    """Render the two reviewers' findings and owner follow-up as a compact plain-language email."""
     status = "completed" if review.get("status") == "complete" else "incomplete"
-    lines = [f"Claude and Codex review: The review is {status}."]
-    for name in ("Claude", "Codex"):
+    names = list(review.get("reviewers") or {}) or ["Reviewer 1", "Reviewer 2"]
+    lines = [f"{' and '.join(names)} review: The review is {status}."]
+    for name in names:
         report = review.get("reviewers", {}).get(name, {})
         if report.get("status") == "failed":
             lines.append(f"{name}: The review did not finish. {report.get('error', 'No report was returned.')}")
@@ -143,7 +145,7 @@ def _review_email_summary(review: dict[str, Any]) -> str:
             lines.append(f"  - {item}")
     disagreements = review.get("disagreements", [])
     if disagreements:
-        lines.append("Claude and Codex did not fully agree: " + " ".join(str(item) for item in disagreements[:2]))
+        lines.append(f"{' and '.join(names)} did not fully agree: " + " ".join(str(item) for item in disagreements[:2]))
     owner_items: list[str] = []
     for report in review.get("reviewers", {}).values():
         if report.get("status") == "failed":
@@ -451,7 +453,27 @@ def _reviewer_environment() -> dict[str, str]:
     return {key: value for key, value in os.environ.items() if not secret_name.search(key)}
 
 
+REVIEWER_ROLES = ("reviewer_1", "reviewer_2")
+DEFAULT_REVIEWERS = {"Claude": "reviewer_1", "Codex": "reviewer_2"}
+
+
+def reviewer_slots(root: Path = ROOT) -> dict[str, str]:
+    """Display label -> agents.json role for the two independent reviewers (owner 2026-11-11: any agent). The label is
+    the role's first agent's "label" (or its name), so reports and emails say who actually reviewed."""
+    try:
+        config = agents.load_config(root)
+        slots: dict[str, str] = {}
+        for role in REVIEWER_ROLES:
+            first = agents.agents_for(role, config)[0]
+            label = str(config["agents"][first].get("label") or first.capitalize())
+            slots[label if label not in slots else f"{label} (2)"] = role
+        return slots
+    except agents.AgentError:
+        return dict(DEFAULT_REVIEWERS)
+
+
 def _run_claude(prompt: str, cwd: Path, timeout: int) -> str:
+    """Before agents.json (kept for reference and manual use): Claude with no tools."""
     exe = shutil.which("claude")
     if not exe:
         raise RuntimeError("Claude CLI is not installed or not on PATH")
@@ -498,7 +520,24 @@ def _parse_report(raw: str, reviewer: str) -> dict[str, Any]:
     return report
 
 
-def _call_reviewer(name: str, prompt: str, cwd: Path, timeout: int = 240) -> dict[str, Any]:
+def _call_reviewer(name: str, prompt: str, cwd: Path, timeout: int = 240, *, role: str | None = None,
+                   root: Path = ROOT) -> dict[str, Any]:
+    role = role or DEFAULT_REVIEWERS.get(name, "reviewer_2")
+    try:
+        reply = agents.ask_json(role, prompt, validate=lambda data: _parse_report(json.dumps(data), name),
+                                timeout=timeout, attempts_per_agent=2, root=root)
+        report = reply.data
+        report["attempts"], report["agent"] = reply.attempts, reply.agent
+        return report
+    except agents.AgentError as exc:
+        last_error = f"{type(exc).__name__}: {exc}"
+    return {"reviewer": name, "status": "failed", "error": last_error[:1500], "attempts": 2,
+            "overall_severity": "high", "evidence": [], "findings": [], "missing_data": ["reviewer did not return a valid report"],
+            "recommendations": ["Check CLI authentication, connectivity, and report logs."]}
+
+
+def _call_reviewer_direct(name: str, prompt: str, cwd: Path, timeout: int = 240) -> dict[str, Any]:
+    """Before agents.json: the hard-coded Claude / Codex calls (unused; kept for reference)."""
     runner = _run_claude if name == "Claude" else _run_codex
     last_error = ""
     for attempt in range(1, 3):
@@ -550,12 +589,11 @@ def run_review(*, root: Path = ROOT, data_dir: Path = DATA, timeout: int = 240,
         snapshot_path.write_text(json.dumps(snapshot, indent=2, default=str) + "\n", encoding="utf-8")
         with tempfile.TemporaryDirectory(prefix="optiobot-review-") as temp:
             isolated = Path(temp)
-            prompt_claude, prompt_codex = _prompt(snapshot, "Claude"), _prompt(snapshot, "Codex")
+            slots = reviewer_slots(root)
             with ThreadPoolExecutor(max_workers=2) as pool:
-                futures = {
-                    "Claude": pool.submit(_call_reviewer, "Claude", prompt_claude, isolated, timeout),
-                    "Codex": pool.submit(_call_reviewer, "Codex", prompt_codex, isolated, timeout),
-                }
+                futures = {label: pool.submit(_call_reviewer, label, _prompt(snapshot, label), isolated, timeout,
+                                              role=role, root=root)
+                           for label, role in slots.items()}
                 reports = {name: future.result() for name, future in futures.items()}
         valid_both = all(report.get("status") != "failed" for report in reports.values())
         disagreements = []
@@ -602,7 +640,15 @@ def run_review(*, root: Path = ROOT, data_dir: Path = DATA, timeout: int = 240,
         append_jsonl(data_dir / "supervisor_reviews.jsonl", {"review_id": review_id, "ledger_id": ledger_id, "status": consolidated["status"],
                      "duration_seconds": consolidated["duration_seconds"], "report": path.name})
         email_failure = None
-        if _email_configured():
+        # Owner 2026-11-11: fewer emails. A routine review stays on disk; it is emailed when a reviewer failed or
+        # rated its findings high or critical (or when notifications.json turns hourly_review back on).
+        from .notifications import routine_email_enabled
+        needs_attention = (not valid_both or bool(consolidated["unresolved"]) or any(
+            report.get("overall_severity") in ("high", "critical") for report in reports.values()))
+        if _email_configured() and not needs_attention and not routine_email_enabled("hourly_review", root):
+            consolidated["email_status"] = "skipped_routine"
+            path.write_text(json.dumps(consolidated, indent=2, default=str) + "\n", encoding="utf-8")
+        elif _email_configured():
             try:
                 summary = _decision_email_summary(snapshot.get("recent_decisions", []))
                 body = (f"{summary}\n\n{_review_email_summary(consolidated)}\n\n"
@@ -656,7 +702,7 @@ def run_daily_report(*, root: Path = ROOT, data_dir: Path = DATA, ledger: dict[s
     review_status = _safe_json(data_dir / "supervisor_status.json", {})
     latest_review = _safe_json(data_dir / "reviews" / str(review_status.get("last_report", "")), {})
     review_summary = (_review_email_summary(latest_review) if latest_review else
-                      "Claude and Codex review: No completed review report is available yet.")
+                      "Agent review: No completed review report is available yet.")
     report = {
         "created_at_utc": utc_now(), "mode": "PAPER", "ledger_id": ledger_id, "strategy": snapshot["strategy"],
         "realized_pnl_usd": account.get("realized_pnl"), "unrealized_pnl_usd": account.get("unrealized_pnl"),
@@ -669,7 +715,10 @@ def run_daily_report(*, root: Path = ROOT, data_dir: Path = DATA, ledger: dict[s
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, indent=2, default=str) + "\n", encoding="utf-8")
     email_status, error = "not_configured", None
-    if _email_configured():
+    from .notifications import routine_email_enabled
+    if _email_configured() and not routine_email_enabled("daily_summary", root):
+        email_status = "skipped_routine"
+    elif _email_configured():
         try:
             body = "\n\n".join((
                 _decision_email_summary(report["recent_decisions"]),

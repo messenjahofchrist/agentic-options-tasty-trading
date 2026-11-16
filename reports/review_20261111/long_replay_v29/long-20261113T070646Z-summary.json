@@ -1,0 +1,5871 @@
+{
+  "source": "massive month chunks + Jun-Oct 2026 cache",
+  "first_day": "2024-12-01",
+  "last_day": "2026-11-12",
+  "days_replayed": 487,
+  "trade_symbols": [
+    "AAPL",
+    "MSFT",
+    "NVDA",
+    "AMZN",
+    "GOOGL",
+    "META",
+    "TSLA",
+    "AVGO",
+    "AMD",
+    "NFLX",
+    "ORCL",
+    "CRM",
+    "ADBE",
+    "QCOM",
+    "MU",
+    "INTC",
+    "AMAT",
+    "LRCX",
+    "MRVL",
+    "ARM",
+    "SMCI",
+    "TSM",
+    "PLTR",
+    "UBER",
+    "SHOP",
+    "SNOW",
+    "CRWD",
+    "PANW",
+    "NET",
+    "DDOG",
+    "ZS",
+    "MDB",
+    "COIN",
+    "HOOD",
+    "MSTR",
+    "SOFI",
+    "PYPL",
+    "AFRM",
+    "UPST",
+    "MARA",
+    "RIOT",
+    "ABNB",
+    "DASH",
+    "NKE",
+    "SBUX",
+    "MCD",
+    "DIS",
+    "WMT",
+    "COST",
+    "TGT",
+    "HD",
+    "LOW",
+    "CMG",
+    "LULU",
+    "ROKU",
+    "SPOT",
+    "DKNG",
+    "CVNA",
+    "BABA",
+    "PDD",
+    "JD",
+    "NIO",
+    "F",
+    "GM",
+    "RIVN",
+    "LCID",
+    "BA",
+    "CAT",
+    "DE",
+    "GE",
+    "LMT",
+    "RTX",
+    "JPM",
+    "BAC",
+    "C",
+    "WFC",
+    "GS",
+    "MS",
+    "SCHW",
+    "V",
+    "MA",
+    "AXP",
+    "UNH",
+    "LLY",
+    "JNJ",
+    "PFE",
+    "MRK",
+    "ABBV",
+    "MRNA",
+    "CVS",
+    "XOM",
+    "CVX",
+    "OXY",
+    "SLB",
+    "FCX",
+    "DAL",
+    "UAL",
+    "AAL",
+    "CCL",
+    "RCL",
+    "T",
+    "VZ",
+    "CMCSA",
+    "KO",
+    "PEP"
+  ],
+  "strategy_version": "2.9.0",
+  "notes": [
+    "option costs: per-symbol cost table measured on recorded quotes from Oct-Nov 2026, applied to every period (spreads in earlier periods may have differed)",
+    "FOMC windows before June 2026 from the published calendar as recalled (unverified); earnings, IV and option selection are not replayed (as in every replay)",
+    "VIX: prior-session daily closes (495 sessions)",
+    "2.9 in_play: symbols without recorded option quotes are charged the median measured option cost"
+  ],
+  "option_cost_contract": "short_1_6_dte",
+  "model": "What is replayed exactly (the production code, not a re-implementation):\n  core signal and indicators (strategy_engine.evaluate_underlying_diagnostics), breakout confirmation (confirmation.py),\n  market context, regime, sector confirmation, VWAP alignment, FOMC windows, correlation clusters and the aggregate\n  cap (pipeline.evaluate_candidate stages 1-7), trailing stop and time stop (management.py).\nWhat is NOT replayed (no historical data): option selection, option bid/ask, Greeks and the expected-net-R gate,\n  IV rank/HV checks, earnings dates, the dollar daily-loss limit. Breakeven is approximated on the underlying (exit\n  when the close returns to the entry price after arming). P&L is the underlying proxy the original backtest uses:\n  100 shares, $0.01/share slippage each way, $1.40 fees per trade, R = net / (|entry - stop| x 100).\nHarness rules for both strategies: completed-bar decisions, entry at that bar's close, exits on later completed bar\ncloses (like the live exit check), flat at the session's last bar, max 4 open / 6 entries per session (original risk\nlimits), no averaging, same-minute candidates ranked by trend efficiency (expected net R needs option quotes), the\n3-consecutive-loss block reset each session (live carries it across sessions; resetting stops one streak from\nending the replay). No bar after the decision bar is ever used for a decision.",
+  "variants": {
+    "v2": {
+      "all": {
+        "trades": 1004,
+        "win_rate": 0.445,
+        "avg_win_r": 0.847,
+        "avg_loss_r": -0.762,
+        "expectancy_r": -0.045,
+        "total_r": -45.67,
+        "max_drawdown_r": 56.02,
+        "profit_factor": 0.892,
+        "net_pnl_100sh": -27755.42,
+        "fees": 1405.6,
+        "slippage": 2008.0
+      },
+      "net_of_option_cost": {
+        "available": true,
+        "coverage": "1004 of 1004 trades",
+        "contract": "short_1_6_dte",
+        "estimated_with_median_cost": 926,
+        "median_cost_bps_used": 6.363,
+        "gross_total_r": -45.67,
+        "cost_total_r": 49.02,
+        "net_total_r": -94.69,
+        "net_expectancy_r": -0.094,
+        "net_win_rate": 0.426,
+        "net_profit_factor": 0.791,
+        "median_cost_r": 0.047,
+        "by_symbol": {
+          "AAL": {
+            "trades": 9,
+            "gross_r": -5.8,
+            "cost_r": 0.38,
+            "net_r": -6.18
+          },
+          "AAPL": {
+            "trades": 9,
+            "gross_r": -3.14,
+            "cost_r": 0.33,
+            "net_r": -3.47
+          },
+          "ABBV": {
+            "trades": 5,
+            "gross_r": -1.23,
+            "cost_r": 0.32,
+            "net_r": -1.54
+          },
+          "ABNB": {
+            "trades": 8,
+            "gross_r": -1.66,
+            "cost_r": 0.37,
+            "net_r": -2.03
+          },
+          "ADBE": {
+            "trades": 10,
+            "gross_r": 0.98,
+            "cost_r": 0.45,
+            "net_r": 0.54
+          },
+          "AFRM": {
+            "trades": 9,
+            "gross_r": 0.12,
+            "cost_r": 0.27,
+            "net_r": -0.15
+          },
+          "AMAT": {
+            "trades": 9,
+            "gross_r": 3.22,
+            "cost_r": 0.53,
+            "net_r": 2.69
+          },
+          "AMD": {
+            "trades": 13,
+            "gross_r": -2.31,
+            "cost_r": 0.59,
+            "net_r": -2.9
+          },
+          "AMZN": {
+            "trades": 6,
+            "gross_r": -0.2,
+            "cost_r": 0.32,
+            "net_r": -0.52
+          },
+          "ARM": {
+            "trades": 17,
+            "gross_r": -2.03,
+            "cost_r": 0.56,
+            "net_r": -2.59
+          },
+          "AVGO": {
+            "trades": 9,
+            "gross_r": 2.44,
+            "cost_r": 0.41,
+            "net_r": 2.03
+          },
+          "AXP": {
+            "trades": 4,
+            "gross_r": -0.08,
+            "cost_r": 0.23,
+            "net_r": -0.3
+          },
+          "BA": {
+            "trades": 15,
+            "gross_r": -4.6,
+            "cost_r": 0.75,
+            "net_r": -5.35
+          },
+          "BABA": {
+            "trades": 15,
+            "gross_r": -3.31,
+            "cost_r": 0.83,
+            "net_r": -4.13
+          },
+          "C": {
+            "trades": 8,
+            "gross_r": -2.06,
+            "cost_r": 0.42,
+            "net_r": -2.49
+          },
+          "CAT": {
+            "trades": 6,
+            "gross_r": -3.65,
+            "cost_r": 0.27,
+            "net_r": -3.91
+          },
+          "CCL": {
+            "trades": 4,
+            "gross_r": 0.77,
+            "cost_r": 0.15,
+            "net_r": 0.61
+          },
+          "CMCSA": {
+            "trades": 12,
+            "gross_r": 6.37,
+            "cost_r": 0.65,
+            "net_r": 5.71
+          },
+          "CMG": {
+            "trades": 8,
+            "gross_r": -2.14,
+            "cost_r": 0.35,
+            "net_r": -2.48
+          },
+          "COIN": {
+            "trades": 12,
+            "gross_r": -0.88,
+            "cost_r": 0.39,
+            "net_r": -1.27
+          },
+          "COST": {
+            "trades": 6,
+            "gross_r": -2.25,
+            "cost_r": 0.29,
+            "net_r": -2.53
+          },
+          "CRM": {
+            "trades": 8,
+            "gross_r": -3.34,
+            "cost_r": 0.37,
+            "net_r": -3.71
+          },
+          "CRWD": {
+            "trades": 13,
+            "gross_r": 0.32,
+            "cost_r": 0.5,
+            "net_r": -0.18
+          },
+          "CVNA": {
+            "trades": 25,
+            "gross_r": -8.19,
+            "cost_r": 0.91,
+            "net_r": -9.11
+          },
+          "CVS": {
+            "trades": 8,
+            "gross_r": -0.5,
+            "cost_r": 0.45,
+            "net_r": -0.95
+          },
+          "CVX": {
+            "trades": 8,
+            "gross_r": -0.46,
+            "cost_r": 0.49,
+            "net_r": -0.95
+          },
+          "DAL": {
+            "trades": 12,
+            "gross_r": -4.99,
+            "cost_r": 0.55,
+            "net_r": -5.54
+          },
+          "DASH": {
+            "trades": 11,
+            "gross_r": -1.78,
+            "cost_r": 0.46,
+            "net_r": -2.24
+          },
+          "DDOG": {
+            "trades": 15,
+            "gross_r": 2.61,
+            "cost_r": 0.69,
+            "net_r": 1.92
+          },
+          "DE": {
+            "trades": 12,
+            "gross_r": -3.54,
+            "cost_r": 0.66,
+            "net_r": -4.2
+          },
+          "DIS": {
+            "trades": 5,
+            "gross_r": -4.5,
+            "cost_r": 0.25,
+            "net_r": -4.75
+          },
+          "DKNG": {
+            "trades": 9,
+            "gross_r": 3.5,
+            "cost_r": 0.32,
+            "net_r": 3.17
+          },
+          "F": {
+            "trades": 10,
+            "gross_r": -0.59,
+            "cost_r": 0.47,
+            "net_r": -1.05
+          },
+          "FCX": {
+            "trades": 15,
+            "gross_r": 3.56,
+            "cost_r": 0.68,
+            "net_r": 2.88
+          },
+          "GE": {
+            "trades": 11,
+            "gross_r": -5.07,
+            "cost_r": 0.57,
+            "net_r": -5.64
+          },
+          "GM": {
+            "trades": 12,
+            "gross_r": 1.83,
+            "cost_r": 0.6,
+            "net_r": 1.23
+          },
+          "GOOGL": {
+            "trades": 11,
+            "gross_r": 0.98,
+            "cost_r": 0.59,
+            "net_r": 0.39
+          },
+          "GS": {
+            "trades": 6,
+            "gross_r": 1.07,
+            "cost_r": 0.36,
+            "net_r": 0.71
+          },
+          "HD": {
+            "trades": 9,
+            "gross_r": -1.49,
+            "cost_r": 0.56,
+            "net_r": -2.06
+          },
+          "HOOD": {
+            "trades": 7,
+            "gross_r": 1.33,
+            "cost_r": 0.2,
+            "net_r": 1.12
+          },
+          "INTC": {
+            "trades": 11,
+            "gross_r": -1.75,
+            "cost_r": 1.28,
+            "net_r": -3.04
+          },
+          "JD": {
+            "trades": 16,
+            "gross_r": -4.72,
+            "cost_r": 0.84,
+            "net_r": -5.56
+          },
+          "JNJ": {
+            "trades": 5,
+            "gross_r": 1.65,
+            "cost_r": 0.3,
+            "net_r": 1.36
+          },
+          "JPM": {
+            "trades": 5,
+            "gross_r": 3.03,
+            "cost_r": 0.28,
+            "net_r": 2.75
+          },
+          "KO": {
+            "trades": 2,
+            "gross_r": 0.71,
+            "cost_r": 0.13,
+            "net_r": 0.59
+          },
+          "LCID": {
+            "trades": 7,
+            "gross_r": -3.03,
+            "cost_r": 0.18,
+            "net_r": -3.21
+          },
+          "LLY": {
+            "trades": 11,
+            "gross_r": -1.95,
+            "cost_r": 0.4,
+            "net_r": -2.35
+          },
+          "LMT": {
+            "trades": 14,
+            "gross_r": -0.28,
+            "cost_r": 0.76,
+            "net_r": -1.04
+          },
+          "LOW": {
+            "trades": 11,
+            "gross_r": 2.72,
+            "cost_r": 0.54,
+            "net_r": 2.17
+          },
+          "LRCX": {
+            "trades": 5,
+            "gross_r": 3.89,
+            "cost_r": 0.21,
+            "net_r": 3.68
+          },
+          "LULU": {
+            "trades": 11,
+            "gross_r": -2.97,
+            "cost_r": 0.6,
+            "net_r": -3.57
+          },
+          "MA": {
+            "trades": 4,
+            "gross_r": -2.56,
+            "cost_r": 0.21,
+            "net_r": -2.77
+          },
+          "MARA": {
+            "trades": 9,
+            "gross_r": 8.05,
+            "cost_r": 0.21,
+            "net_r": 7.84
+          },
+          "MCD": {
+            "trades": 7,
+            "gross_r": -0.59,
+            "cost_r": 0.39,
+            "net_r": -0.98
+          },
+          "MDB": {
+            "trades": 15,
+            "gross_r": -2.6,
+            "cost_r": 0.52,
+            "net_r": -3.13
+          },
+          "META": {
+            "trades": 10,
+            "gross_r": 2.35,
+            "cost_r": 0.55,
+            "net_r": 1.8
+          },
+          "MRK": {
+            "trades": 4,
+            "gross_r": 3.08,
+            "cost_r": 0.21,
+            "net_r": 2.86
+          },
+          "MRNA": {
+            "trades": 9,
+            "gross_r": -6.01,
+            "cost_r": 0.17,
+            "net_r": -6.18
+          },
+          "MRVL": {
+            "trades": 18,
+            "gross_r": -3.3,
+            "cost_r": 0.68,
+            "net_r": -3.98
+          },
+          "MS": {
+            "trades": 5,
+            "gross_r": 1.36,
+            "cost_r": 0.32,
+            "net_r": 1.04
+          },
+          "MSFT": {
+            "trades": 9,
+            "gross_r": 0.24,
+            "cost_r": 0.44,
+            "net_r": -0.2
+          },
+          "MSTR": {
+            "trades": 15,
+            "gross_r": -9.01,
+            "cost_r": 0.61,
+            "net_r": -9.63
+          },
+          "MU": {
+            "trades": 10,
+            "gross_r": -3.19,
+            "cost_r": 0.39,
+            "net_r": -3.58
+          },
+          "NET": {
+            "trades": 12,
+            "gross_r": 5.17,
+            "cost_r": 0.47,
+            "net_r": 4.7
+          },
+          "NFLX": {
+            "trades": 11,
+            "gross_r": -4.4,
+            "cost_r": 1.14,
+            "net_r": -5.55
+          },
+          "NKE": {
+            "trades": 10,
+            "gross_r": -1.51,
+            "cost_r": 0.53,
+            "net_r": -2.04
+          },
+          "NVDA": {
+            "trades": 9,
+            "gross_r": 2.42,
+            "cost_r": 0.4,
+            "net_r": 2.01
+          },
+          "ORCL": {
+            "trades": 10,
+            "gross_r": 1.43,
+            "cost_r": 0.44,
+            "net_r": 0.99
+          },
+          "OXY": {
+            "trades": 6,
+            "gross_r": -1.39,
+            "cost_r": 0.3,
+            "net_r": -1.7
+          },
+          "PANW": {
+            "trades": 10,
+            "gross_r": 4.68,
+            "cost_r": 0.51,
+            "net_r": 4.17
+          },
+          "PDD": {
+            "trades": 12,
+            "gross_r": 3.77,
+            "cost_r": 0.66,
+            "net_r": 3.11
+          },
+          "PEP": {
+            "trades": 7,
+            "gross_r": 2.32,
+            "cost_r": 0.41,
+            "net_r": 1.91
+          },
+          "PFE": {
+            "trades": 6,
+            "gross_r": 0.13,
+            "cost_r": 0.35,
+            "net_r": -0.22
+          },
+          "PLTR": {
+            "trades": 8,
+            "gross_r": -4.01,
+            "cost_r": 0.42,
+            "net_r": -4.43
+          },
+          "PYPL": {
+            "trades": 8,
+            "gross_r": -0.09,
+            "cost_r": 0.42,
+            "net_r": -0.51
+          },
+          "QCOM": {
+            "trades": 10,
+            "gross_r": -1.31,
+            "cost_r": 0.36,
+            "net_r": -1.67
+          },
+          "RCL": {
+            "trades": 11,
+            "gross_r": 4.38,
+            "cost_r": 0.44,
+            "net_r": 3.94
+          },
+          "RIOT": {
+            "trades": 9,
+            "gross_r": -6.13,
+            "cost_r": 0.2,
+            "net_r": -6.32
+          },
+          "RIVN": {
+            "trades": 13,
+            "gross_r": 2.68,
+            "cost_r": 0.42,
+            "net_r": 2.26
+          },
+          "ROKU": {
+            "trades": 16,
+            "gross_r": 3.99,
+            "cost_r": 0.76,
+            "net_r": 3.22
+          },
+          "RTX": {
+            "trades": 14,
+            "gross_r": 0.87,
+            "cost_r": 0.86,
+            "net_r": 0.01
+          },
+          "SBUX": {
+            "trades": 8,
+            "gross_r": 1.59,
+            "cost_r": 0.39,
+            "net_r": 1.2
+          },
+          "SCHW": {
+            "trades": 14,
+            "gross_r": 1.55,
+            "cost_r": 0.77,
+            "net_r": 0.78
+          },
+          "SHOP": {
+            "trades": 17,
+            "gross_r": -2.3,
+            "cost_r": 0.66,
+            "net_r": -2.95
+          },
+          "SLB": {
+            "trades": 4,
+            "gross_r": 0.1,
+            "cost_r": 0.23,
+            "net_r": -0.13
+          },
+          "SMCI": {
+            "trades": 13,
+            "gross_r": 9.95,
+            "cost_r": 0.36,
+            "net_r": 9.58
+          },
+          "SNOW": {
+            "trades": 20,
+            "gross_r": -2.63,
+            "cost_r": 0.9,
+            "net_r": -3.53
+          },
+          "SOFI": {
+            "trades": 7,
+            "gross_r": -0.41,
+            "cost_r": 0.17,
+            "net_r": -0.57
+          },
+          "SPOT": {
+            "trades": 13,
+            "gross_r": -2.42,
+            "cost_r": 0.54,
+            "net_r": -2.96
+          },
+          "T": {
+            "trades": 4,
+            "gross_r": 1.2,
+            "cost_r": 0.22,
+            "net_r": 0.98
+          },
+          "TGT": {
+            "trades": 11,
+            "gross_r": 3.78,
+            "cost_r": 0.42,
+            "net_r": 3.36
+          },
+          "TSLA": {
+            "trades": 1,
+            "gross_r": 2.2,
+            "cost_r": 0.05,
+            "net_r": 2.15
+          },
+          "TSM": {
+            "trades": 10,
+            "gross_r": 1.71,
+            "cost_r": 0.58,
+            "net_r": 1.13
+          },
+          "UAL": {
+            "trades": 14,
+            "gross_r": -4.86,
+            "cost_r": 0.66,
+            "net_r": -5.53
+          },
+          "UBER": {
+            "trades": 13,
+            "gross_r": -7.87,
+            "cost_r": 2.57,
+            "net_r": -10.44
+          },
+          "UNH": {
+            "trades": 11,
+            "gross_r": -1.83,
+            "cost_r": 0.58,
+            "net_r": -2.4
+          },
+          "UPST": {
+            "trades": 12,
+            "gross_r": 1.87,
+            "cost_r": 0.3,
+            "net_r": 1.57
+          },
+          "V": {
+            "trades": 4,
+            "gross_r": -0.52,
+            "cost_r": 0.23,
+            "net_r": -0.75
+          },
+          "VZ": {
+            "trades": 1,
+            "gross_r": -0.47,
+            "cost_r": 0.06,
+            "net_r": -0.53
+          },
+          "WFC": {
+            "trades": 8,
+            "gross_r": -0.74,
+            "cost_r": 0.4,
+            "net_r": -1.14
+          },
+          "WMT": {
+            "trades": 4,
+            "gross_r": -1.11,
+            "cost_r": 0.25,
+            "net_r": -1.37
+          },
+          "XOM": {
+            "trades": 3,
+            "gross_r": 0.71,
+            "cost_r": 0.19,
+            "net_r": 0.52
+          },
+          "ZS": {
+            "trades": 16,
+            "gross_r": -2.61,
+            "cost_r": 0.62,
+            "net_r": -3.22
+          }
+        }
+      },
+      "by_quarter": {
+        "2024-Q4": {
+          "gross": {
+            "trades": 1,
+            "win_rate": 1.0,
+            "avg_win_r": 0.395,
+            "avg_loss_r": null,
+            "expectancy_r": 0.395,
+            "total_r": 0.4,
+            "max_drawdown_r": 0.0,
+            "profit_factor": null,
+            "net_pnl_100sh": 99.6,
+            "fees": 1.4,
+            "slippage": 2.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "1 of 1 trades",
+            "contract": "short_1_6_dte",
+            "estimated_with_median_cost": 1,
+            "median_cost_bps_used": 6.363,
+            "gross_total_r": 0.4,
+            "cost_total_r": 0.04,
+            "net_total_r": 0.35,
+            "net_expectancy_r": 0.351,
+            "net_win_rate": 1.0,
+            "net_profit_factor": null,
+            "median_cost_r": 0.044,
+            "by_symbol": {
+              "BA": {
+                "trades": 1,
+                "gross_r": 0.4,
+                "cost_r": 0.04,
+                "net_r": 0.35
+              }
+            }
+          }
+        },
+        "2025-Q1": {
+          "gross": {
+            "trades": 163,
+            "win_rate": 0.436,
+            "avg_win_r": 0.741,
+            "avg_loss_r": -0.777,
+            "expectancy_r": -0.116,
+            "total_r": -18.86,
+            "max_drawdown_r": 24.01,
+            "profit_factor": 0.736,
+            "net_pnl_100sh": -6263.0,
+            "fees": 228.2,
+            "slippage": 326.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "163 of 163 trades",
+            "contract": "short_1_6_dte",
+            "estimated_with_median_cost": 151,
+            "median_cost_bps_used": 6.363,
+            "gross_total_r": -18.86,
+            "cost_total_r": 7.93,
+            "net_total_r": -26.8,
+            "net_expectancy_r": -0.164,
+            "net_win_rate": 0.423,
+            "net_profit_factor": 0.647,
+            "median_cost_r": 0.047,
+            "by_symbol": {
+              "AAL": {
+                "trades": 2,
+                "gross_r": -1.42,
+                "cost_r": 0.07,
+                "net_r": -1.49
+              },
+              "ABNB": {
+                "trades": 1,
+                "gross_r": -1.03,
+                "cost_r": 0.06,
+                "net_r": -1.09
+              },
+              "ADBE": {
+                "trades": 2,
+                "gross_r": 2.18,
+                "cost_r": 0.08,
+                "net_r": 2.1
+              },
+              "AFRM": {
+                "trades": 1,
+                "gross_r": 0.47,
+                "cost_r": 0.01,
+                "net_r": 0.45
+              },
+              "AMAT": {
+                "trades": 1,
+                "gross_r": 1.98,
+                "cost_r": 0.06,
+                "net_r": 1.92
+              },
+              "AMD": {
+                "trades": 1,
+                "gross_r": 0.78,
+                "cost_r": 0.06,
+                "net_r": 0.72
+              },
+              "AMZN": {
+                "trades": 1,
+                "gross_r": 0.33,
+                "cost_r": 0.06,
+                "net_r": 0.27
+              },
+              "ARM": {
+                "trades": 1,
+                "gross_r": -0.12,
+                "cost_r": 0.01,
+                "net_r": -0.13
+              },
+              "AVGO": {
+                "trades": 2,
+                "gross_r": 0.02,
+                "cost_r": 0.08,
+                "net_r": -0.06
+              },
+              "BA": {
+                "trades": 3,
+                "gross_r": -1.99,
+                "cost_r": 0.16,
+                "net_r": -2.15
+              },
+              "BABA": {
+                "trades": 7,
+                "gross_r": -2.42,
+                "cost_r": 0.37,
+                "net_r": -2.78
+              },
+              "C": {
+                "trades": 2,
+                "gross_r": 0.03,
+                "cost_r": 0.11,
+                "net_r": -0.08
+              },
+              "CMCSA": {
+                "trades": 2,
+                "gross_r": 1.79,
+                "cost_r": 0.11,
+                "net_r": 1.68
+              },
+              "CMG": {
+                "trades": 1,
+                "gross_r": -0.12,
+                "cost_r": 0.06,
+                "net_r": -0.19
+              },
+              "COIN": {
+                "trades": 1,
+                "gross_r": 0.87,
+                "cost_r": 0.05,
+                "net_r": 0.83
+              },
+              "CRM": {
+                "trades": 2,
+                "gross_r": -0.61,
+                "cost_r": 0.08,
+                "net_r": -0.69
+              },
+              "CRWD": {
+                "trades": 3,
+                "gross_r": -2.23,
+                "cost_r": 0.13,
+                "net_r": -2.36
+              },
+              "CVNA": {
+                "trades": 9,
+                "gross_r": -4.88,
+                "cost_r": 0.32,
+                "net_r": -5.21
+              },
+              "CVS": {
+                "trades": 2,
+                "gross_r": -0.39,
+                "cost_r": 0.07,
+                "net_r": -0.46
+              },
+              "CVX": {
+                "trades": 2,
+                "gross_r": -0.57,
+                "cost_r": 0.13,
+                "net_r": -0.69
+              },
+              "DAL": {
+                "trades": 4,
+                "gross_r": -2.25,
+                "cost_r": 0.17,
+                "net_r": -2.42
+              },
+              "DDOG": {
+                "trades": 1,
+                "gross_r": 0.6,
+                "cost_r": 0.06,
+                "net_r": 0.54
+              },
+              "DE": {
+                "trades": 1,
+                "gross_r": -0.78,
+                "cost_r": 0.06,
+                "net_r": -0.84
+              },
+              "FCX": {
+                "trades": 4,
+                "gross_r": 0.56,
+                "cost_r": 0.21,
+                "net_r": 0.35
+              },
+              "GE": {
+                "trades": 1,
+                "gross_r": -0.17,
+                "cost_r": 0.06,
+                "net_r": -0.24
+              },
+              "GM": {
+                "trades": 3,
+                "gross_r": -0.0,
+                "cost_r": 0.16,
+                "net_r": -0.16
+              },
+              "HD": {
+                "trades": 2,
+                "gross_r": -1.55,
+                "cost_r": 0.13,
+                "net_r": -1.68
+              },
+              "HOOD": {
+                "trades": 1,
+                "gross_r": 0.43,
+                "cost_r": 0.04,
+                "net_r": 0.38
+              },
+              "INTC": {
+                "trades": 3,
+                "gross_r": 1.82,
+                "cost_r": 0.29,
+                "net_r": 1.53
+              },
+              "JD": {
+                "trades": 1,
+                "gross_r": -0.3,
+                "cost_r": 0.02,
+                "net_r": -0.32
+              },
+              "JPM": {
+                "trades": 3,
+                "gross_r": 0.44,
+                "cost_r": 0.19,
+                "net_r": 0.25
+              },
+              "LCID": {
+                "trades": 1,
+                "gross_r": 0.67,
+                "cost_r": 0.02,
+                "net_r": 0.65
+              },
+              "LLY": {
+                "trades": 3,
+                "gross_r": -1.94,
+                "cost_r": 0.11,
+                "net_r": -2.06
+              },
+              "LMT": {
+                "trades": 3,
+                "gross_r": 1.48,
+                "cost_r": 0.19,
+                "net_r": 1.29
+              },
+              "LOW": {
+                "trades": 3,
+                "gross_r": -1.2,
+                "cost_r": 0.15,
+                "net_r": -1.35
+              },
+              "LULU": {
+                "trades": 1,
+                "gross_r": 1.08,
+                "cost_r": 0.06,
+                "net_r": 1.01
+              },
+              "MA": {
+                "trades": 2,
+                "gross_r": -0.84,
+                "cost_r": 0.1,
+                "net_r": -0.94
+              },
+              "MARA": {
+                "trades": 3,
+                "gross_r": 3.19,
+                "cost_r": 0.08,
+                "net_r": 3.1
+              },
+              "MCD": {
+                "trades": 1,
+                "gross_r": -1.04,
+                "cost_r": 0.05,
+                "net_r": -1.1
+              },
+              "MDB": {
+                "trades": 3,
+                "gross_r": -1.01,
+                "cost_r": 0.09,
+                "net_r": -1.11
+              },
+              "META": {
+                "trades": 1,
+                "gross_r": 0.06,
+                "cost_r": 0.06,
+                "net_r": -0.01
+              },
+              "MRK": {
+                "trades": 1,
+                "gross_r": 0.08,
+                "cost_r": 0.04,
+                "net_r": 0.04
+              },
+              "MRNA": {
+                "trades": 1,
+                "gross_r": -1.08,
+                "cost_r": 0.02,
+                "net_r": -1.09
+              },
+              "MRVL": {
+                "trades": 3,
+                "gross_r": -2.19,
+                "cost_r": 0.1,
+                "net_r": -2.3
+              },
+              "MS": {
+                "trades": 3,
+                "gross_r": 2.03,
+                "cost_r": 0.19,
+                "net_r": 1.84
+              },
+              "MSFT": {
+                "trades": 1,
+                "gross_r": -0.24,
+                "cost_r": 0.06,
+                "net_r": -0.3
+              },
+              "MSTR": {
+                "trades": 1,
+                "gross_r": 0.92,
+                "cost_r": 0.04,
+                "net_r": 0.88
+              },
+              "MU": {
+                "trades": 3,
+                "gross_r": -0.45,
+                "cost_r": 0.1,
+                "net_r": -0.55
+              },
+              "NET": {
+                "trades": 2,
+                "gross_r": 1.39,
+                "cost_r": 0.1,
+                "net_r": 1.29
+              },
+              "NFLX": {
+                "trades": 4,
+                "gross_r": -1.65,
+                "cost_r": 0.5,
+                "net_r": -2.15
+              },
+              "NKE": {
+                "trades": 1,
+                "gross_r": 0.57,
+                "cost_r": 0.05,
+                "net_r": 0.53
+              },
+              "NVDA": {
+                "trades": 1,
+                "gross_r": 1.44,
+                "cost_r": 0.03,
+                "net_r": 1.41
+              },
+              "OXY": {
+                "trades": 1,
+                "gross_r": -0.75,
+                "cost_r": 0.03,
+                "net_r": -0.77
+              },
+              "PANW": {
+                "trades": 2,
+                "gross_r": 0.99,
+                "cost_r": 0.13,
+                "net_r": 0.86
+              },
+              "PDD": {
+                "trades": 1,
+                "gross_r": 0.44,
+                "cost_r": 0.02,
+                "net_r": 0.42
+              },
+              "PLTR": {
+                "trades": 2,
+                "gross_r": -2.11,
+                "cost_r": 0.09,
+                "net_r": -2.2
+              },
+              "PYPL": {
+                "trades": 2,
+                "gross_r": 0.66,
+                "cost_r": 0.11,
+                "net_r": 0.56
+              },
+              "RCL": {
+                "trades": 4,
+                "gross_r": -1.62,
+                "cost_r": 0.14,
+                "net_r": -1.75
+              },
+              "RIOT": {
+                "trades": 1,
+                "gross_r": 0.06,
+                "cost_r": 0.01,
+                "net_r": 0.05
+              },
+              "RIVN": {
+                "trades": 2,
+                "gross_r": -1.51,
+                "cost_r": 0.05,
+                "net_r": -1.56
+              },
+              "ROKU": {
+                "trades": 4,
+                "gross_r": -1.94,
+                "cost_r": 0.12,
+                "net_r": -2.06
+              },
+              "RTX": {
+                "trades": 2,
+                "gross_r": -0.17,
+                "cost_r": 0.13,
+                "net_r": -0.3
+              },
+              "SCHW": {
+                "trades": 2,
+                "gross_r": -0.15,
+                "cost_r": 0.13,
+                "net_r": -0.28
+              },
+              "SHOP": {
+                "trades": 4,
+                "gross_r": -1.58,
+                "cost_r": 0.2,
+                "net_r": -1.78
+              },
+              "SMCI": {
+                "trades": 5,
+                "gross_r": 0.37,
+                "cost_r": 0.14,
+                "net_r": 0.23
+              },
+              "SNOW": {
+                "trades": 1,
+                "gross_r": 0.48,
+                "cost_r": 0.02,
+                "net_r": 0.45
+              },
+              "SOFI": {
+                "trades": 1,
+                "gross_r": -0.55,
+                "cost_r": 0.02,
+                "net_r": -0.56
+              },
+              "SPOT": {
+                "trades": 3,
+                "gross_r": -0.66,
+                "cost_r": 0.17,
+                "net_r": -0.83
+              },
+              "TGT": {
+                "trades": 1,
+                "gross_r": 0.65,
+                "cost_r": 0.04,
+                "net_r": 0.6
+              },
+              "TSM": {
+                "trades": 1,
+                "gross_r": 0.33,
+                "cost_r": 0.05,
+                "net_r": 0.28
+              },
+              "UAL": {
+                "trades": 4,
+                "gross_r": -0.46,
+                "cost_r": 0.17,
+                "net_r": -0.63
+              },
+              "UBER": {
+                "trades": 1,
+                "gross_r": -1.05,
+                "cost_r": 0.25,
+                "net_r": -1.29
+              },
+              "UPST": {
+                "trades": 3,
+                "gross_r": -2.31,
+                "cost_r": 0.07,
+                "net_r": -2.37
+              },
+              "V": {
+                "trades": 2,
+                "gross_r": -0.3,
+                "cost_r": 0.13,
+                "net_r": -0.43
+              },
+              "WMT": {
+                "trades": 1,
+                "gross_r": 0.68,
+                "cost_r": 0.06,
+                "net_r": 0.62
+              },
+              "ZS": {
+                "trades": 1,
+                "gross_r": -1.1,
+                "cost_r": 0.03,
+                "net_r": -1.12
+              }
+            }
+          }
+        },
+        "2025-Q2": {
+          "gross": {
+            "trades": 93,
+            "win_rate": 0.505,
+            "avg_win_r": 0.901,
+            "avg_loss_r": -0.745,
+            "expectancy_r": 0.087,
+            "total_r": 8.07,
+            "max_drawdown_r": 6.8,
+            "profit_factor": 1.235,
+            "net_pnl_100sh": -857.11,
+            "fees": 130.2,
+            "slippage": 186.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "93 of 93 trades",
+            "contract": "short_1_6_dte",
+            "estimated_with_median_cost": 85,
+            "median_cost_bps_used": 6.363,
+            "gross_total_r": 8.07,
+            "cost_total_r": 4.75,
+            "net_total_r": 3.33,
+            "net_expectancy_r": 0.036,
+            "net_win_rate": 0.505,
+            "net_profit_factor": 1.09,
+            "median_cost_r": 0.049,
+            "by_symbol": {
+              "AAPL": {
+                "trades": 1,
+                "gross_r": -1.02,
+                "cost_r": 0.04,
+                "net_r": -1.06
+              },
+              "ABNB": {
+                "trades": 1,
+                "gross_r": -1.06,
+                "cost_r": 0.04,
+                "net_r": -1.11
+              },
+              "ADBE": {
+                "trades": 1,
+                "gross_r": -1.07,
+                "cost_r": 0.06,
+                "net_r": -1.13
+              },
+              "AFRM": {
+                "trades": 1,
+                "gross_r": 1.25,
+                "cost_r": 0.03,
+                "net_r": 1.23
+              },
+              "AMAT": {
+                "trades": 1,
+                "gross_r": -1.11,
+                "cost_r": 0.06,
+                "net_r": -1.18
+              },
+              "AMD": {
+                "trades": 2,
+                "gross_r": -0.96,
+                "cost_r": 0.1,
+                "net_r": -1.06
+              },
+              "BABA": {
+                "trades": 1,
+                "gross_r": -0.47,
+                "cost_r": 0.06,
+                "net_r": -0.54
+              },
+              "C": {
+                "trades": 1,
+                "gross_r": -0.2,
+                "cost_r": 0.06,
+                "net_r": -0.27
+              },
+              "CAT": {
+                "trades": 1,
+                "gross_r": -0.04,
+                "cost_r": 0.06,
+                "net_r": -0.1
+              },
+              "CCL": {
+                "trades": 1,
+                "gross_r": 1.39,
+                "cost_r": 0.04,
+                "net_r": 1.35
+              },
+              "CMCSA": {
+                "trades": 1,
+                "gross_r": 0.24,
+                "cost_r": 0.03,
+                "net_r": 0.21
+              },
+              "COIN": {
+                "trades": 5,
+                "gross_r": 1.41,
+                "cost_r": 0.17,
+                "net_r": 1.25
+              },
+              "COST": {
+                "trades": 1,
+                "gross_r": -0.41,
+                "cost_r": 0.03,
+                "net_r": -0.44
+              },
+              "CRWD": {
+                "trades": 1,
+                "gross_r": -0.35,
+                "cost_r": 0.05,
+                "net_r": -0.4
+              },
+              "CVNA": {
+                "trades": 2,
+                "gross_r": -0.65,
+                "cost_r": 0.06,
+                "net_r": -0.71
+              },
+              "CVS": {
+                "trades": 1,
+                "gross_r": 0.72,
+                "cost_r": 0.06,
+                "net_r": 0.66
+              },
+              "DAL": {
+                "trades": 1,
+                "gross_r": -0.47,
+                "cost_r": 0.04,
+                "net_r": -0.51
+              },
+              "DDOG": {
+                "trades": 2,
+                "gross_r": 1.46,
+                "cost_r": 0.1,
+                "net_r": 1.36
+              },
+              "DE": {
+                "trades": 2,
+                "gross_r": 1.69,
+                "cost_r": 0.13,
+                "net_r": 1.56
+              },
+              "F": {
+                "trades": 1,
+                "gross_r": -0.31,
+                "cost_r": 0.04,
+                "net_r": -0.34
+              },
+              "GM": {
+                "trades": 1,
+                "gross_r": 0.21,
+                "cost_r": 0.05,
+                "net_r": 0.17
+              },
+              "GOOGL": {
+                "trades": 2,
+                "gross_r": -0.69,
+                "cost_r": 0.12,
+                "net_r": -0.81
+              },
+              "GS": {
+                "trades": 1,
+                "gross_r": -0.62,
+                "cost_r": 0.06,
+                "net_r": -0.68
+              },
+              "HD": {
+                "trades": 2,
+                "gross_r": -0.74,
+                "cost_r": 0.13,
+                "net_r": -0.87
+              },
+              "INTC": {
+                "trades": 1,
+                "gross_r": -0.08,
+                "cost_r": 0.14,
+                "net_r": -0.22
+              },
+              "JD": {
+                "trades": 1,
+                "gross_r": -0.32,
+                "cost_r": 0.02,
+                "net_r": -0.34
+              },
+              "LCID": {
+                "trades": 1,
+                "gross_r": -1.19,
+                "cost_r": 0.03,
+                "net_r": -1.22
+              },
+              "LMT": {
+                "trades": 1,
+                "gross_r": 1.29,
+                "cost_r": 0.06,
+                "net_r": 1.23
+              },
+              "LOW": {
+                "trades": 3,
+                "gross_r": 0.18,
+                "cost_r": 0.17,
+                "net_r": 0.02
+              },
+              "LRCX": {
+                "trades": 1,
+                "gross_r": 0.65,
+                "cost_r": 0.04,
+                "net_r": 0.61
+              },
+              "LULU": {
+                "trades": 2,
+                "gross_r": 1.64,
+                "cost_r": 0.12,
+                "net_r": 1.52
+              },
+              "MA": {
+                "trades": 1,
+                "gross_r": -1.04,
+                "cost_r": 0.05,
+                "net_r": -1.09
+              },
+              "MARA": {
+                "trades": 1,
+                "gross_r": 0.37,
+                "cost_r": 0.02,
+                "net_r": 0.36
+              },
+              "MCD": {
+                "trades": 1,
+                "gross_r": 0.25,
+                "cost_r": 0.06,
+                "net_r": 0.18
+              },
+              "MDB": {
+                "trades": 1,
+                "gross_r": 0.04,
+                "cost_r": 0.04,
+                "net_r": 0.0
+              },
+              "MSFT": {
+                "trades": 1,
+                "gross_r": 0.99,
+                "cost_r": 0.06,
+                "net_r": 0.92
+              },
+              "MU": {
+                "trades": 1,
+                "gross_r": -1.12,
+                "cost_r": 0.06,
+                "net_r": -1.18
+              },
+              "NET": {
+                "trades": 1,
+                "gross_r": 0.5,
+                "cost_r": 0.05,
+                "net_r": 0.45
+              },
+              "NFLX": {
+                "trades": 2,
+                "gross_r": -1.67,
+                "cost_r": 0.15,
+                "net_r": -1.82
+              },
+              "NKE": {
+                "trades": 1,
+                "gross_r": -0.51,
+                "cost_r": 0.03,
+                "net_r": -0.54
+              },
+              "NVDA": {
+                "trades": 1,
+                "gross_r": 1.25,
+                "cost_r": 0.06,
+                "net_r": 1.19
+              },
+              "ORCL": {
+                "trades": 1,
+                "gross_r": 1.14,
+                "cost_r": 0.05,
+                "net_r": 1.09
+              },
+              "OXY": {
+                "trades": 1,
+                "gross_r": 0.35,
+                "cost_r": 0.05,
+                "net_r": 0.3
+              },
+              "PDD": {
+                "trades": 4,
+                "gross_r": 3.29,
+                "cost_r": 0.24,
+                "net_r": 3.05
+              },
+              "PFE": {
+                "trades": 1,
+                "gross_r": 0.79,
+                "cost_r": 0.03,
+                "net_r": 0.75
+              },
+              "PYPL": {
+                "trades": 1,
+                "gross_r": -1.05,
+                "cost_r": 0.06,
+                "net_r": -1.11
+              },
+              "QCOM": {
+                "trades": 1,
+                "gross_r": -0.23,
+                "cost_r": 0.04,
+                "net_r": -0.28
+              },
+              "RCL": {
+                "trades": 1,
+                "gross_r": 1.84,
+                "cost_r": 0.06,
+                "net_r": 1.78
+              },
+              "RIVN": {
+                "trades": 1,
+                "gross_r": 0.46,
+                "cost_r": 0.03,
+                "net_r": 0.43
+              },
+              "ROKU": {
+                "trades": 2,
+                "gross_r": -0.12,
+                "cost_r": 0.1,
+                "net_r": -0.22
+              },
+              "RTX": {
+                "trades": 2,
+                "gross_r": 2.14,
+                "cost_r": 0.11,
+                "net_r": 2.03
+              },
+              "SBUX": {
+                "trades": 2,
+                "gross_r": 3.1,
+                "cost_r": 0.09,
+                "net_r": 3.02
+              },
+              "SHOP": {
+                "trades": 2,
+                "gross_r": 0.94,
+                "cost_r": 0.08,
+                "net_r": 0.87
+              },
+              "SMCI": {
+                "trades": 1,
+                "gross_r": -1.05,
+                "cost_r": 0.03,
+                "net_r": -1.08
+              },
+              "SNOW": {
+                "trades": 3,
+                "gross_r": -3.11,
+                "cost_r": 0.19,
+                "net_r": -3.3
+              },
+              "SOFI": {
+                "trades": 1,
+                "gross_r": 0.78,
+                "cost_r": 0.04,
+                "net_r": 0.75
+              },
+              "SPOT": {
+                "trades": 2,
+                "gross_r": -0.52,
+                "cost_r": 0.05,
+                "net_r": -0.58
+              },
+              "TGT": {
+                "trades": 1,
+                "gross_r": 0.42,
+                "cost_r": 0.04,
+                "net_r": 0.38
+              },
+              "UBER": {
+                "trades": 1,
+                "gross_r": -1.14,
+                "cost_r": 0.25,
+                "net_r": -1.39
+              },
+              "UNH": {
+                "trades": 6,
+                "gross_r": 1.91,
+                "cost_r": 0.26,
+                "net_r": 1.65
+              },
+              "UPST": {
+                "trades": 1,
+                "gross_r": -0.24,
+                "cost_r": 0.02,
+                "net_r": -0.26
+              },
+              "V": {
+                "trades": 1,
+                "gross_r": -0.28,
+                "cost_r": 0.04,
+                "net_r": -0.32
+              },
+              "ZS": {
+                "trades": 2,
+                "gross_r": -0.79,
+                "cost_r": 0.1,
+                "net_r": -0.89
+              }
+            }
+          }
+        },
+        "2025-Q3": {
+          "gross": {
+            "trades": 150,
+            "win_rate": 0.44,
+            "avg_win_r": 0.873,
+            "avg_loss_r": -0.773,
+            "expectancy_r": -0.049,
+            "total_r": -7.34,
+            "max_drawdown_r": 15.81,
+            "profit_factor": 0.887,
+            "net_pnl_100sh": -866.77,
+            "fees": 210.0,
+            "slippage": 300.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "150 of 150 trades",
+            "contract": "short_1_6_dte",
+            "estimated_with_median_cost": 138,
+            "median_cost_bps_used": 6.363,
+            "gross_total_r": -7.34,
+            "cost_total_r": 8.0,
+            "net_total_r": -15.34,
+            "net_expectancy_r": -0.102,
+            "net_win_rate": 0.407,
+            "net_profit_factor": 0.78,
+            "median_cost_r": 0.054,
+            "by_symbol": {
+              "AAPL": {
+                "trades": 1,
+                "gross_r": -0.3,
+                "cost_r": 0.04,
+                "net_r": -0.34
+              },
+              "ABNB": {
+                "trades": 2,
+                "gross_r": -2.09,
+                "cost_r": 0.1,
+                "net_r": -2.19
+              },
+              "ADBE": {
+                "trades": 1,
+                "gross_r": -1.02,
+                "cost_r": 0.06,
+                "net_r": -1.08
+              },
+              "AFRM": {
+                "trades": 2,
+                "gross_r": -0.22,
+                "cost_r": 0.05,
+                "net_r": -0.28
+              },
+              "AMAT": {
+                "trades": 2,
+                "gross_r": 0.25,
+                "cost_r": 0.12,
+                "net_r": 0.14
+              },
+              "AMD": {
+                "trades": 1,
+                "gross_r": -1.05,
+                "cost_r": 0.05,
+                "net_r": -1.1
+              },
+              "AMZN": {
+                "trades": 1,
+                "gross_r": 0.16,
+                "cost_r": 0.06,
+                "net_r": 0.09
+              },
+              "ARM": {
+                "trades": 2,
+                "gross_r": -1.48,
+                "cost_r": 0.08,
+                "net_r": -1.57
+              },
+              "AVGO": {
+                "trades": 1,
+                "gross_r": -1.02,
+                "cost_r": 0.04,
+                "net_r": -1.07
+              },
+              "BA": {
+                "trades": 2,
+                "gross_r": -0.22,
+                "cost_r": 0.09,
+                "net_r": -0.31
+              },
+              "BABA": {
+                "trades": 1,
+                "gross_r": -0.59,
+                "cost_r": 0.06,
+                "net_r": -0.66
+              },
+              "C": {
+                "trades": 1,
+                "gross_r": -0.39,
+                "cost_r": 0.06,
+                "net_r": -0.45
+              },
+              "CAT": {
+                "trades": 1,
+                "gross_r": -0.29,
+                "cost_r": 0.06,
+                "net_r": -0.35
+              },
+              "CMCSA": {
+                "trades": 4,
+                "gross_r": -1.53,
+                "cost_r": 0.23,
+                "net_r": -1.77
+              },
+              "CMG": {
+                "trades": 2,
+                "gross_r": -0.98,
+                "cost_r": 0.09,
+                "net_r": -1.07
+              },
+              "COIN": {
+                "trades": 1,
+                "gross_r": -1.05,
+                "cost_r": 0.03,
+                "net_r": -1.08
+              },
+              "CRM": {
+                "trades": 3,
+                "gross_r": -0.99,
+                "cost_r": 0.18,
+                "net_r": -1.17
+              },
+              "CRWD": {
+                "trades": 1,
+                "gross_r": 0.49,
+                "cost_r": 0.02,
+                "net_r": 0.47
+              },
+              "CVNA": {
+                "trades": 5,
+                "gross_r": -1.19,
+                "cost_r": 0.27,
+                "net_r": -1.46
+              },
+              "CVX": {
+                "trades": 3,
+                "gross_r": 1.05,
+                "cost_r": 0.17,
+                "net_r": 0.88
+              },
+              "DAL": {
+                "trades": 1,
+                "gross_r": -0.2,
+                "cost_r": 0.04,
+                "net_r": -0.24
+              },
+              "DASH": {
+                "trades": 1,
+                "gross_r": 0.92,
+                "cost_r": 0.05,
+                "net_r": 0.87
+              },
+              "DDOG": {
+                "trades": 3,
+                "gross_r": 1.75,
+                "cost_r": 0.17,
+                "net_r": 1.58
+              },
+              "DE": {
+                "trades": 2,
+                "gross_r": -1.0,
+                "cost_r": 0.11,
+                "net_r": -1.11
+              },
+              "DIS": {
+                "trades": 2,
+                "gross_r": -1.2,
+                "cost_r": 0.1,
+                "net_r": -1.3
+              },
+              "DKNG": {
+                "trades": 1,
+                "gross_r": 3.63,
+                "cost_r": 0.03,
+                "net_r": 3.6
+              },
+              "FCX": {
+                "trades": 2,
+                "gross_r": 5.67,
+                "cost_r": 0.1,
+                "net_r": 5.57
+              },
+              "GM": {
+                "trades": 3,
+                "gross_r": 1.48,
+                "cost_r": 0.13,
+                "net_r": 1.35
+              },
+              "GOOGL": {
+                "trades": 1,
+                "gross_r": 0.36,
+                "cost_r": 0.06,
+                "net_r": 0.3
+              },
+              "HD": {
+                "trades": 1,
+                "gross_r": 1.12,
+                "cost_r": 0.06,
+                "net_r": 1.06
+              },
+              "INTC": {
+                "trades": 4,
+                "gross_r": -4.05,
+                "cost_r": 0.53,
+                "net_r": -4.58
+              },
+              "JD": {
+                "trades": 5,
+                "gross_r": -2.93,
+                "cost_r": 0.29,
+                "net_r": -3.22
+              },
+              "JNJ": {
+                "trades": 2,
+                "gross_r": -0.03,
+                "cost_r": 0.11,
+                "net_r": -0.13
+              },
+              "LCID": {
+                "trades": 4,
+                "gross_r": -2.07,
+                "cost_r": 0.1,
+                "net_r": -2.17
+              },
+              "LLY": {
+                "trades": 1,
+                "gross_r": 0.11,
+                "cost_r": 0.03,
+                "net_r": 0.09
+              },
+              "LMT": {
+                "trades": 2,
+                "gross_r": 0.05,
+                "cost_r": 0.13,
+                "net_r": -0.07
+              },
+              "LOW": {
+                "trades": 1,
+                "gross_r": 0.08,
+                "cost_r": 0.04,
+                "net_r": 0.05
+              },
+              "LRCX": {
+                "trades": 3,
+                "gross_r": 2.93,
+                "cost_r": 0.15,
+                "net_r": 2.78
+              },
+              "LULU": {
+                "trades": 2,
+                "gross_r": -1.57,
+                "cost_r": 0.12,
+                "net_r": -1.7
+              },
+              "MARA": {
+                "trades": 2,
+                "gross_r": 0.6,
+                "cost_r": 0.05,
+                "net_r": 0.55
+              },
+              "MCD": {
+                "trades": 1,
+                "gross_r": -0.14,
+                "cost_r": 0.06,
+                "net_r": -0.2
+              },
+              "MDB": {
+                "trades": 3,
+                "gross_r": 1.52,
+                "cost_r": 0.13,
+                "net_r": 1.38
+              },
+              "MRNA": {
+                "trades": 1,
+                "gross_r": -1.09,
+                "cost_r": 0.03,
+                "net_r": -1.12
+              },
+              "MRVL": {
+                "trades": 3,
+                "gross_r": 3.26,
+                "cost_r": 0.15,
+                "net_r": 3.11
+              },
+              "MSFT": {
+                "trades": 2,
+                "gross_r": 1.0,
+                "cost_r": 0.1,
+                "net_r": 0.9
+              },
+              "MSTR": {
+                "trades": 2,
+                "gross_r": 0.71,
+                "cost_r": 0.09,
+                "net_r": 0.62
+              },
+              "MU": {
+                "trades": 3,
+                "gross_r": -0.29,
+                "cost_r": 0.15,
+                "net_r": -0.44
+              },
+              "NET": {
+                "trades": 2,
+                "gross_r": -0.28,
+                "cost_r": 0.09,
+                "net_r": -0.37
+              },
+              "NFLX": {
+                "trades": 1,
+                "gross_r": -0.17,
+                "cost_r": 0.09,
+                "net_r": -0.26
+              },
+              "NKE": {
+                "trades": 1,
+                "gross_r": -0.29,
+                "cost_r": 0.06,
+                "net_r": -0.35
+              },
+              "NVDA": {
+                "trades": 1,
+                "gross_r": -1.02,
+                "cost_r": 0.04,
+                "net_r": -1.06
+              },
+              "ORCL": {
+                "trades": 2,
+                "gross_r": -2.08,
+                "cost_r": 0.13,
+                "net_r": -2.2
+              },
+              "OXY": {
+                "trades": 3,
+                "gross_r": -0.95,
+                "cost_r": 0.17,
+                "net_r": -1.13
+              },
+              "PANW": {
+                "trades": 4,
+                "gross_r": 0.2,
+                "cost_r": 0.2,
+                "net_r": -0.0
+              },
+              "PDD": {
+                "trades": 2,
+                "gross_r": 0.51,
+                "cost_r": 0.11,
+                "net_r": 0.4
+              },
+              "PEP": {
+                "trades": 1,
+                "gross_r": 0.03,
+                "cost_r": 0.05,
+                "net_r": -0.02
+              },
+              "PFE": {
+                "trades": 3,
+                "gross_r": 0.39,
+                "cost_r": 0.19,
+                "net_r": 0.2
+              },
+              "PLTR": {
+                "trades": 1,
+                "gross_r": 1.32,
+                "cost_r": 0.07,
+                "net_r": 1.25
+              },
+              "PYPL": {
+                "trades": 1,
+                "gross_r": -1.07,
+                "cost_r": 0.06,
+                "net_r": -1.14
+              },
+              "QCOM": {
+                "trades": 1,
+                "gross_r": 2.24,
+                "cost_r": 0.04,
+                "net_r": 2.19
+              },
+              "RCL": {
+                "trades": 1,
+                "gross_r": -0.68,
+                "cost_r": 0.02,
+                "net_r": -0.7
+              },
+              "RIOT": {
+                "trades": 1,
+                "gross_r": -1.13,
+                "cost_r": 0.02,
+                "net_r": -1.15
+              },
+              "RIVN": {
+                "trades": 1,
+                "gross_r": 1.07,
+                "cost_r": 0.05,
+                "net_r": 1.01
+              },
+              "ROKU": {
+                "trades": 1,
+                "gross_r": 0.36,
+                "cost_r": 0.06,
+                "net_r": 0.3
+              },
+              "RTX": {
+                "trades": 1,
+                "gross_r": 0.79,
+                "cost_r": 0.06,
+                "net_r": 0.72
+              },
+              "SCHW": {
+                "trades": 3,
+                "gross_r": -1.17,
+                "cost_r": 0.18,
+                "net_r": -1.35
+              },
+              "SHOP": {
+                "trades": 1,
+                "gross_r": -1.09,
+                "cost_r": 0.05,
+                "net_r": -1.14
+              },
+              "SNOW": {
+                "trades": 2,
+                "gross_r": 0.28,
+                "cost_r": 0.08,
+                "net_r": 0.2
+              },
+              "SOFI": {
+                "trades": 2,
+                "gross_r": -0.06,
+                "cost_r": 0.04,
+                "net_r": -0.1
+              },
+              "SPOT": {
+                "trades": 2,
+                "gross_r": -0.33,
+                "cost_r": 0.05,
+                "net_r": -0.38
+              },
+              "T": {
+                "trades": 1,
+                "gross_r": -0.06,
+                "cost_r": 0.06,
+                "net_r": -0.12
+              },
+              "TGT": {
+                "trades": 1,
+                "gross_r": 0.76,
+                "cost_r": 0.05,
+                "net_r": 0.72
+              },
+              "TSLA": {
+                "trades": 1,
+                "gross_r": 2.2,
+                "cost_r": 0.05,
+                "net_r": 2.15
+              },
+              "TSM": {
+                "trades": 3,
+                "gross_r": -2.0,
+                "cost_r": 0.17,
+                "net_r": -2.17
+              },
+              "UAL": {
+                "trades": 1,
+                "gross_r": -1.14,
+                "cost_r": 0.06,
+                "net_r": -1.2
+              },
+              "UBER": {
+                "trades": 2,
+                "gross_r": -0.89,
+                "cost_r": 0.31,
+                "net_r": -1.2
+              },
+              "UNH": {
+                "trades": 1,
+                "gross_r": -1.09,
+                "cost_r": 0.06,
+                "net_r": -1.15
+              },
+              "UPST": {
+                "trades": 2,
+                "gross_r": 1.15,
+                "cost_r": 0.03,
+                "net_r": 1.12
+              },
+              "VZ": {
+                "trades": 1,
+                "gross_r": -0.47,
+                "cost_r": 0.06,
+                "net_r": -0.53
+              },
+              "WFC": {
+                "trades": 2,
+                "gross_r": 0.99,
+                "cost_r": 0.11,
+                "net_r": 0.88
+              },
+              "ZS": {
+                "trades": 2,
+                "gross_r": -1.86,
+                "cost_r": 0.08,
+                "net_r": -1.94
+              }
+            }
+          }
+        },
+        "2025-Q4": {
+          "gross": {
+            "trades": 142,
+            "win_rate": 0.415,
+            "avg_win_r": 0.908,
+            "avg_loss_r": -0.802,
+            "expectancy_r": -0.092,
+            "total_r": -13.02,
+            "max_drawdown_r": 22.22,
+            "profit_factor": 0.804,
+            "net_pnl_100sh": -2091.91,
+            "fees": 198.8,
+            "slippage": 284.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "142 of 142 trades",
+            "contract": "short_1_6_dte",
+            "estimated_with_median_cost": 133,
+            "median_cost_bps_used": 6.363,
+            "gross_total_r": -13.02,
+            "cost_total_r": 7.32,
+            "net_total_r": -20.35,
+            "net_expectancy_r": -0.143,
+            "net_win_rate": 0.401,
+            "net_profit_factor": 0.713,
+            "median_cost_r": 0.05,
+            "by_symbol": {
+              "AAL": {
+                "trades": 3,
+                "gross_r": -2.02,
+                "cost_r": 0.16,
+                "net_r": -2.18
+              },
+              "ABBV": {
+                "trades": 1,
+                "gross_r": 0.83,
+                "cost_r": 0.06,
+                "net_r": 0.77
+              },
+              "ABNB": {
+                "trades": 1,
+                "gross_r": -1.01,
+                "cost_r": 0.03,
+                "net_r": -1.04
+              },
+              "ADBE": {
+                "trades": 1,
+                "gross_r": 1.01,
+                "cost_r": 0.05,
+                "net_r": 0.97
+              },
+              "AFRM": {
+                "trades": 3,
+                "gross_r": -0.8,
+                "cost_r": 0.13,
+                "net_r": -0.93
+              },
+              "AMD": {
+                "trades": 3,
+                "gross_r": 0.53,
+                "cost_r": 0.15,
+                "net_r": 0.38
+              },
+              "AMZN": {
+                "trades": 1,
+                "gross_r": 0.64,
+                "cost_r": 0.06,
+                "net_r": 0.57
+              },
+              "ARM": {
+                "trades": 4,
+                "gross_r": -1.22,
+                "cost_r": 0.17,
+                "net_r": -1.39
+              },
+              "AVGO": {
+                "trades": 2,
+                "gross_r": 1.05,
+                "cost_r": 0.08,
+                "net_r": 0.98
+              },
+              "AXP": {
+                "trades": 1,
+                "gross_r": 0.8,
+                "cost_r": 0.06,
+                "net_r": 0.74
+              },
+              "BABA": {
+                "trades": 1,
+                "gross_r": -1.03,
+                "cost_r": 0.06,
+                "net_r": -1.09
+              },
+              "CAT": {
+                "trades": 1,
+                "gross_r": -0.21,
+                "cost_r": 0.03,
+                "net_r": -0.24
+              },
+              "CCL": {
+                "trades": 1,
+                "gross_r": 0.87,
+                "cost_r": 0.05,
+                "net_r": 0.82
+              },
+              "CMCSA": {
+                "trades": 2,
+                "gross_r": 2.35,
+                "cost_r": 0.12,
+                "net_r": 2.23
+              },
+              "CMG": {
+                "trades": 1,
+                "gross_r": -0.44,
+                "cost_r": 0.02,
+                "net_r": -0.46
+              },
+              "COIN": {
+                "trades": 1,
+                "gross_r": 1.19,
+                "cost_r": 0.05,
+                "net_r": 1.14
+              },
+              "COST": {
+                "trades": 2,
+                "gross_r": -1.38,
+                "cost_r": 0.13,
+                "net_r": -1.51
+              },
+              "CRWD": {
+                "trades": 3,
+                "gross_r": 1.06,
+                "cost_r": 0.16,
+                "net_r": 0.9
+              },
+              "CVNA": {
+                "trades": 1,
+                "gross_r": -1.2,
+                "cost_r": 0.02,
+                "net_r": -1.22
+              },
+              "CVS": {
+                "trades": 1,
+                "gross_r": -1.05,
+                "cost_r": 0.06,
+                "net_r": -1.11
+              },
+              "CVX": {
+                "trades": 3,
+                "gross_r": -0.94,
+                "cost_r": 0.19,
+                "net_r": -1.13
+              },
+              "DAL": {
+                "trades": 2,
+                "gross_r": -2.17,
+                "cost_r": 0.09,
+                "net_r": -2.26
+              },
+              "DASH": {
+                "trades": 1,
+                "gross_r": -1.02,
+                "cost_r": 0.04,
+                "net_r": -1.05
+              },
+              "DDOG": {
+                "trades": 2,
+                "gross_r": 0.55,
+                "cost_r": 0.1,
+                "net_r": 0.45
+              },
+              "DE": {
+                "trades": 2,
+                "gross_r": -1.63,
+                "cost_r": 0.13,
+                "net_r": -1.76
+              },
+              "DIS": {
+                "trades": 1,
+                "gross_r": -1.08,
+                "cost_r": 0.04,
+                "net_r": -1.12
+              },
+              "DKNG": {
+                "trades": 1,
+                "gross_r": 0.53,
+                "cost_r": 0.03,
+                "net_r": 0.5
+              },
+              "F": {
+                "trades": 2,
+                "gross_r": -0.19,
+                "cost_r": 0.1,
+                "net_r": -0.29
+              },
+              "FCX": {
+                "trades": 3,
+                "gross_r": -2.51,
+                "cost_r": 0.14,
+                "net_r": -2.65
+              },
+              "GM": {
+                "trades": 1,
+                "gross_r": 0.29,
+                "cost_r": 0.04,
+                "net_r": 0.25
+              },
+              "GOOGL": {
+                "trades": 1,
+                "gross_r": -0.13,
+                "cost_r": 0.05,
+                "net_r": -0.18
+              },
+              "HD": {
+                "trades": 2,
+                "gross_r": 0.14,
+                "cost_r": 0.12,
+                "net_r": 0.02
+              },
+              "JD": {
+                "trades": 2,
+                "gross_r": -1.33,
+                "cost_r": 0.12,
+                "net_r": -1.45
+              },
+              "JPM": {
+                "trades": 1,
+                "gross_r": 2.67,
+                "cost_r": 0.06,
+                "net_r": 2.61
+              },
+              "KO": {
+                "trades": 1,
+                "gross_r": 0.0,
+                "cost_r": 0.06,
+                "net_r": -0.06
+              },
+              "LCID": {
+                "trades": 1,
+                "gross_r": -0.44,
+                "cost_r": 0.03,
+                "net_r": -0.47
+              },
+              "LLY": {
+                "trades": 3,
+                "gross_r": 1.58,
+                "cost_r": 0.13,
+                "net_r": 1.46
+              },
+              "LRCX": {
+                "trades": 1,
+                "gross_r": 0.31,
+                "cost_r": 0.02,
+                "net_r": 0.28
+              },
+              "LULU": {
+                "trades": 6,
+                "gross_r": -4.12,
+                "cost_r": 0.29,
+                "net_r": -4.41
+              },
+              "MARA": {
+                "trades": 1,
+                "gross_r": 2.49,
+                "cost_r": 0.02,
+                "net_r": 2.47
+              },
+              "MCD": {
+                "trades": 1,
+                "gross_r": -0.35,
+                "cost_r": 0.06,
+                "net_r": -0.41
+              },
+              "META": {
+                "trades": 1,
+                "gross_r": 1.23,
+                "cost_r": 0.06,
+                "net_r": 1.17
+              },
+              "MRK": {
+                "trades": 2,
+                "gross_r": 2.44,
+                "cost_r": 0.11,
+                "net_r": 2.33
+              },
+              "MRNA": {
+                "trades": 1,
+                "gross_r": -0.44,
+                "cost_r": 0.02,
+                "net_r": -0.46
+              },
+              "MRVL": {
+                "trades": 1,
+                "gross_r": -1.02,
+                "cost_r": 0.03,
+                "net_r": -1.05
+              },
+              "MSFT": {
+                "trades": 1,
+                "gross_r": -0.02,
+                "cost_r": 0.06,
+                "net_r": -0.08
+              },
+              "MSTR": {
+                "trades": 5,
+                "gross_r": -3.61,
+                "cost_r": 0.19,
+                "net_r": -3.8
+              },
+              "MU": {
+                "trades": 2,
+                "gross_r": -0.24,
+                "cost_r": 0.06,
+                "net_r": -0.31
+              },
+              "NET": {
+                "trades": 2,
+                "gross_r": -0.12,
+                "cost_r": 0.07,
+                "net_r": -0.2
+              },
+              "NFLX": {
+                "trades": 2,
+                "gross_r": -0.49,
+                "cost_r": 0.19,
+                "net_r": -0.67
+              },
+              "NKE": {
+                "trades": 3,
+                "gross_r": -0.76,
+                "cost_r": 0.17,
+                "net_r": -0.93
+              },
+              "NVDA": {
+                "trades": 1,
+                "gross_r": -0.11,
+                "cost_r": 0.05,
+                "net_r": -0.16
+              },
+              "ORCL": {
+                "trades": 2,
+                "gross_r": 2.36,
+                "cost_r": 0.07,
+                "net_r": 2.29
+              },
+              "PANW": {
+                "trades": 1,
+                "gross_r": 2.56,
+                "cost_r": 0.05,
+                "net_r": 2.51
+              },
+              "PDD": {
+                "trades": 4,
+                "gross_r": -0.05,
+                "cost_r": 0.23,
+                "net_r": -0.28
+              },
+              "PEP": {
+                "trades": 2,
+                "gross_r": 0.79,
+                "cost_r": 0.11,
+                "net_r": 0.69
+              },
+              "PLTR": {
+                "trades": 1,
+                "gross_r": -1.04,
+                "cost_r": 0.05,
+                "net_r": -1.09
+              },
+              "QCOM": {
+                "trades": 1,
+                "gross_r": 0.39,
+                "cost_r": 0.05,
+                "net_r": 0.34
+              },
+              "RIOT": {
+                "trades": 1,
+                "gross_r": -1.18,
+                "cost_r": 0.02,
+                "net_r": -1.2
+              },
+              "RIVN": {
+                "trades": 4,
+                "gross_r": 0.9,
+                "cost_r": 0.14,
+                "net_r": 0.76
+              },
+              "ROKU": {
+                "trades": 2,
+                "gross_r": 0.32,
+                "cost_r": 0.08,
+                "net_r": 0.24
+              },
+              "RTX": {
+                "trades": 2,
+                "gross_r": -1.58,
+                "cost_r": 0.13,
+                "net_r": -1.71
+              },
+              "SBUX": {
+                "trades": 2,
+                "gross_r": -1.22,
+                "cost_r": 0.09,
+                "net_r": -1.31
+              },
+              "SCHW": {
+                "trades": 3,
+                "gross_r": -0.9,
+                "cost_r": 0.16,
+                "net_r": -1.05
+              },
+              "SHOP": {
+                "trades": 2,
+                "gross_r": -1.23,
+                "cost_r": 0.09,
+                "net_r": -1.32
+              },
+              "SLB": {
+                "trades": 1,
+                "gross_r": 0.53,
+                "cost_r": 0.06,
+                "net_r": 0.47
+              },
+              "SNOW": {
+                "trades": 5,
+                "gross_r": 1.39,
+                "cost_r": 0.23,
+                "net_r": 1.15
+              },
+              "SOFI": {
+                "trades": 1,
+                "gross_r": 0.21,
+                "cost_r": 0.02,
+                "net_r": 0.19
+              },
+              "SPOT": {
+                "trades": 1,
+                "gross_r": -1.11,
+                "cost_r": 0.03,
+                "net_r": -1.14
+              },
+              "TGT": {
+                "trades": 2,
+                "gross_r": 0.34,
+                "cost_r": 0.09,
+                "net_r": 0.25
+              },
+              "TSM": {
+                "trades": 1,
+                "gross_r": 0.07,
+                "cost_r": 0.04,
+                "net_r": 0.03
+              },
+              "UAL": {
+                "trades": 2,
+                "gross_r": 0.26,
+                "cost_r": 0.08,
+                "net_r": 0.18
+              },
+              "UBER": {
+                "trades": 3,
+                "gross_r": -1.3,
+                "cost_r": 0.64,
+                "net_r": -1.94
+              },
+              "V": {
+                "trades": 1,
+                "gross_r": 0.06,
+                "cost_r": 0.06,
+                "net_r": 0.0
+              },
+              "WFC": {
+                "trades": 1,
+                "gross_r": 0.88,
+                "cost_r": 0.05,
+                "net_r": 0.83
+              },
+              "WMT": {
+                "trades": 1,
+                "gross_r": -0.79,
+                "cost_r": 0.06,
+                "net_r": -0.85
+              },
+              "XOM": {
+                "trades": 1,
+                "gross_r": -1.04,
+                "cost_r": 0.06,
+                "net_r": -1.1
+              },
+              "ZS": {
+                "trades": 2,
+                "gross_r": -2.17,
+                "cost_r": 0.1,
+                "net_r": -2.27
+              }
+            }
+          }
+        },
+        "2026-Q1": {
+          "gross": {
+            "trades": 141,
+            "win_rate": 0.44,
+            "avg_win_r": 0.828,
+            "avg_loss_r": -0.758,
+            "expectancy_r": -0.061,
+            "total_r": -8.58,
+            "max_drawdown_r": 14.91,
+            "profit_factor": 0.857,
+            "net_pnl_100sh": -1223.78,
+            "fees": 197.4,
+            "slippage": 282.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "141 of 141 trades",
+            "contract": "short_1_6_dte",
+            "estimated_with_median_cost": 134,
+            "median_cost_bps_used": 6.363,
+            "gross_total_r": -8.58,
+            "cost_total_r": 6.49,
+            "net_total_r": -15.07,
+            "net_expectancy_r": -0.107,
+            "net_win_rate": 0.404,
+            "net_profit_factor": 0.763,
+            "median_cost_r": 0.044,
+            "by_symbol": {
+              "AAL": {
+                "trades": 2,
+                "gross_r": -1.27,
+                "cost_r": 0.09,
+                "net_r": -1.35
+              },
+              "ABBV": {
+                "trades": 4,
+                "gross_r": -2.06,
+                "cost_r": 0.25,
+                "net_r": -2.32
+              },
+              "ADBE": {
+                "trades": 1,
+                "gross_r": 0.24,
+                "cost_r": 0.05,
+                "net_r": 0.19
+              },
+              "AFRM": {
+                "trades": 1,
+                "gross_r": -0.31,
+                "cost_r": 0.03,
+                "net_r": -0.34
+              },
+              "AMAT": {
+                "trades": 3,
+                "gross_r": 2.73,
+                "cost_r": 0.17,
+                "net_r": 2.56
+              },
+              "AMD": {
+                "trades": 4,
+                "gross_r": -0.51,
+                "cost_r": 0.16,
+                "net_r": -0.67
+              },
+              "AMZN": {
+                "trades": 1,
+                "gross_r": -0.48,
+                "cost_r": 0.04,
+                "net_r": -0.52
+              },
+              "ARM": {
+                "trades": 5,
+                "gross_r": -1.83,
+                "cost_r": 0.16,
+                "net_r": -1.99
+              },
+              "AVGO": {
+                "trades": 1,
+                "gross_r": -1.02,
+                "cost_r": 0.05,
+                "net_r": -1.08
+              },
+              "AXP": {
+                "trades": 2,
+                "gross_r": -1.05,
+                "cost_r": 0.11,
+                "net_r": -1.16
+              },
+              "BA": {
+                "trades": 2,
+                "gross_r": -1.65,
+                "cost_r": 0.1,
+                "net_r": -1.75
+              },
+              "BABA": {
+                "trades": 1,
+                "gross_r": 2.41,
+                "cost_r": 0.06,
+                "net_r": 2.35
+              },
+              "CRM": {
+                "trades": 1,
+                "gross_r": 0.06,
+                "cost_r": 0.04,
+                "net_r": 0.02
+              },
+              "CRWD": {
+                "trades": 2,
+                "gross_r": -0.68,
+                "cost_r": 0.06,
+                "net_r": -0.74
+              },
+              "CVNA": {
+                "trades": 5,
+                "gross_r": 0.55,
+                "cost_r": 0.13,
+                "net_r": 0.43
+              },
+              "CVS": {
+                "trades": 1,
+                "gross_r": 1.01,
+                "cost_r": 0.06,
+                "net_r": 0.95
+              },
+              "DAL": {
+                "trades": 2,
+                "gross_r": -2.31,
+                "cost_r": 0.13,
+                "net_r": -2.44
+              },
+              "DASH": {
+                "trades": 3,
+                "gross_r": -0.54,
+                "cost_r": 0.13,
+                "net_r": -0.67
+              },
+              "DDOG": {
+                "trades": 4,
+                "gross_r": -1.94,
+                "cost_r": 0.2,
+                "net_r": -2.14
+              },
+              "DE": {
+                "trades": 1,
+                "gross_r": 1.44,
+                "cost_r": 0.05,
+                "net_r": 1.39
+              },
+              "DIS": {
+                "trades": 2,
+                "gross_r": -2.22,
+                "cost_r": 0.11,
+                "net_r": -2.33
+              },
+              "DKNG": {
+                "trades": 3,
+                "gross_r": -1.2,
+                "cost_r": 0.14,
+                "net_r": -1.34
+              },
+              "F": {
+                "trades": 1,
+                "gross_r": -0.1,
+                "cost_r": 0.05,
+                "net_r": -0.15
+              },
+              "FCX": {
+                "trades": 3,
+                "gross_r": 0.98,
+                "cost_r": 0.11,
+                "net_r": 0.87
+              },
+              "GE": {
+                "trades": 2,
+                "gross_r": -2.09,
+                "cost_r": 0.1,
+                "net_r": -2.19
+              },
+              "GOOGL": {
+                "trades": 1,
+                "gross_r": 0.27,
+                "cost_r": 0.02,
+                "net_r": 0.25
+              },
+              "GS": {
+                "trades": 1,
+                "gross_r": 0.05,
+                "cost_r": 0.06,
+                "net_r": -0.01
+              },
+              "HD": {
+                "trades": 1,
+                "gross_r": -1.01,
+                "cost_r": 0.06,
+                "net_r": -1.08
+              },
+              "INTC": {
+                "trades": 2,
+                "gross_r": -1.01,
+                "cost_r": 0.23,
+                "net_r": -1.24
+              },
+              "JD": {
+                "trades": 1,
+                "gross_r": 0.2,
+                "cost_r": 0.04,
+                "net_r": 0.15
+              },
+              "JNJ": {
+                "trades": 1,
+                "gross_r": 0.16,
+                "cost_r": 0.06,
+                "net_r": 0.1
+              },
+              "LLY": {
+                "trades": 1,
+                "gross_r": 0.39,
+                "cost_r": 0.03,
+                "net_r": 0.36
+              },
+              "LMT": {
+                "trades": 2,
+                "gross_r": 0.22,
+                "cost_r": 0.08,
+                "net_r": 0.14
+              },
+              "LOW": {
+                "trades": 2,
+                "gross_r": 1.64,
+                "cost_r": 0.1,
+                "net_r": 1.54
+              },
+              "MA": {
+                "trades": 1,
+                "gross_r": -0.68,
+                "cost_r": 0.06,
+                "net_r": -0.74
+              },
+              "MDB": {
+                "trades": 1,
+                "gross_r": -0.39,
+                "cost_r": 0.02,
+                "net_r": -0.41
+              },
+              "META": {
+                "trades": 4,
+                "gross_r": 0.69,
+                "cost_r": 0.22,
+                "net_r": 0.47
+              },
+              "MRNA": {
+                "trades": 1,
+                "gross_r": 0.43,
+                "cost_r": 0.01,
+                "net_r": 0.41
+              },
+              "MRVL": {
+                "trades": 2,
+                "gross_r": 1.02,
+                "cost_r": 0.09,
+                "net_r": 0.93
+              },
+              "MS": {
+                "trades": 1,
+                "gross_r": -1.11,
+                "cost_r": 0.06,
+                "net_r": -1.18
+              },
+              "MSTR": {
+                "trades": 3,
+                "gross_r": -2.32,
+                "cost_r": 0.11,
+                "net_r": -2.42
+              },
+              "NET": {
+                "trades": 3,
+                "gross_r": 2.38,
+                "cost_r": 0.08,
+                "net_r": 2.29
+              },
+              "ORCL": {
+                "trades": 3,
+                "gross_r": -0.66,
+                "cost_r": 0.1,
+                "net_r": -0.75
+              },
+              "PANW": {
+                "trades": 2,
+                "gross_r": 0.24,
+                "cost_r": 0.1,
+                "net_r": 0.14
+              },
+              "PEP": {
+                "trades": 1,
+                "gross_r": 1.42,
+                "cost_r": 0.06,
+                "net_r": 1.35
+              },
+              "PLTR": {
+                "trades": 1,
+                "gross_r": -1.01,
+                "cost_r": 0.03,
+                "net_r": -1.05
+              },
+              "PYPL": {
+                "trades": 1,
+                "gross_r": 0.69,
+                "cost_r": 0.04,
+                "net_r": 0.65
+              },
+              "QCOM": {
+                "trades": 2,
+                "gross_r": -1.46,
+                "cost_r": 0.09,
+                "net_r": -1.55
+              },
+              "RCL": {
+                "trades": 1,
+                "gross_r": 0.97,
+                "cost_r": 0.04,
+                "net_r": 0.92
+              },
+              "RIOT": {
+                "trades": 1,
+                "gross_r": -1.32,
+                "cost_r": 0.03,
+                "net_r": -1.35
+              },
+              "RIVN": {
+                "trades": 1,
+                "gross_r": -0.15,
+                "cost_r": 0.04,
+                "net_r": -0.19
+              },
+              "ROKU": {
+                "trades": 1,
+                "gross_r": 3.2,
+                "cost_r": 0.04,
+                "net_r": 3.16
+              },
+              "RTX": {
+                "trades": 5,
+                "gross_r": 0.51,
+                "cost_r": 0.3,
+                "net_r": 0.21
+              },
+              "SBUX": {
+                "trades": 1,
+                "gross_r": 1.11,
+                "cost_r": 0.02,
+                "net_r": 1.09
+              },
+              "SCHW": {
+                "trades": 1,
+                "gross_r": 2.2,
+                "cost_r": 0.05,
+                "net_r": 2.15
+              },
+              "SHOP": {
+                "trades": 4,
+                "gross_r": -2.05,
+                "cost_r": 0.12,
+                "net_r": -2.17
+              },
+              "SLB": {
+                "trades": 1,
+                "gross_r": -1.14,
+                "cost_r": 0.06,
+                "net_r": -1.2
+              },
+              "SMCI": {
+                "trades": 3,
+                "gross_r": 2.55,
+                "cost_r": 0.1,
+                "net_r": 2.45
+              },
+              "SNOW": {
+                "trades": 4,
+                "gross_r": -0.15,
+                "cost_r": 0.18,
+                "net_r": -0.33
+              },
+              "SPOT": {
+                "trades": 4,
+                "gross_r": 0.8,
+                "cost_r": 0.17,
+                "net_r": 0.63
+              },
+              "T": {
+                "trades": 1,
+                "gross_r": 1.59,
+                "cost_r": 0.06,
+                "net_r": 1.53
+              },
+              "TGT": {
+                "trades": 1,
+                "gross_r": 0.39,
+                "cost_r": 0.03,
+                "net_r": 0.36
+              },
+              "TSM": {
+                "trades": 1,
+                "gross_r": 0.8,
+                "cost_r": 0.06,
+                "net_r": 0.74
+              },
+              "UAL": {
+                "trades": 2,
+                "gross_r": -0.48,
+                "cost_r": 0.1,
+                "net_r": -0.58
+              },
+              "UBER": {
+                "trades": 2,
+                "gross_r": -0.61,
+                "cost_r": 0.21,
+                "net_r": -0.82
+              },
+              "UPST": {
+                "trades": 3,
+                "gross_r": -0.16,
+                "cost_r": 0.11,
+                "net_r": -0.28
+              },
+              "WFC": {
+                "trades": 4,
+                "gross_r": -1.83,
+                "cost_r": 0.18,
+                "net_r": -2.0
+              },
+              "WMT": {
+                "trades": 2,
+                "gross_r": -1.01,
+                "cost_r": 0.13,
+                "net_r": -1.13
+              },
+              "ZS": {
+                "trades": 3,
+                "gross_r": -2.09,
+                "cost_r": 0.1,
+                "net_r": -2.19
+              }
+            }
+          }
+        },
+        "2026-Q2": {
+          "gross": {
+            "trades": 129,
+            "win_rate": 0.419,
+            "avg_win_r": 1.075,
+            "avg_loss_r": -0.818,
+            "expectancy_r": -0.026,
+            "total_r": -3.32,
+            "max_drawdown_r": 19.92,
+            "profit_factor": 0.946,
+            "net_pnl_100sh": -4877.2,
+            "fees": 180.6,
+            "slippage": 258.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "129 of 129 trades",
+            "contract": "short_1_6_dte",
+            "estimated_with_median_cost": 116,
+            "median_cost_bps_used": 6.363,
+            "gross_total_r": -3.32,
+            "cost_total_r": 6.15,
+            "net_total_r": -9.47,
+            "net_expectancy_r": -0.073,
+            "net_win_rate": 0.395,
+            "net_profit_factor": 0.855,
+            "median_cost_r": 0.044,
+            "by_symbol": {
+              "AAPL": {
+                "trades": 3,
+                "gross_r": -0.62,
+                "cost_r": 0.1,
+                "net_r": -0.72
+              },
+              "ADBE": {
+                "trades": 3,
+                "gross_r": -0.73,
+                "cost_r": 0.11,
+                "net_r": -0.84
+              },
+              "AMAT": {
+                "trades": 1,
+                "gross_r": -1.04,
+                "cost_r": 0.05,
+                "net_r": -1.09
+              },
+              "AMD": {
+                "trades": 1,
+                "gross_r": -0.05,
+                "cost_r": 0.03,
+                "net_r": -0.09
+              },
+              "ARM": {
+                "trades": 1,
+                "gross_r": -1.05,
+                "cost_r": 0.03,
+                "net_r": -1.08
+              },
+              "AVGO": {
+                "trades": 2,
+                "gross_r": 2.81,
+                "cost_r": 0.09,
+                "net_r": 2.71
+              },
+              "BA": {
+                "trades": 1,
+                "gross_r": -1.03,
+                "cost_r": 0.05,
+                "net_r": -1.09
+              },
+              "BABA": {
+                "trades": 2,
+                "gross_r": -1.06,
+                "cost_r": 0.08,
+                "net_r": -1.14
+              },
+              "C": {
+                "trades": 1,
+                "gross_r": -1.2,
+                "cost_r": 0.06,
+                "net_r": -1.26
+              },
+              "CCL": {
+                "trades": 1,
+                "gross_r": -1.23,
+                "cost_r": 0.04,
+                "net_r": -1.28
+              },
+              "CMCSA": {
+                "trades": 1,
+                "gross_r": 4.39,
+                "cost_r": 0.04,
+                "net_r": 4.35
+              },
+              "COIN": {
+                "trades": 1,
+                "gross_r": -0.87,
+                "cost_r": 0.03,
+                "net_r": -0.9
+              },
+              "COST": {
+                "trades": 1,
+                "gross_r": -0.24,
+                "cost_r": 0.03,
+                "net_r": -0.26
+              },
+              "CRM": {
+                "trades": 1,
+                "gross_r": -1.01,
+                "cost_r": 0.03,
+                "net_r": -1.05
+              },
+              "CRWD": {
+                "trades": 2,
+                "gross_r": 1.45,
+                "cost_r": 0.06,
+                "net_r": 1.39
+              },
+              "CVS": {
+                "trades": 2,
+                "gross_r": -0.68,
+                "cost_r": 0.12,
+                "net_r": -0.8
+              },
+              "DAL": {
+                "trades": 1,
+                "gross_r": 1.51,
+                "cost_r": 0.03,
+                "net_r": 1.48
+              },
+              "DASH": {
+                "trades": 1,
+                "gross_r": -0.41,
+                "cost_r": 0.03,
+                "net_r": -0.43
+              },
+              "DDOG": {
+                "trades": 2,
+                "gross_r": 0.05,
+                "cost_r": 0.04,
+                "net_r": 0.01
+              },
+              "DE": {
+                "trades": 1,
+                "gross_r": -1.04,
+                "cost_r": 0.02,
+                "net_r": -1.07
+              },
+              "DKNG": {
+                "trades": 3,
+                "gross_r": -0.56,
+                "cost_r": 0.1,
+                "net_r": -0.66
+              },
+              "F": {
+                "trades": 3,
+                "gross_r": 0.67,
+                "cost_r": 0.14,
+                "net_r": 0.53
+              },
+              "FCX": {
+                "trades": 1,
+                "gross_r": -1.21,
+                "cost_r": 0.03,
+                "net_r": -1.24
+              },
+              "GE": {
+                "trades": 2,
+                "gross_r": 1.22,
+                "cost_r": 0.07,
+                "net_r": 1.15
+              },
+              "GM": {
+                "trades": 1,
+                "gross_r": -1.09,
+                "cost_r": 0.03,
+                "net_r": -1.12
+              },
+              "GOOGL": {
+                "trades": 4,
+                "gross_r": -0.22,
+                "cost_r": 0.22,
+                "net_r": -0.44
+              },
+              "GS": {
+                "trades": 3,
+                "gross_r": 1.1,
+                "cost_r": 0.19,
+                "net_r": 0.91
+              },
+              "HOOD": {
+                "trades": 3,
+                "gross_r": 0.79,
+                "cost_r": 0.09,
+                "net_r": 0.7
+              },
+              "JD": {
+                "trades": 2,
+                "gross_r": 0.94,
+                "cost_r": 0.11,
+                "net_r": 0.83
+              },
+              "JNJ": {
+                "trades": 2,
+                "gross_r": 1.52,
+                "cost_r": 0.13,
+                "net_r": 1.39
+              },
+              "KO": {
+                "trades": 1,
+                "gross_r": 0.71,
+                "cost_r": 0.06,
+                "net_r": 0.65
+              },
+              "LMT": {
+                "trades": 3,
+                "gross_r": -1.71,
+                "cost_r": 0.17,
+                "net_r": -1.88
+              },
+              "LOW": {
+                "trades": 1,
+                "gross_r": 1.95,
+                "cost_r": 0.04,
+                "net_r": 1.91
+              },
+              "MCD": {
+                "trades": 1,
+                "gross_r": -0.2,
+                "cost_r": 0.04,
+                "net_r": -0.25
+              },
+              "MDB": {
+                "trades": 4,
+                "gross_r": -2.47,
+                "cost_r": 0.14,
+                "net_r": -2.61
+              },
+              "MRK": {
+                "trades": 1,
+                "gross_r": 0.56,
+                "cost_r": 0.06,
+                "net_r": 0.49
+              },
+              "MRNA": {
+                "trades": 2,
+                "gross_r": -1.64,
+                "cost_r": 0.03,
+                "net_r": -1.67
+              },
+              "MRVL": {
+                "trades": 7,
+                "gross_r": -3.2,
+                "cost_r": 0.26,
+                "net_r": -3.46
+              },
+              "MSTR": {
+                "trades": 4,
+                "gross_r": -4.72,
+                "cost_r": 0.19,
+                "net_r": -4.91
+              },
+              "MU": {
+                "trades": 1,
+                "gross_r": -1.08,
+                "cost_r": 0.03,
+                "net_r": -1.1
+              },
+              "NFLX": {
+                "trades": 1,
+                "gross_r": -0.17,
+                "cost_r": 0.09,
+                "net_r": -0.25
+              },
+              "NKE": {
+                "trades": 2,
+                "gross_r": -0.85,
+                "cost_r": 0.13,
+                "net_r": -0.98
+              },
+              "NVDA": {
+                "trades": 1,
+                "gross_r": -0.16,
+                "cost_r": 0.04,
+                "net_r": -0.2
+              },
+              "ORCL": {
+                "trades": 2,
+                "gross_r": 0.67,
+                "cost_r": 0.1,
+                "net_r": 0.57
+              },
+              "PANW": {
+                "trades": 1,
+                "gross_r": 0.69,
+                "cost_r": 0.04,
+                "net_r": 0.65
+              },
+              "PEP": {
+                "trades": 1,
+                "gross_r": -0.32,
+                "cost_r": 0.06,
+                "net_r": -0.38
+              },
+              "PFE": {
+                "trades": 1,
+                "gross_r": -1.2,
+                "cost_r": 0.06,
+                "net_r": -1.26
+              },
+              "PLTR": {
+                "trades": 1,
+                "gross_r": -1.04,
+                "cost_r": 0.06,
+                "net_r": -1.11
+              },
+              "PYPL": {
+                "trades": 1,
+                "gross_r": 1.35,
+                "cost_r": 0.06,
+                "net_r": 1.29
+              },
+              "QCOM": {
+                "trades": 2,
+                "gross_r": -1.21,
+                "cost_r": 0.04,
+                "net_r": -1.24
+              },
+              "RCL": {
+                "trades": 1,
+                "gross_r": 1.56,
+                "cost_r": 0.03,
+                "net_r": 1.53
+              },
+              "RIOT": {
+                "trades": 3,
+                "gross_r": -3.36,
+                "cost_r": 0.08,
+                "net_r": -3.44
+              },
+              "RIVN": {
+                "trades": 1,
+                "gross_r": -0.22,
+                "cost_r": 0.03,
+                "net_r": -0.25
+              },
+              "ROKU": {
+                "trades": 2,
+                "gross_r": 1.17,
+                "cost_r": 0.11,
+                "net_r": 1.06
+              },
+              "RTX": {
+                "trades": 1,
+                "gross_r": 0.25,
+                "cost_r": 0.06,
+                "net_r": 0.18
+              },
+              "SCHW": {
+                "trades": 3,
+                "gross_r": 0.65,
+                "cost_r": 0.14,
+                "net_r": 0.51
+              },
+              "SHOP": {
+                "trades": 1,
+                "gross_r": 0.94,
+                "cost_r": 0.03,
+                "net_r": 0.91
+              },
+              "SMCI": {
+                "trades": 3,
+                "gross_r": 7.9,
+                "cost_r": 0.07,
+                "net_r": 7.83
+              },
+              "SNOW": {
+                "trades": 2,
+                "gross_r": -2.12,
+                "cost_r": 0.08,
+                "net_r": -2.2
+              },
+              "T": {
+                "trades": 1,
+                "gross_r": 0.76,
+                "cost_r": 0.06,
+                "net_r": 0.7
+              },
+              "TGT": {
+                "trades": 3,
+                "gross_r": 1.63,
+                "cost_r": 0.12,
+                "net_r": 1.51
+              },
+              "TSM": {
+                "trades": 2,
+                "gross_r": -1.12,
+                "cost_r": 0.13,
+                "net_r": -1.25
+              },
+              "UAL": {
+                "trades": 1,
+                "gross_r": -0.03,
+                "cost_r": 0.06,
+                "net_r": -0.09
+              },
+              "UBER": {
+                "trades": 3,
+                "gross_r": -2.2,
+                "cost_r": 0.71,
+                "net_r": -2.91
+              },
+              "UNH": {
+                "trades": 4,
+                "gross_r": -2.65,
+                "cost_r": 0.25,
+                "net_r": -2.9
+              },
+              "UPST": {
+                "trades": 1,
+                "gross_r": 2.4,
+                "cost_r": 0.04,
+                "net_r": 2.36
+              },
+              "XOM": {
+                "trades": 2,
+                "gross_r": 1.75,
+                "cost_r": 0.13,
+                "net_r": 1.62
+              },
+              "ZS": {
+                "trades": 4,
+                "gross_r": 2.33,
+                "cost_r": 0.14,
+                "net_r": 2.19
+              }
+            }
+          }
+        },
+        "2026-Q3": {
+          "gross": {
+            "trades": 125,
+            "win_rate": 0.48,
+            "avg_win_r": 0.777,
+            "avg_loss_r": -0.628,
+            "expectancy_r": 0.046,
+            "total_r": 5.8,
+            "max_drawdown_r": 6.76,
+            "profit_factor": 1.142,
+            "net_pnl_100sh": -5446.09,
+            "fees": 175.0,
+            "slippage": 250.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "125 of 125 trades",
+            "contract": "short_1_6_dte",
+            "estimated_with_median_cost": 115,
+            "median_cost_bps_used": 6.363,
+            "gross_total_r": 5.8,
+            "cost_total_r": 5.6,
+            "net_total_r": 0.2,
+            "net_expectancy_r": 0.002,
+            "net_win_rate": 0.464,
+            "net_profit_factor": 1.005,
+            "median_cost_r": 0.042,
+            "by_symbol": {
+              "AAL": {
+                "trades": 1,
+                "gross_r": -0.53,
+                "cost_r": 0.02,
+                "net_r": -0.55
+              },
+              "AAPL": {
+                "trades": 3,
+                "gross_r": -0.74,
+                "cost_r": 0.11,
+                "net_r": -0.85
+              },
+              "ABNB": {
+                "trades": 3,
+                "gross_r": 3.54,
+                "cost_r": 0.14,
+                "net_r": 3.4
+              },
+              "ADBE": {
+                "trades": 1,
+                "gross_r": 0.36,
+                "cost_r": 0.04,
+                "net_r": 0.32
+              },
+              "AFRM": {
+                "trades": 1,
+                "gross_r": -0.26,
+                "cost_r": 0.02,
+                "net_r": -0.28
+              },
+              "AMAT": {
+                "trades": 1,
+                "gross_r": 0.4,
+                "cost_r": 0.06,
+                "net_r": 0.34
+              },
+              "AMD": {
+                "trades": 1,
+                "gross_r": -1.05,
+                "cost_r": 0.03,
+                "net_r": -1.08
+              },
+              "ARM": {
+                "trades": 3,
+                "gross_r": 3.16,
+                "cost_r": 0.06,
+                "net_r": 3.1
+              },
+              "AVGO": {
+                "trades": 1,
+                "gross_r": 0.6,
+                "cost_r": 0.06,
+                "net_r": 0.54
+              },
+              "AXP": {
+                "trades": 1,
+                "gross_r": 0.17,
+                "cost_r": 0.05,
+                "net_r": 0.12
+              },
+              "BA": {
+                "trades": 4,
+                "gross_r": 1.28,
+                "cost_r": 0.17,
+                "net_r": 1.11
+              },
+              "BABA": {
+                "trades": 1,
+                "gross_r": -0.7,
+                "cost_r": 0.06,
+                "net_r": -0.76
+              },
+              "C": {
+                "trades": 3,
+                "gross_r": -0.3,
+                "cost_r": 0.12,
+                "net_r": -0.42
+              },
+              "CAT": {
+                "trades": 1,
+                "gross_r": -1.01,
+                "cost_r": 0.04,
+                "net_r": -1.05
+              },
+              "CCL": {
+                "trades": 1,
+                "gross_r": -0.26,
+                "cost_r": 0.03,
+                "net_r": -0.28
+              },
+              "CMCSA": {
+                "trades": 1,
+                "gross_r": 0.33,
+                "cost_r": 0.06,
+                "net_r": 0.26
+              },
+              "CMG": {
+                "trades": 2,
+                "gross_r": -0.24,
+                "cost_r": 0.09,
+                "net_r": -0.33
+              },
+              "COIN": {
+                "trades": 2,
+                "gross_r": -1.33,
+                "cost_r": 0.05,
+                "net_r": -1.39
+              },
+              "COST": {
+                "trades": 2,
+                "gross_r": -0.22,
+                "cost_r": 0.1,
+                "net_r": -0.32
+              },
+              "CRM": {
+                "trades": 1,
+                "gross_r": -0.79,
+                "cost_r": 0.04,
+                "net_r": -0.82
+              },
+              "CRWD": {
+                "trades": 1,
+                "gross_r": 0.58,
+                "cost_r": 0.02,
+                "net_r": 0.56
+              },
+              "CVNA": {
+                "trades": 2,
+                "gross_r": 0.23,
+                "cost_r": 0.08,
+                "net_r": 0.15
+              },
+              "CVS": {
+                "trades": 1,
+                "gross_r": -0.12,
+                "cost_r": 0.06,
+                "net_r": -0.18
+              },
+              "DASH": {
+                "trades": 3,
+                "gross_r": -0.31,
+                "cost_r": 0.16,
+                "net_r": -0.47
+              },
+              "DE": {
+                "trades": 1,
+                "gross_r": -0.04,
+                "cost_r": 0.03,
+                "net_r": -0.07
+              },
+              "DKNG": {
+                "trades": 1,
+                "gross_r": 1.09,
+                "cost_r": 0.02,
+                "net_r": 1.06
+              },
+              "FCX": {
+                "trades": 2,
+                "gross_r": 0.08,
+                "cost_r": 0.09,
+                "net_r": -0.01
+              },
+              "GE": {
+                "trades": 3,
+                "gross_r": -1.54,
+                "cost_r": 0.18,
+                "net_r": -1.72
+              },
+              "GM": {
+                "trades": 3,
+                "gross_r": 0.94,
+                "cost_r": 0.19,
+                "net_r": 0.75
+              },
+              "GOOGL": {
+                "trades": 2,
+                "gross_r": 1.39,
+                "cost_r": 0.12,
+                "net_r": 1.27
+              },
+              "HD": {
+                "trades": 1,
+                "gross_r": 0.55,
+                "cost_r": 0.06,
+                "net_r": 0.49
+              },
+              "HOOD": {
+                "trades": 3,
+                "gross_r": 0.11,
+                "cost_r": 0.07,
+                "net_r": 0.04
+              },
+              "INTC": {
+                "trades": 1,
+                "gross_r": 1.57,
+                "cost_r": 0.09,
+                "net_r": 1.48
+              },
+              "JPM": {
+                "trades": 1,
+                "gross_r": -0.09,
+                "cost_r": 0.03,
+                "net_r": -0.12
+              },
+              "LLY": {
+                "trades": 2,
+                "gross_r": -1.07,
+                "cost_r": 0.06,
+                "net_r": -1.13
+              },
+              "LMT": {
+                "trades": 2,
+                "gross_r": -2.08,
+                "cost_r": 0.09,
+                "net_r": -2.17
+              },
+              "MARA": {
+                "trades": 2,
+                "gross_r": 1.4,
+                "cost_r": 0.04,
+                "net_r": 1.36
+              },
+              "MCD": {
+                "trades": 2,
+                "gross_r": 0.89,
+                "cost_r": 0.1,
+                "net_r": 0.79
+              },
+              "MDB": {
+                "trades": 3,
+                "gross_r": -0.28,
+                "cost_r": 0.1,
+                "net_r": -0.38
+              },
+              "META": {
+                "trades": 2,
+                "gross_r": 0.09,
+                "cost_r": 0.11,
+                "net_r": -0.02
+              },
+              "MRNA": {
+                "trades": 2,
+                "gross_r": -1.77,
+                "cost_r": 0.04,
+                "net_r": -1.81
+              },
+              "MRVL": {
+                "trades": 2,
+                "gross_r": -1.16,
+                "cost_r": 0.05,
+                "net_r": -1.21
+              },
+              "MS": {
+                "trades": 1,
+                "gross_r": 0.45,
+                "cost_r": 0.06,
+                "net_r": 0.38
+              },
+              "MSFT": {
+                "trades": 3,
+                "gross_r": -0.46,
+                "cost_r": 0.11,
+                "net_r": -0.58
+              },
+              "NET": {
+                "trades": 1,
+                "gross_r": -0.29,
+                "cost_r": 0.03,
+                "net_r": -0.33
+              },
+              "NFLX": {
+                "trades": 1,
+                "gross_r": -0.26,
+                "cost_r": 0.13,
+                "net_r": -0.39
+              },
+              "NKE": {
+                "trades": 1,
+                "gross_r": -0.63,
+                "cost_r": 0.06,
+                "net_r": -0.69
+              },
+              "NVDA": {
+                "trades": 2,
+                "gross_r": -0.42,
+                "cost_r": 0.11,
+                "net_r": -0.53
+              },
+              "OXY": {
+                "trades": 1,
+                "gross_r": -0.04,
+                "cost_r": 0.06,
+                "net_r": -0.1
+              },
+              "PDD": {
+                "trades": 1,
+                "gross_r": -0.42,
+                "cost_r": 0.06,
+                "net_r": -0.48
+              },
+              "PEP": {
+                "trades": 2,
+                "gross_r": 0.39,
+                "cost_r": 0.13,
+                "net_r": 0.27
+              },
+              "PFE": {
+                "trades": 1,
+                "gross_r": 0.14,
+                "cost_r": 0.06,
+                "net_r": 0.08
+              },
+              "PYPL": {
+                "trades": 2,
+                "gross_r": -0.67,
+                "cost_r": 0.09,
+                "net_r": -0.76
+              },
+              "QCOM": {
+                "trades": 3,
+                "gross_r": -1.04,
+                "cost_r": 0.09,
+                "net_r": -1.13
+              },
+              "RCL": {
+                "trades": 3,
+                "gross_r": 2.31,
+                "cost_r": 0.15,
+                "net_r": 2.16
+              },
+              "RIOT": {
+                "trades": 2,
+                "gross_r": 0.79,
+                "cost_r": 0.03,
+                "net_r": 0.77
+              },
+              "RIVN": {
+                "trades": 1,
+                "gross_r": 1.69,
+                "cost_r": 0.03,
+                "net_r": 1.67
+              },
+              "ROKU": {
+                "trades": 2,
+                "gross_r": 0.12,
+                "cost_r": 0.13,
+                "net_r": -0.01
+              },
+              "RTX": {
+                "trades": 1,
+                "gross_r": -1.07,
+                "cost_r": 0.06,
+                "net_r": -1.13
+              },
+              "SBUX": {
+                "trades": 3,
+                "gross_r": -1.41,
+                "cost_r": 0.19,
+                "net_r": -1.6
+              },
+              "SCHW": {
+                "trades": 1,
+                "gross_r": 0.25,
+                "cost_r": 0.05,
+                "net_r": 0.2
+              },
+              "SHOP": {
+                "trades": 2,
+                "gross_r": 2.16,
+                "cost_r": 0.07,
+                "net_r": 2.09
+              },
+              "SLB": {
+                "trades": 2,
+                "gross_r": 0.7,
+                "cost_r": 0.1,
+                "net_r": 0.6
+              },
+              "SMCI": {
+                "trades": 1,
+                "gross_r": 0.17,
+                "cost_r": 0.02,
+                "net_r": 0.15
+              },
+              "SNOW": {
+                "trades": 3,
+                "gross_r": 0.6,
+                "cost_r": 0.12,
+                "net_r": 0.48
+              },
+              "SOFI": {
+                "trades": 2,
+                "gross_r": -0.79,
+                "cost_r": 0.06,
+                "net_r": -0.85
+              },
+              "TGT": {
+                "trades": 1,
+                "gross_r": -0.33,
+                "cost_r": 0.01,
+                "net_r": -0.34
+              },
+              "UAL": {
+                "trades": 3,
+                "gross_r": -2.94,
+                "cost_r": 0.16,
+                "net_r": -3.1
+              },
+              "UBER": {
+                "trades": 1,
+                "gross_r": -0.68,
+                "cost_r": 0.19,
+                "net_r": -0.88
+              },
+              "UPST": {
+                "trades": 1,
+                "gross_r": 0.49,
+                "cost_r": 0.01,
+                "net_r": 0.48
+              },
+              "ZS": {
+                "trades": 1,
+                "gross_r": 4.1,
+                "cost_r": 0.04,
+                "net_r": 4.07
+              }
+            }
+          }
+        },
+        "2026-Q4": {
+          "gross": {
+            "trades": 60,
+            "win_rate": 0.45,
+            "avg_win_r": 0.599,
+            "avg_loss_r": -0.757,
+            "expectancy_r": -0.147,
+            "total_r": -8.81,
+            "max_drawdown_r": 11.88,
+            "profit_factor": 0.647,
+            "net_pnl_100sh": -6229.16,
+            "fees": 84.0,
+            "slippage": 120.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "60 of 60 trades",
+            "contract": "short_1_6_dte",
+            "estimated_with_median_cost": 53,
+            "median_cost_bps_used": 6.363,
+            "gross_total_r": -8.81,
+            "cost_total_r": 2.72,
+            "net_total_r": -11.53,
+            "net_expectancy_r": -0.192,
+            "net_win_rate": 0.45,
+            "net_profit_factor": 0.564,
+            "median_cost_r": 0.046,
+            "by_symbol": {
+              "AAL": {
+                "trades": 1,
+                "gross_r": -0.56,
+                "cost_r": 0.05,
+                "net_r": -0.61
+              },
+              "AAPL": {
+                "trades": 1,
+                "gross_r": -0.46,
+                "cost_r": 0.04,
+                "net_r": -0.5
+              },
+              "AMZN": {
+                "trades": 2,
+                "gross_r": -0.85,
+                "cost_r": 0.09,
+                "net_r": -0.94
+              },
+              "ARM": {
+                "trades": 1,
+                "gross_r": 0.51,
+                "cost_r": 0.03,
+                "net_r": 0.48
+              },
+              "BA": {
+                "trades": 2,
+                "gross_r": -1.38,
+                "cost_r": 0.13,
+                "net_r": -1.51
+              },
+              "BABA": {
+                "trades": 1,
+                "gross_r": 0.55,
+                "cost_r": 0.06,
+                "net_r": 0.49
+              },
+              "CAT": {
+                "trades": 2,
+                "gross_r": -2.1,
+                "cost_r": 0.08,
+                "net_r": -2.18
+              },
+              "CMCSA": {
+                "trades": 1,
+                "gross_r": -1.2,
+                "cost_r": 0.06,
+                "net_r": -1.26
+              },
+              "CMG": {
+                "trades": 2,
+                "gross_r": -0.36,
+                "cost_r": 0.08,
+                "net_r": -0.44
+              },
+              "COIN": {
+                "trades": 1,
+                "gross_r": -1.1,
+                "cost_r": 0.02,
+                "net_r": -1.12
+              },
+              "CVNA": {
+                "trades": 1,
+                "gross_r": -1.06,
+                "cost_r": 0.03,
+                "net_r": -1.09
+              },
+              "DAL": {
+                "trades": 1,
+                "gross_r": 0.91,
+                "cost_r": 0.05,
+                "net_r": 0.85
+              },
+              "DASH": {
+                "trades": 2,
+                "gross_r": -0.43,
+                "cost_r": 0.06,
+                "net_r": -0.49
+              },
+              "DDOG": {
+                "trades": 1,
+                "gross_r": 0.14,
+                "cost_r": 0.02,
+                "net_r": 0.12
+              },
+              "DE": {
+                "trades": 2,
+                "gross_r": -2.17,
+                "cost_r": 0.13,
+                "net_r": -2.3
+              },
+              "F": {
+                "trades": 3,
+                "gross_r": -0.65,
+                "cost_r": 0.15,
+                "net_r": -0.8
+              },
+              "GE": {
+                "trades": 3,
+                "gross_r": -2.48,
+                "cost_r": 0.16,
+                "net_r": -2.64
+              },
+              "GS": {
+                "trades": 1,
+                "gross_r": 0.53,
+                "cost_r": 0.04,
+                "net_r": 0.5
+              },
+              "JD": {
+                "trades": 4,
+                "gross_r": -0.99,
+                "cost_r": 0.24,
+                "net_r": -1.22
+              },
+              "LLY": {
+                "trades": 1,
+                "gross_r": -1.03,
+                "cost_r": 0.04,
+                "net_r": -1.07
+              },
+              "LMT": {
+                "trades": 1,
+                "gross_r": 0.47,
+                "cost_r": 0.04,
+                "net_r": 0.43
+              },
+              "LOW": {
+                "trades": 1,
+                "gross_r": 0.06,
+                "cost_r": 0.05,
+                "net_r": 0.01
+              },
+              "META": {
+                "trades": 2,
+                "gross_r": 0.28,
+                "cost_r": 0.09,
+                "net_r": 0.19
+              },
+              "MRNA": {
+                "trades": 1,
+                "gross_r": -0.41,
+                "cost_r": 0.01,
+                "net_r": -0.43
+              },
+              "MSFT": {
+                "trades": 1,
+                "gross_r": -1.02,
+                "cost_r": 0.04,
+                "net_r": -1.06
+              },
+              "NET": {
+                "trades": 1,
+                "gross_r": 1.61,
+                "cost_r": 0.04,
+                "net_r": 1.57
+              },
+              "NKE": {
+                "trades": 1,
+                "gross_r": 0.96,
+                "cost_r": 0.03,
+                "net_r": 0.93
+              },
+              "NVDA": {
+                "trades": 2,
+                "gross_r": 1.43,
+                "cost_r": 0.08,
+                "net_r": 1.35
+              },
+              "PLTR": {
+                "trades": 2,
+                "gross_r": -0.13,
+                "cost_r": 0.11,
+                "net_r": -0.24
+              },
+              "RIVN": {
+                "trades": 2,
+                "gross_r": 0.44,
+                "cost_r": 0.05,
+                "net_r": 0.39
+              },
+              "ROKU": {
+                "trades": 2,
+                "gross_r": 0.89,
+                "cost_r": 0.13,
+                "net_r": 0.76
+              },
+              "SCHW": {
+                "trades": 1,
+                "gross_r": 0.67,
+                "cost_r": 0.06,
+                "net_r": 0.61
+              },
+              "SHOP": {
+                "trades": 1,
+                "gross_r": -0.4,
+                "cost_r": 0.02,
+                "net_r": -0.43
+              },
+              "SPOT": {
+                "trades": 1,
+                "gross_r": -0.6,
+                "cost_r": 0.06,
+                "net_r": -0.66
+              },
+              "T": {
+                "trades": 1,
+                "gross_r": -1.09,
+                "cost_r": 0.04,
+                "net_r": -1.13
+              },
+              "TGT": {
+                "trades": 1,
+                "gross_r": -0.08,
+                "cost_r": 0.03,
+                "net_r": -0.11
+              },
+              "TSM": {
+                "trades": 2,
+                "gross_r": 3.62,
+                "cost_r": 0.13,
+                "net_r": 3.5
+              },
+              "UAL": {
+                "trades": 1,
+                "gross_r": -0.06,
+                "cost_r": 0.04,
+                "net_r": -0.1
+              },
+              "UPST": {
+                "trades": 1,
+                "gross_r": 0.54,
+                "cost_r": 0.03,
+                "net_r": 0.51
+              },
+              "WFC": {
+                "trades": 1,
+                "gross_r": -0.78,
+                "cost_r": 0.06,
+                "net_r": -0.84
+              },
+              "ZS": {
+                "trades": 1,
+                "gross_r": -1.03,
+                "cost_r": 0.04,
+                "net_r": -1.06
+              }
+            }
+          }
+        }
+      },
+      "by_symbol": {
+        "AAL": {
+          "trades": 9,
+          "win_rate": 0.111,
+          "avg_win_r": 0.136,
+          "avg_loss_r": -0.742,
+          "expectancy_r": -0.644,
+          "total_r": -5.8,
+          "max_drawdown_r": 5.8,
+          "profit_factor": 0.023,
+          "net_pnl_100sh": -126.92,
+          "fees": 12.6,
+          "slippage": 18.0
+        },
+        "AAPL": {
+          "trades": 9,
+          "win_rate": 0.333,
+          "avg_win_r": 0.446,
+          "avg_loss_r": -0.746,
+          "expectancy_r": -0.349,
+          "total_r": -3.14,
+          "max_drawdown_r": 3.14,
+          "profit_factor": 0.299,
+          "net_pnl_100sh": -774.06,
+          "fees": 12.6,
+          "slippage": 18.0
+        },
+        "ABBV": {
+          "trades": 5,
+          "win_rate": 0.4,
+          "avg_win_r": 0.469,
+          "avg_loss_r": -0.722,
+          "expectancy_r": -0.245,
+          "total_r": -1.23,
+          "max_drawdown_r": 2.06,
+          "profit_factor": 0.433,
+          "net_pnl_100sh": -265.0,
+          "fees": 7.0,
+          "slippage": 10.0
+        },
+        "ABNB": {
+          "trades": 8,
+          "win_rate": 0.375,
+          "avg_win_r": 1.179,
+          "avg_loss_r": -1.039,
+          "expectancy_r": -0.207,
+          "total_r": -1.66,
+          "max_drawdown_r": 5.2,
+          "profit_factor": 0.681,
+          "net_pnl_100sh": -168.2,
+          "fees": 11.2,
+          "slippage": 16.0
+        },
+        "ADBE": {
+          "trades": 10,
+          "win_rate": 0.6,
+          "avg_win_r": 0.648,
+          "avg_loss_r": -0.725,
+          "expectancy_r": 0.098,
+          "total_r": 0.98,
+          "max_drawdown_r": 2.08,
+          "profit_factor": 1.339,
+          "net_pnl_100sh": 1103.1,
+          "fees": 14.0,
+          "slippage": 20.0
+        },
+        "AFRM": {
+          "trades": 9,
+          "win_rate": 0.444,
+          "avg_win_r": 0.873,
+          "avg_loss_r": -0.674,
+          "expectancy_r": 0.014,
+          "total_r": 0.12,
+          "max_drawdown_r": 2.31,
+          "profit_factor": 1.036,
+          "net_pnl_100sh": 115.62,
+          "fees": 12.6,
+          "slippage": 18.0
+        },
+        "AMAT": {
+          "trades": 9,
+          "win_rate": 0.667,
+          "avg_win_r": 0.912,
+          "avg_loss_r": -0.75,
+          "expectancy_r": 0.358,
+          "total_r": 3.22,
+          "max_drawdown_r": 1.22,
+          "profit_factor": 2.431,
+          "net_pnl_100sh": 960.59,
+          "fees": 12.6,
+          "slippage": 18.0
+        },
+        "AMD": {
+          "trades": 13,
+          "win_rate": 0.385,
+          "avg_win_r": 0.559,
+          "avg_loss_r": -0.638,
+          "expectancy_r": -0.178,
+          "total_r": -2.31,
+          "max_drawdown_r": 3.23,
+          "profit_factor": 0.548,
+          "net_pnl_100sh": -1069.75,
+          "fees": 18.2,
+          "slippage": 26.0
+        },
+        "AMZN": {
+          "trades": 6,
+          "win_rate": 0.667,
+          "avg_win_r": 0.342,
+          "avg_loss_r": -0.783,
+          "expectancy_r": -0.033,
+          "total_r": -0.2,
+          "max_drawdown_r": 1.32,
+          "profit_factor": 0.873,
+          "net_pnl_100sh": -107.4,
+          "fees": 8.4,
+          "slippage": 12.0
+        },
+        "ARM": {
+          "trades": 17,
+          "win_rate": 0.294,
+          "avg_win_r": 1.133,
+          "avg_loss_r": -0.641,
+          "expectancy_r": -0.119,
+          "total_r": -2.03,
+          "max_drawdown_r": 5.97,
+          "profit_factor": 0.736,
+          "net_pnl_100sh": -255.83,
+          "fees": 23.8,
+          "slippage": 34.0
+        },
+        "AVGO": {
+          "trades": 9,
+          "win_rate": 0.556,
+          "avg_win_r": 1.139,
+          "avg_loss_r": -0.815,
+          "expectancy_r": 0.271,
+          "total_r": 2.44,
+          "max_drawdown_r": 1.21,
+          "profit_factor": 1.747,
+          "net_pnl_100sh": 1759.16,
+          "fees": 12.6,
+          "slippage": 18.0
+        },
+        "AXP": {
+          "trades": 4,
+          "win_rate": 0.75,
+          "avg_win_r": 0.329,
+          "avg_loss_r": -1.064,
+          "expectancy_r": -0.02,
+          "total_r": -0.08,
+          "max_drawdown_r": 1.06,
+          "profit_factor": 0.926,
+          "net_pnl_100sh": -161.71,
+          "fees": 5.6,
+          "slippage": 8.0
+        },
+        "BA": {
+          "trades": 15,
+          "win_rate": 0.4,
+          "avg_win_r": 0.649,
+          "avg_loss_r": -0.943,
+          "expectancy_r": -0.306,
+          "total_r": -4.6,
+          "max_drawdown_r": 5.97,
+          "profit_factor": 0.459,
+          "net_pnl_100sh": -560.6,
+          "fees": 21.0,
+          "slippage": 30.0
+        },
+        "BABA": {
+          "trades": 15,
+          "win_rate": 0.4,
+          "avg_win_r": 0.801,
+          "avg_loss_r": -0.901,
+          "expectancy_r": -0.22,
+          "total_r": -3.31,
+          "max_drawdown_r": 4.95,
+          "profit_factor": 0.592,
+          "net_pnl_100sh": -510.28,
+          "fees": 21.0,
+          "slippage": 30.0
+        },
+        "C": {
+          "trades": 8,
+          "win_rate": 0.25,
+          "avg_win_r": 0.57,
+          "avg_loss_r": -0.534,
+          "expectancy_r": -0.258,
+          "total_r": -2.06,
+          "max_drawdown_r": 3.05,
+          "profit_factor": 0.356,
+          "net_pnl_100sh": -454.9,
+          "fees": 11.2,
+          "slippage": 16.0
+        },
+        "CAT": {
+          "trades": 6,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.608,
+          "expectancy_r": -0.608,
+          "total_r": -3.65,
+          "max_drawdown_r": 3.65,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -4069.4,
+          "fees": 8.4,
+          "slippage": 12.0
+        },
+        "CCL": {
+          "trades": 4,
+          "win_rate": 0.5,
+          "avg_win_r": 1.128,
+          "avg_loss_r": -0.746,
+          "expectancy_r": 0.191,
+          "total_r": 0.77,
+          "max_drawdown_r": 1.49,
+          "profit_factor": 1.513,
+          "net_pnl_100sh": 14.41,
+          "fees": 5.6,
+          "slippage": 8.0
+        },
+        "CMCSA": {
+          "trades": 12,
+          "win_rate": 0.667,
+          "avg_win_r": 1.242,
+          "avg_loss_r": -0.892,
+          "expectancy_r": 0.531,
+          "total_r": 6.37,
+          "max_drawdown_r": 1.53,
+          "profit_factor": 2.785,
+          "net_pnl_100sh": 328.08,
+          "fees": 16.8,
+          "slippage": 24.0
+        },
+        "CMG": {
+          "trades": 8,
+          "win_rate": 0.25,
+          "avg_win_r": 0.136,
+          "avg_loss_r": -0.402,
+          "expectancy_r": -0.267,
+          "total_r": -2.14,
+          "max_drawdown_r": 2.27,
+          "profit_factor": 0.113,
+          "net_pnl_100sh": -141.35,
+          "fees": 11.2,
+          "slippage": 16.0
+        },
+        "COIN": {
+          "trades": 12,
+          "win_rate": 0.333,
+          "avg_win_r": 1.666,
+          "avg_loss_r": -0.943,
+          "expectancy_r": -0.073,
+          "total_r": -0.88,
+          "max_drawdown_r": 5.46,
+          "profit_factor": 0.883,
+          "net_pnl_100sh": -1197.08,
+          "fees": 16.8,
+          "slippage": 24.0
+        },
+        "COST": {
+          "trades": 6,
+          "win_rate": 0.167,
+          "avg_win_r": 0.277,
+          "avg_loss_r": -0.505,
+          "expectancy_r": -0.375,
+          "total_r": -2.25,
+          "max_drawdown_r": 2.53,
+          "profit_factor": 0.11,
+          "net_pnl_100sh": -2598.88,
+          "fees": 8.4,
+          "slippage": 12.0
+        },
+        "CRM": {
+          "trades": 8,
+          "win_rate": 0.375,
+          "avg_win_r": 0.501,
+          "avg_loss_r": -0.969,
+          "expectancy_r": -0.418,
+          "total_r": -3.34,
+          "max_drawdown_r": 3.75,
+          "profit_factor": 0.31,
+          "net_pnl_100sh": -1006.56,
+          "fees": 11.2,
+          "slippage": 16.0
+        },
+        "CRWD": {
+          "trades": 13,
+          "win_rate": 0.462,
+          "avg_win_r": 0.748,
+          "avg_loss_r": -0.596,
+          "expectancy_r": 0.025,
+          "total_r": 0.32,
+          "max_drawdown_r": 2.58,
+          "profit_factor": 1.077,
+          "net_pnl_100sh": 1040.68,
+          "fees": 18.2,
+          "slippage": 26.0
+        },
+        "CVNA": {
+          "trades": 25,
+          "win_rate": 0.24,
+          "avg_win_r": 1.584,
+          "avg_loss_r": -0.931,
+          "expectancy_r": -0.328,
+          "total_r": -8.19,
+          "max_drawdown_r": 8.44,
+          "profit_factor": 0.537,
+          "net_pnl_100sh": -397.31,
+          "fees": 35.0,
+          "slippage": 50.0
+        },
+        "CVS": {
+          "trades": 8,
+          "win_rate": 0.375,
+          "avg_win_r": 0.794,
+          "avg_loss_r": -0.576,
+          "expectancy_r": -0.062,
+          "total_r": -0.5,
+          "max_drawdown_r": 1.36,
+          "profit_factor": 0.827,
+          "net_pnl_100sh": -129.7,
+          "fees": 11.2,
+          "slippage": 16.0
+        },
+        "CVX": {
+          "trades": 8,
+          "win_rate": 0.5,
+          "avg_win_r": 0.427,
+          "avg_loss_r": -0.541,
+          "expectancy_r": -0.057,
+          "total_r": -0.46,
+          "max_drawdown_r": 1.6,
+          "profit_factor": 0.79,
+          "net_pnl_100sh": -18.7,
+          "fees": 11.2,
+          "slippage": 16.0
+        },
+        "DAL": {
+          "trades": 12,
+          "win_rate": 0.25,
+          "avg_win_r": 0.928,
+          "avg_loss_r": -0.864,
+          "expectancy_r": -0.416,
+          "total_r": -4.99,
+          "max_drawdown_r": 7.77,
+          "profit_factor": 0.358,
+          "net_pnl_100sh": -285.05,
+          "fees": 16.8,
+          "slippage": 24.0
+        },
+        "DASH": {
+          "trades": 11,
+          "win_rate": 0.455,
+          "avg_win_r": 0.483,
+          "avg_loss_r": -0.699,
+          "expectancy_r": -0.162,
+          "total_r": -1.78,
+          "max_drawdown_r": 2.73,
+          "profit_factor": 0.576,
+          "net_pnl_100sh": -939.66,
+          "fees": 15.4,
+          "slippage": 22.0
+        },
+        "DDOG": {
+          "trades": 15,
+          "win_rate": 0.533,
+          "avg_win_r": 0.898,
+          "avg_loss_r": -0.653,
+          "expectancy_r": 0.174,
+          "total_r": 2.61,
+          "max_drawdown_r": 2.46,
+          "profit_factor": 1.571,
+          "net_pnl_100sh": 312.5,
+          "fees": 21.0,
+          "slippage": 30.0
+        },
+        "DE": {
+          "trades": 12,
+          "win_rate": 0.333,
+          "avg_win_r": 0.805,
+          "avg_loss_r": -0.845,
+          "expectancy_r": -0.295,
+          "total_r": -3.54,
+          "max_drawdown_r": 4.45,
+          "profit_factor": 0.476,
+          "net_pnl_100sh": -2665.05,
+          "fees": 16.8,
+          "slippage": 24.0
+        },
+        "DIS": {
+          "trades": 5,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.901,
+          "expectancy_r": -0.901,
+          "total_r": -4.5,
+          "max_drawdown_r": 4.5,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -636.0,
+          "fees": 7.0,
+          "slippage": 10.0
+        },
+        "DKNG": {
+          "trades": 9,
+          "win_rate": 0.667,
+          "avg_win_r": 1.037,
+          "avg_loss_r": -0.908,
+          "expectancy_r": 0.388,
+          "total_r": 3.5,
+          "max_drawdown_r": 2.08,
+          "profit_factor": 2.283,
+          "net_pnl_100sh": 333.36,
+          "fees": 12.6,
+          "slippage": 18.0
+        },
+        "F": {
+          "trades": 10,
+          "win_rate": 0.5,
+          "avg_win_r": 0.373,
+          "avg_loss_r": -0.49,
+          "expectancy_r": -0.059,
+          "total_r": -0.59,
+          "max_drawdown_r": 1.26,
+          "profit_factor": 0.761,
+          "net_pnl_100sh": 2.69,
+          "fees": 14.0,
+          "slippage": 20.0
+        },
+        "FCX": {
+          "trades": 15,
+          "win_rate": 0.467,
+          "avg_win_r": 1.372,
+          "avg_loss_r": -0.755,
+          "expectancy_r": 0.238,
+          "total_r": 3.56,
+          "max_drawdown_r": 3.55,
+          "profit_factor": 1.59,
+          "net_pnl_100sh": 175.33,
+          "fees": 21.0,
+          "slippage": 30.0
+        },
+        "GE": {
+          "trades": 11,
+          "win_rate": 0.273,
+          "avg_win_r": 0.61,
+          "avg_loss_r": -0.862,
+          "expectancy_r": -0.461,
+          "total_r": -5.07,
+          "max_drawdown_r": 5.07,
+          "profit_factor": 0.265,
+          "net_pnl_100sh": -1749.41,
+          "fees": 15.4,
+          "slippage": 22.0
+        },
+        "GM": {
+          "trades": 12,
+          "win_rate": 0.667,
+          "avg_win_r": 0.733,
+          "avg_loss_r": -1.008,
+          "expectancy_r": 0.153,
+          "total_r": 1.83,
+          "max_drawdown_r": 2.44,
+          "profit_factor": 1.454,
+          "net_pnl_100sh": 112.02,
+          "fees": 16.8,
+          "slippage": 24.0
+        },
+        "GOOGL": {
+          "trades": 11,
+          "win_rate": 0.636,
+          "avg_win_r": 0.606,
+          "avg_loss_r": -0.816,
+          "expectancy_r": 0.089,
+          "total_r": 0.98,
+          "max_drawdown_r": 2.07,
+          "profit_factor": 1.299,
+          "net_pnl_100sh": 661.82,
+          "fees": 15.4,
+          "slippage": 22.0
+        },
+        "GS": {
+          "trades": 6,
+          "win_rate": 0.667,
+          "avg_win_r": 0.675,
+          "avg_loss_r": -0.818,
+          "expectancy_r": 0.178,
+          "total_r": 1.07,
+          "max_drawdown_r": 1.58,
+          "profit_factor": 1.652,
+          "net_pnl_100sh": 1692.84,
+          "fees": 8.4,
+          "slippage": 12.0
+        },
+        "HD": {
+          "trades": 9,
+          "win_rate": 0.444,
+          "avg_win_r": 0.593,
+          "avg_loss_r": -0.774,
+          "expectancy_r": -0.166,
+          "total_r": -1.49,
+          "max_drawdown_r": 2.29,
+          "profit_factor": 0.614,
+          "net_pnl_100sh": -589.6,
+          "fees": 12.6,
+          "slippage": 18.0
+        },
+        "HOOD": {
+          "trades": 7,
+          "win_rate": 0.429,
+          "avg_win_r": 0.877,
+          "avg_loss_r": -0.326,
+          "expectancy_r": 0.19,
+          "total_r": 1.33,
+          "max_drawdown_r": 1.08,
+          "profit_factor": 2.017,
+          "net_pnl_100sh": 434.19,
+          "fees": 9.8,
+          "slippage": 14.0
+        },
+        "INTC": {
+          "trades": 11,
+          "win_rate": 0.364,
+          "avg_win_r": 0.995,
+          "avg_loss_r": -0.819,
+          "expectancy_r": -0.159,
+          "total_r": -1.75,
+          "max_drawdown_r": 5.14,
+          "profit_factor": 0.694,
+          "net_pnl_100sh": 243.52,
+          "fees": 15.4,
+          "slippage": 22.0
+        },
+        "JD": {
+          "trades": 16,
+          "win_rate": 0.25,
+          "avg_win_r": 0.677,
+          "avg_loss_r": -0.619,
+          "expectancy_r": -0.295,
+          "total_r": -4.72,
+          "max_drawdown_r": 4.87,
+          "profit_factor": 0.364,
+          "net_pnl_100sh": -212.37,
+          "fees": 22.4,
+          "slippage": 32.0
+        },
+        "JNJ": {
+          "trades": 5,
+          "win_rate": 0.8,
+          "avg_win_r": 0.497,
+          "avg_loss_r": -0.332,
+          "expectancy_r": 0.331,
+          "total_r": 1.65,
+          "max_drawdown_r": 0.33,
+          "profit_factor": 5.978,
+          "net_pnl_100sh": 374.0,
+          "fees": 7.0,
+          "slippage": 10.0
+        },
+        "JPM": {
+          "trades": 5,
+          "win_rate": 0.6,
+          "avg_win_r": 1.28,
+          "avg_loss_r": -0.407,
+          "expectancy_r": 0.605,
+          "total_r": 3.03,
+          "max_drawdown_r": 0.72,
+          "profit_factor": 4.714,
+          "net_pnl_100sh": 823.39,
+          "fees": 7.0,
+          "slippage": 10.0
+        },
+        "KO": {
+          "trades": 2,
+          "win_rate": 1.0,
+          "avg_win_r": 0.357,
+          "avg_loss_r": null,
+          "expectancy_r": 0.357,
+          "total_r": 0.71,
+          "max_drawdown_r": 0.0,
+          "profit_factor": null,
+          "net_pnl_100sh": 59.2,
+          "fees": 2.8,
+          "slippage": 4.0
+        },
+        "LCID": {
+          "trades": 7,
+          "win_rate": 0.286,
+          "avg_win_r": 0.715,
+          "avg_loss_r": -0.891,
+          "expectancy_r": -0.433,
+          "total_r": -3.03,
+          "max_drawdown_r": 3.69,
+          "profit_factor": 0.321,
+          "net_pnl_100sh": -50.0,
+          "fees": 9.8,
+          "slippage": 14.0
+        },
+        "LLY": {
+          "trades": 11,
+          "win_rate": 0.273,
+          "avg_win_r": 1.012,
+          "avg_loss_r": -0.623,
+          "expectancy_r": -0.177,
+          "total_r": -1.95,
+          "max_drawdown_r": 2.65,
+          "profit_factor": 0.609,
+          "net_pnl_100sh": -5186.45,
+          "fees": 15.4,
+          "slippage": 22.0
+        },
+        "LMT": {
+          "trades": 14,
+          "win_rate": 0.429,
+          "avg_win_r": 0.753,
+          "avg_loss_r": -0.599,
+          "expectancy_r": -0.02,
+          "total_r": -0.28,
+          "max_drawdown_r": 4.48,
+          "profit_factor": 0.942,
+          "net_pnl_100sh": -1595.66,
+          "fees": 19.6,
+          "slippage": 28.0
+        },
+        "LOW": {
+          "trades": 11,
+          "win_rate": 0.636,
+          "avg_win_r": 0.736,
+          "avg_loss_r": -0.61,
+          "expectancy_r": 0.247,
+          "total_r": 2.72,
+          "max_drawdown_r": 1.38,
+          "profit_factor": 2.114,
+          "net_pnl_100sh": 538.39,
+          "fees": 15.4,
+          "slippage": 22.0
+        },
+        "LRCX": {
+          "trades": 5,
+          "win_rate": 1.0,
+          "avg_win_r": 0.777,
+          "avg_loss_r": null,
+          "expectancy_r": 0.777,
+          "total_r": 3.89,
+          "max_drawdown_r": 0.0,
+          "profit_factor": null,
+          "net_pnl_100sh": 531.2,
+          "fees": 7.0,
+          "slippage": 10.0
+        },
+        "LULU": {
+          "trades": 11,
+          "win_rate": 0.364,
+          "avg_win_r": 0.819,
+          "avg_loss_r": -0.892,
+          "expectancy_r": -0.27,
+          "total_r": -2.97,
+          "max_drawdown_r": 5.69,
+          "profit_factor": 0.524,
+          "net_pnl_100sh": -837.21,
+          "fees": 15.4,
+          "slippage": 22.0
+        },
+        "MA": {
+          "trades": 4,
+          "win_rate": 0.25,
+          "avg_win_r": 0.171,
+          "avg_loss_r": -0.911,
+          "expectancy_r": -0.64,
+          "total_r": -2.56,
+          "max_drawdown_r": 2.56,
+          "profit_factor": 0.063,
+          "net_pnl_100sh": -2071.8,
+          "fees": 5.6,
+          "slippage": 8.0
+        },
+        "MARA": {
+          "trades": 9,
+          "win_rate": 0.889,
+          "avg_win_r": 1.117,
+          "avg_loss_r": -0.879,
+          "expectancy_r": 0.895,
+          "total_r": 8.05,
+          "max_drawdown_r": 0.88,
+          "profit_factor": 10.158,
+          "net_pnl_100sh": 364.19,
+          "fees": 12.6,
+          "slippage": 18.0
+        },
+        "MCD": {
+          "trades": 7,
+          "win_rate": 0.429,
+          "avg_win_r": 0.381,
+          "avg_loss_r": -0.432,
+          "expectancy_r": -0.084,
+          "total_r": -0.59,
+          "max_drawdown_r": 1.48,
+          "profit_factor": 0.66,
+          "net_pnl_100sh": -278.01,
+          "fees": 9.8,
+          "slippage": 14.0
+        },
+        "MDB": {
+          "trades": 15,
+          "win_rate": 0.4,
+          "avg_win_r": 1.067,
+          "avg_loss_r": -1.0,
+          "expectancy_r": -0.173,
+          "total_r": -2.6,
+          "max_drawdown_r": 4.79,
+          "profit_factor": 0.711,
+          "net_pnl_100sh": -1398.05,
+          "fees": 21.0,
+          "slippage": 30.0
+        },
+        "META": {
+          "trades": 10,
+          "win_rate": 0.6,
+          "avg_win_r": 0.735,
+          "avg_loss_r": -0.515,
+          "expectancy_r": 0.235,
+          "total_r": 2.35,
+          "max_drawdown_r": 1.1,
+          "profit_factor": 2.138,
+          "net_pnl_100sh": 679.76,
+          "fees": 14.0,
+          "slippage": 20.0
+        },
+        "MRK": {
+          "trades": 4,
+          "win_rate": 0.75,
+          "avg_win_r": 1.38,
+          "avg_loss_r": -1.065,
+          "expectancy_r": 0.769,
+          "total_r": 3.08,
+          "max_drawdown_r": 1.06,
+          "profit_factor": 3.888,
+          "net_pnl_100sh": 247.41,
+          "fees": 5.6,
+          "slippage": 8.0
+        },
+        "MRNA": {
+          "trades": 9,
+          "win_rate": 0.111,
+          "avg_win_r": 0.426,
+          "avg_loss_r": -0.804,
+          "expectancy_r": -0.667,
+          "total_r": -6.01,
+          "max_drawdown_r": 6.01,
+          "profit_factor": 0.066,
+          "net_pnl_100sh": -1446.37,
+          "fees": 12.6,
+          "slippage": 18.0
+        },
+        "MRVL": {
+          "trades": 18,
+          "win_rate": 0.333,
+          "avg_win_r": 0.878,
+          "avg_loss_r": -0.714,
+          "expectancy_r": -0.183,
+          "total_r": -3.3,
+          "max_drawdown_r": 4.36,
+          "profit_factor": 0.615,
+          "net_pnl_100sh": -1009.92,
+          "fees": 25.2,
+          "slippage": 36.0
+        },
+        "MS": {
+          "trades": 5,
+          "win_rate": 0.8,
+          "avg_win_r": 0.619,
+          "avg_loss_r": -1.112,
+          "expectancy_r": 0.273,
+          "total_r": 1.36,
+          "max_drawdown_r": 1.11,
+          "profit_factor": 2.225,
+          "net_pnl_100sh": 165.0,
+          "fees": 7.0,
+          "slippage": 10.0
+        },
+        "MSFT": {
+          "trades": 9,
+          "win_rate": 0.444,
+          "avg_win_r": 0.502,
+          "avg_loss_r": -0.353,
+          "expectancy_r": 0.027,
+          "total_r": 0.24,
+          "max_drawdown_r": 1.5,
+          "profit_factor": 1.136,
+          "net_pnl_100sh": -202.31,
+          "fees": 12.6,
+          "slippage": 18.0
+        },
+        "MSTR": {
+          "trades": 15,
+          "win_rate": 0.2,
+          "avg_win_r": 1.088,
+          "avg_loss_r": -1.023,
+          "expectancy_r": -0.601,
+          "total_r": -9.01,
+          "max_drawdown_r": 11.79,
+          "profit_factor": 0.266,
+          "net_pnl_100sh": -1714.67,
+          "fees": 21.0,
+          "slippage": 30.0
+        },
+        "MU": {
+          "trades": 10,
+          "win_rate": 0.3,
+          "avg_win_r": 0.484,
+          "avg_loss_r": -0.663,
+          "expectancy_r": -0.319,
+          "total_r": -3.19,
+          "max_drawdown_r": 3.19,
+          "profit_factor": 0.313,
+          "net_pnl_100sh": -2541.77,
+          "fees": 14.0,
+          "slippage": 20.0
+        },
+        "NET": {
+          "trades": 12,
+          "win_rate": 0.667,
+          "avg_win_r": 1.031,
+          "avg_loss_r": -0.77,
+          "expectancy_r": 0.431,
+          "total_r": 5.17,
+          "max_drawdown_r": 1.63,
+          "profit_factor": 2.678,
+          "net_pnl_100sh": 1508.53,
+          "fees": 16.8,
+          "slippage": 24.0
+        },
+        "NFLX": {
+          "trades": 11,
+          "win_rate": 0.182,
+          "avg_win_r": 0.427,
+          "avg_loss_r": -0.584,
+          "expectancy_r": -0.4,
+          "total_r": -4.4,
+          "max_drawdown_r": 4.4,
+          "profit_factor": 0.162,
+          "net_pnl_100sh": -716.54,
+          "fees": 15.4,
+          "slippage": 22.0
+        },
+        "NKE": {
+          "trades": 10,
+          "win_rate": 0.4,
+          "avg_win_r": 0.61,
+          "avg_loss_r": -0.658,
+          "expectancy_r": -0.151,
+          "total_r": -1.51,
+          "max_drawdown_r": 3.04,
+          "profit_factor": 0.619,
+          "net_pnl_100sh": -102.87,
+          "fees": 14.0,
+          "slippage": 20.0
+        },
+        "NVDA": {
+          "trades": 9,
+          "win_rate": 0.556,
+          "avg_win_r": 0.946,
+          "avg_loss_r": -0.578,
+          "expectancy_r": 0.268,
+          "total_r": 2.42,
+          "max_drawdown_r": 1.7,
+          "profit_factor": 2.044,
+          "net_pnl_100sh": 432.31,
+          "fees": 12.6,
+          "slippage": 18.0
+        },
+        "ORCL": {
+          "trades": 10,
+          "win_rate": 0.5,
+          "avg_win_r": 1.13,
+          "avg_loss_r": -0.844,
+          "expectancy_r": 0.143,
+          "total_r": 1.43,
+          "max_drawdown_r": 2.08,
+          "profit_factor": 1.339,
+          "net_pnl_100sh": 613.7,
+          "fees": 14.0,
+          "slippage": 20.0
+        },
+        "OXY": {
+          "trades": 6,
+          "win_rate": 0.333,
+          "avg_win_r": 0.294,
+          "avg_loss_r": -0.495,
+          "expectancy_r": -0.232,
+          "total_r": -1.39,
+          "max_drawdown_r": 1.48,
+          "profit_factor": 0.297,
+          "net_pnl_100sh": -138.34,
+          "fees": 8.4,
+          "slippage": 12.0
+        },
+        "PANW": {
+          "trades": 10,
+          "win_rate": 0.7,
+          "avg_win_r": 0.846,
+          "avg_loss_r": -0.416,
+          "expectancy_r": 0.468,
+          "total_r": 4.68,
+          "max_drawdown_r": 1.02,
+          "profit_factor": 4.747,
+          "net_pnl_100sh": 1290.39,
+          "fees": 14.0,
+          "slippage": 20.0
+        },
+        "PDD": {
+          "trades": 12,
+          "win_rate": 0.75,
+          "avg_win_r": 0.645,
+          "avg_loss_r": -0.676,
+          "expectancy_r": 0.314,
+          "total_r": 3.77,
+          "max_drawdown_r": 1.87,
+          "profit_factor": 2.861,
+          "net_pnl_100sh": 593.56,
+          "fees": 16.8,
+          "slippage": 24.0
+        },
+        "PEP": {
+          "trades": 7,
+          "win_rate": 0.857,
+          "avg_win_r": 0.439,
+          "avg_loss_r": -0.315,
+          "expectancy_r": 0.332,
+          "total_r": 2.32,
+          "max_drawdown_r": 0.32,
+          "profit_factor": 8.358,
+          "net_pnl_100sh": 353.7,
+          "fees": 9.8,
+          "slippage": 14.0
+        },
+        "PFE": {
+          "trades": 6,
+          "win_rate": 0.667,
+          "avg_win_r": 0.625,
+          "avg_loss_r": -1.186,
+          "expectancy_r": 0.021,
+          "total_r": 0.13,
+          "max_drawdown_r": 2.37,
+          "profit_factor": 1.053,
+          "net_pnl_100sh": 14.1,
+          "fees": 8.4,
+          "slippage": 12.0
+        },
+        "PLTR": {
+          "trades": 8,
+          "win_rate": 0.25,
+          "avg_win_r": 0.875,
+          "avg_loss_r": -0.96,
+          "expectancy_r": -0.501,
+          "total_r": -4.01,
+          "max_drawdown_r": 4.43,
+          "profit_factor": 0.304,
+          "net_pnl_100sh": -1404.45,
+          "fees": 11.2,
+          "slippage": 16.0
+        },
+        "PYPL": {
+          "trades": 8,
+          "win_rate": 0.5,
+          "avg_win_r": 0.829,
+          "avg_loss_r": -0.852,
+          "expectancy_r": -0.012,
+          "total_r": -0.09,
+          "max_drawdown_r": 2.12,
+          "profit_factor": 0.973,
+          "net_pnl_100sh": -37.47,
+          "fees": 11.2,
+          "slippage": 16.0
+        },
+        "QCOM": {
+          "trades": 10,
+          "win_rate": 0.2,
+          "avg_win_r": 1.315,
+          "avg_loss_r": -0.493,
+          "expectancy_r": -0.131,
+          "total_r": -1.31,
+          "max_drawdown_r": 3.71,
+          "profit_factor": 0.667,
+          "net_pnl_100sh": -948.26,
+          "fees": 14.0,
+          "slippage": 20.0
+        },
+        "RCL": {
+          "trades": 11,
+          "win_rate": 0.455,
+          "avg_win_r": 1.839,
+          "avg_loss_r": -0.802,
+          "expectancy_r": 0.398,
+          "total_r": 4.38,
+          "max_drawdown_r": 2.35,
+          "profit_factor": 1.91,
+          "net_pnl_100sh": 951.11,
+          "fees": 15.4,
+          "slippage": 22.0
+        },
+        "RIOT": {
+          "trades": 9,
+          "win_rate": 0.333,
+          "avg_win_r": 0.285,
+          "avg_loss_r": -1.164,
+          "expectancy_r": -0.681,
+          "total_r": -6.13,
+          "max_drawdown_r": 6.98,
+          "profit_factor": 0.123,
+          "net_pnl_100sh": -221.85,
+          "fees": 12.6,
+          "slippage": 18.0
+        },
+        "RIVN": {
+          "trades": 13,
+          "win_rate": 0.462,
+          "avg_win_r": 1.12,
+          "avg_loss_r": -0.577,
+          "expectancy_r": 0.206,
+          "total_r": 2.68,
+          "max_drawdown_r": 1.54,
+          "profit_factor": 1.663,
+          "net_pnl_100sh": 44.61,
+          "fees": 18.2,
+          "slippage": 26.0
+        },
+        "ROKU": {
+          "trades": 16,
+          "win_rate": 0.562,
+          "avg_win_r": 1.039,
+          "avg_loss_r": -0.766,
+          "expectancy_r": 0.249,
+          "total_r": 3.99,
+          "max_drawdown_r": 2.06,
+          "profit_factor": 1.744,
+          "net_pnl_100sh": 487.95,
+          "fees": 22.4,
+          "slippage": 32.0
+        },
+        "RTX": {
+          "trades": 14,
+          "win_rate": 0.643,
+          "avg_win_r": 0.557,
+          "avg_loss_r": -0.83,
+          "expectancy_r": 0.062,
+          "total_r": 0.87,
+          "max_drawdown_r": 1.89,
+          "profit_factor": 1.209,
+          "net_pnl_100sh": 173.39,
+          "fees": 19.6,
+          "slippage": 28.0
+        },
+        "SBUX": {
+          "trades": 8,
+          "win_rate": 0.5,
+          "avg_win_r": 1.112,
+          "avg_loss_r": -0.715,
+          "expectancy_r": 0.199,
+          "total_r": 1.59,
+          "max_drawdown_r": 1.64,
+          "profit_factor": 1.555,
+          "net_pnl_100sh": 411.2,
+          "fees": 11.2,
+          "slippage": 16.0
+        },
+        "SCHW": {
+          "trades": 14,
+          "win_rate": 0.643,
+          "avg_win_r": 0.561,
+          "avg_loss_r": -0.7,
+          "expectancy_r": 0.111,
+          "total_r": 1.55,
+          "max_drawdown_r": 2.32,
+          "profit_factor": 1.443,
+          "net_pnl_100sh": 313.87,
+          "fees": 19.6,
+          "slippage": 28.0
+        },
+        "SHOP": {
+          "trades": 17,
+          "win_rate": 0.471,
+          "avg_win_r": 0.71,
+          "avg_loss_r": -0.886,
+          "expectancy_r": -0.135,
+          "total_r": -2.3,
+          "max_drawdown_r": 5.15,
+          "profit_factor": 0.712,
+          "net_pnl_100sh": -289.72,
+          "fees": 23.8,
+          "slippage": 34.0
+        },
+        "SLB": {
+          "trades": 4,
+          "win_rate": 0.75,
+          "avg_win_r": 0.411,
+          "avg_loss_r": -1.136,
+          "expectancy_r": 0.025,
+          "total_r": 0.1,
+          "max_drawdown_r": 1.14,
+          "profit_factor": 1.086,
+          "net_pnl_100sh": 7.87,
+          "fees": 5.6,
+          "slippage": 8.0
+        },
+        "SMCI": {
+          "trades": 13,
+          "win_rate": 0.615,
+          "avg_win_r": 1.703,
+          "avg_loss_r": -0.735,
+          "expectancy_r": 0.765,
+          "total_r": 9.95,
+          "max_drawdown_r": 2.49,
+          "profit_factor": 3.706,
+          "net_pnl_100sh": 954.58,
+          "fees": 18.2,
+          "slippage": 26.0
+        },
+        "SNOW": {
+          "trades": 20,
+          "win_rate": 0.4,
+          "avg_win_r": 1.023,
+          "avg_loss_r": -0.902,
+          "expectancy_r": -0.132,
+          "total_r": -2.63,
+          "max_drawdown_r": 5.64,
+          "profit_factor": 0.757,
+          "net_pnl_100sh": -491.51,
+          "fees": 28.0,
+          "slippage": 40.0
+        },
+        "SOFI": {
+          "trades": 7,
+          "win_rate": 0.571,
+          "avg_win_r": 0.432,
+          "avg_loss_r": -0.711,
+          "expectancy_r": -0.058,
+          "total_r": -0.41,
+          "max_drawdown_r": 1.09,
+          "profit_factor": 0.81,
+          "net_pnl_100sh": -4.57,
+          "fees": 9.8,
+          "slippage": 14.0
+        },
+        "SPOT": {
+          "trades": 13,
+          "win_rate": 0.308,
+          "avg_win_r": 0.976,
+          "avg_loss_r": -0.702,
+          "expectancy_r": -0.186,
+          "total_r": -2.42,
+          "max_drawdown_r": 2.62,
+          "profit_factor": 0.617,
+          "net_pnl_100sh": -3430.74,
+          "fees": 18.2,
+          "slippage": 26.0
+        },
+        "T": {
+          "trades": 4,
+          "win_rate": 0.5,
+          "avg_win_r": 1.175,
+          "avg_loss_r": -0.576,
+          "expectancy_r": 0.299,
+          "total_r": 1.2,
+          "max_drawdown_r": 1.09,
+          "profit_factor": 2.038,
+          "net_pnl_100sh": 16.4,
+          "fees": 5.6,
+          "slippage": 8.0
+        },
+        "TGT": {
+          "trades": 11,
+          "win_rate": 0.636,
+          "avg_win_r": 0.783,
+          "avg_loss_r": -0.424,
+          "expectancy_r": 0.344,
+          "total_r": 3.78,
+          "max_drawdown_r": 1.09,
+          "profit_factor": 3.232,
+          "net_pnl_100sh": 425.1,
+          "fees": 15.4,
+          "slippage": 22.0
+        },
+        "TSLA": {
+          "trades": 1,
+          "win_rate": 1.0,
+          "avg_win_r": 2.201,
+          "avg_loss_r": null,
+          "expectancy_r": 2.201,
+          "total_r": 2.2,
+          "max_drawdown_r": 0.0,
+          "profit_factor": null,
+          "net_pnl_100sh": 1024.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "TSM": {
+          "trades": 10,
+          "win_rate": 0.5,
+          "avg_win_r": 0.964,
+          "avg_loss_r": -0.623,
+          "expectancy_r": 0.171,
+          "total_r": 1.71,
+          "max_drawdown_r": 2.25,
+          "profit_factor": 1.547,
+          "net_pnl_100sh": 815.74,
+          "fees": 14.0,
+          "slippage": 20.0
+        },
+        "UAL": {
+          "trades": 14,
+          "win_rate": 0.286,
+          "avg_win_r": 1.013,
+          "avg_loss_r": -0.891,
+          "expectancy_r": -0.347,
+          "total_r": -4.86,
+          "max_drawdown_r": 4.86,
+          "profit_factor": 0.455,
+          "net_pnl_100sh": -528.86,
+          "fees": 19.6,
+          "slippage": 28.0
+        },
+        "UBER": {
+          "trades": 13,
+          "win_rate": 0.308,
+          "avg_win_r": 0.371,
+          "avg_loss_r": -1.039,
+          "expectancy_r": -0.605,
+          "total_r": -7.87,
+          "max_drawdown_r": 7.87,
+          "profit_factor": 0.159,
+          "net_pnl_100sh": -734.35,
+          "fees": 18.2,
+          "slippage": 26.0
+        },
+        "UNH": {
+          "trades": 11,
+          "win_rate": 0.364,
+          "avg_win_r": 1.256,
+          "avg_loss_r": -0.979,
+          "expectancy_r": -0.166,
+          "total_r": -1.83,
+          "max_drawdown_r": 4.03,
+          "profit_factor": 0.733,
+          "net_pnl_100sh": -1349.66,
+          "fees": 15.4,
+          "slippage": 22.0
+        },
+        "UPST": {
+          "trades": 12,
+          "win_rate": 0.417,
+          "avg_win_r": 1.278,
+          "avg_loss_r": -0.645,
+          "expectancy_r": 0.156,
+          "total_r": 1.87,
+          "max_drawdown_r": 2.55,
+          "profit_factor": 1.414,
+          "net_pnl_100sh": 190.0,
+          "fees": 16.8,
+          "slippage": 24.0
+        },
+        "V": {
+          "trades": 4,
+          "win_rate": 0.5,
+          "avg_win_r": 0.393,
+          "avg_loss_r": -0.654,
+          "expectancy_r": -0.131,
+          "total_r": -0.52,
+          "max_drawdown_r": 1.31,
+          "profit_factor": 0.601,
+          "net_pnl_100sh": -235.6,
+          "fees": 5.6,
+          "slippage": 8.0
+        },
+        "VZ": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.466,
+          "expectancy_r": -0.466,
+          "total_r": -0.47,
+          "max_drawdown_r": 0.47,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -19.9,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "WFC": {
+          "trades": 8,
+          "win_rate": 0.625,
+          "avg_win_r": 0.436,
+          "avg_loss_r": -0.973,
+          "expectancy_r": -0.092,
+          "total_r": -0.74,
+          "max_drawdown_r": 2.6,
+          "profit_factor": 0.747,
+          "net_pnl_100sh": -15.63,
+          "fees": 11.2,
+          "slippage": 16.0
+        },
+        "WMT": {
+          "trades": 4,
+          "win_rate": 0.5,
+          "avg_win_r": 0.352,
+          "avg_loss_r": -0.908,
+          "expectancy_r": -0.278,
+          "total_r": -1.11,
+          "max_drawdown_r": 1.79,
+          "profit_factor": 0.387,
+          "net_pnl_100sh": -137.47,
+          "fees": 5.6,
+          "slippage": 8.0
+        },
+        "XOM": {
+          "trades": 3,
+          "win_rate": 0.667,
+          "avg_win_r": 0.876,
+          "avg_loss_r": -1.039,
+          "expectancy_r": 0.238,
+          "total_r": 0.71,
+          "max_drawdown_r": 1.04,
+          "profit_factor": 1.686,
+          "net_pnl_100sh": 141.29,
+          "fees": 4.2,
+          "slippage": 6.0
+        },
+        "ZS": {
+          "trades": 16,
+          "win_rate": 0.312,
+          "avg_win_r": 1.55,
+          "avg_loss_r": -0.941,
+          "expectancy_r": -0.163,
+          "total_r": -2.61,
+          "max_drawdown_r": 9.1,
+          "profit_factor": 0.748,
+          "net_pnl_100sh": -1360.89,
+          "fees": 22.4,
+          "slippage": 32.0
+        }
+      },
+      "by_side": {
+        "CALL": {
+          "trades": 530,
+          "win_rate": 0.464,
+          "avg_win_r": 0.802,
+          "avg_loss_r": -0.76,
+          "expectancy_r": -0.035,
+          "total_r": -18.56,
+          "max_drawdown_r": 32.98,
+          "profit_factor": 0.914,
+          "net_pnl_100sh": -9298.9,
+          "fees": 742.0,
+          "slippage": 1060.0
+        },
+        "PUT": {
+          "trades": 474,
+          "win_rate": 0.424,
+          "avg_win_r": 0.903,
+          "avg_loss_r": -0.764,
+          "expectancy_r": -0.057,
+          "total_r": -27.11,
+          "max_drawdown_r": 30.0,
+          "profit_factor": 0.87,
+          "net_pnl_100sh": -18456.52,
+          "fees": 663.6,
+          "slippage": 948.0
+        }
+      },
+      "by_hour_et": {
+        "09:00": {
+          "trades": 149,
+          "win_rate": 0.463,
+          "avg_win_r": 1.286,
+          "avg_loss_r": -0.93,
+          "expectancy_r": 0.096,
+          "total_r": 14.34,
+          "max_drawdown_r": 9.06,
+          "profit_factor": 1.193,
+          "net_pnl_100sh": 5054.18,
+          "fees": 208.6,
+          "slippage": 298.0
+        },
+        "10:00": {
+          "trades": 342,
+          "win_rate": 0.436,
+          "avg_win_r": 0.915,
+          "avg_loss_r": -0.841,
+          "expectancy_r": -0.076,
+          "total_r": -26.0,
+          "max_drawdown_r": 34.05,
+          "profit_factor": 0.84,
+          "net_pnl_100sh": -20571.47,
+          "fees": 478.8,
+          "slippage": 684.0
+        },
+        "11:00": {
+          "trades": 227,
+          "win_rate": 0.454,
+          "avg_win_r": 0.769,
+          "avg_loss_r": -0.738,
+          "expectancy_r": -0.054,
+          "total_r": -12.29,
+          "max_drawdown_r": 22.57,
+          "profit_factor": 0.866,
+          "net_pnl_100sh": -1643.38,
+          "fees": 317.8,
+          "slippage": 454.0
+        },
+        "12:00": {
+          "trades": 94,
+          "win_rate": 0.362,
+          "avg_win_r": 0.692,
+          "avg_loss_r": -0.651,
+          "expectancy_r": -0.165,
+          "total_r": -15.51,
+          "max_drawdown_r": 17.06,
+          "profit_factor": 0.603,
+          "net_pnl_100sh": -5033.53,
+          "fees": 131.6,
+          "slippage": 188.0
+        },
+        "13:00": {
+          "trades": 90,
+          "win_rate": 0.522,
+          "avg_win_r": 0.624,
+          "avg_loss_r": -0.673,
+          "expectancy_r": 0.005,
+          "total_r": 0.41,
+          "max_drawdown_r": 9.82,
+          "profit_factor": 1.014,
+          "net_pnl_100sh": -2169.97,
+          "fees": 126.0,
+          "slippage": 180.0
+        },
+        "14:00": {
+          "trades": 76,
+          "win_rate": 0.408,
+          "avg_win_r": 0.537,
+          "avg_loss_r": -0.485,
+          "expectancy_r": -0.068,
+          "total_r": -5.18,
+          "max_drawdown_r": 5.72,
+          "profit_factor": 0.762,
+          "net_pnl_100sh": -2332.27,
+          "fees": 106.4,
+          "slippage": 152.0
+        },
+        "15:00": {
+          "trades": 26,
+          "win_rate": 0.538,
+          "avg_win_r": 0.351,
+          "avg_loss_r": -0.529,
+          "expectancy_r": -0.055,
+          "total_r": -1.43,
+          "max_drawdown_r": 3.5,
+          "profit_factor": 0.774,
+          "net_pnl_100sh": -1058.98,
+          "fees": 36.4,
+          "slippage": 52.0
+        }
+      }
+    }
+  },
+  "in_play": {
+    "days": 487,
+    "days_with_picks": 456,
+    "average_picks": 4.97,
+    "most_picked": [
+      [
+        "ROKU",
+        39
+      ],
+      [
+        "SNOW",
+        38
+      ],
+      [
+        "DKNG",
+        37
+      ],
+      [
+        "UAL",
+        36
+      ],
+      [
+        "BABA",
+        36
+      ],
+      [
+        "RIVN",
+        35
+      ],
+      [
+        "CVNA",
+        34
+      ],
+      [
+        "AAL",
+        34
+      ],
+      [
+        "MRVL",
+        34
+      ],
+      [
+        "PDD",
+        34
+      ],
+      [
+        "ARM",
+        33
+      ],
+      [
+        "NET",
+        33
+      ],
+      [
+        "SMCI",
+        33
+      ],
+      [
+        "LULU",
+        33
+      ],
+      [
+        "JD",
+        33
+      ]
+    ]
+  }
+}

@@ -24,8 +24,10 @@ from ..strategy_loader import Strategy
 
 class ShadowOriginal:
     def __init__(self, *, root: Path, data_dir: Path, strategy: Strategy, starting_cash: float, profile=None,
-                 arbiter_factory: Callable | None = None, helpers: dict[str, Callable]):
+                 arbiter_factory: Callable | None = None, helpers: dict[str, Callable],
+                 reset_loss_streak_each_session: bool = False):
         self.root = root
+        self.reset_loss_streak_each_session = reset_loss_streak_each_session
         self.dir = data_dir / "v2_shadow_original"
         self.account_path = self.dir / "paper_account.json"
         self.account = load_or_initialize(self.account_path, starting_cash)
@@ -44,6 +46,16 @@ class ShadowOriginal:
     def equity(self) -> float:
         a = self.account
         return max(0.0, a.starting_capital + a.deposits - a.withdrawals + a.realized_pnl + a.unrealized_pnl)
+
+    def streak_since(self, now: datetime):
+        """The original's consecutive-loss rule only ends a streak with a win, so after losses on 2026-10-26
+        neither shadow's ledger recorded another trade.
+        Since 2026-11-04 the benchmark counts today's trades only when V2 does (loss_streak.reset_each_session), so
+        it stays a live comparison. The original engine itself (profile=None, no V2) is unchanged."""
+        if not self.reset_loss_streak_each_session:
+            return None
+        from zoneinfo import ZoneInfo
+        return now.astimezone(ZoneInfo("America/New_York")).date()
 
     def available_slots(self, at: datetime | None = None) -> int:
         moment = at or datetime.now(timezone.utc)
@@ -102,7 +114,7 @@ class ShadowOriginal:
         chain_quotes = await chain() if wants_chain else []
         risk_state = RiskState(equity=equity, daily_pnl=self.h["daily_realized"](account, bar_now) + account.unrealized_pnl,
                                weekly_pnl=self.h["weekly_realized"](account, bar_now) + account.unrealized_pnl,
-                               consecutive_losses=self.h["consecutive_losses"](account),
+                               consecutive_losses=self.h["consecutive_losses"](account, since=self.streak_since(bar_now)),
                                trades_today=self.h["trades_today"](account, bar_now), open_positions=len(account.positions),
                                open_underlyings=tuple(str(p["underlying"]) for p in account.positions))
         records = await asyncio.to_thread(

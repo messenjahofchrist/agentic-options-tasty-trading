@@ -17,6 +17,9 @@ States
 
 An actionable state stays actionable only while price remains beyond the level by min_distance_atr x ATR and no
 more than the strategy's breakout_lookback_bars have passed since the breakout (the core's own anti-chasing bound).
+
+Every REJECTED_BREAKOUT / FAILED_BREAKOUT is also kept in `failures` (side, level, time) for the rest of the session,
+so a later setup can see that the same breakout already failed (V2 failed_level_reentry, 2.7.0).
 """
 from __future__ import annotations
 
@@ -63,6 +66,7 @@ class BreakoutTracker:
         self.lookback = int(breakout_lookback_bars)
         self.setup: Setup | None = None
         self.last_bar_time: datetime | None = None
+        self.failures: list[dict[str, Any]] = []   # this session's failed breakouts, oldest first
 
     @property
     def state(self) -> str:
@@ -104,8 +108,11 @@ class BreakoutTracker:
         beyond = (close - setup.level) * direction
         back_inside = close < setup.range_high if direction == 1 else close > setup.range_low
         if back_inside:
-            self._move("REJECTED_BREAKOUT" if setup.bars_since == 1 else "FAILED_BREAKOUT", bar,
-                       "completed close back inside the opening range")
+            failed_state = "REJECTED_BREAKOUT" if setup.bars_since == 1 else "FAILED_BREAKOUT"
+            self._move(failed_state, bar, "completed close back inside the opening range")
+            self.failures.append({"side": setup.side, "level": setup.level, "at": bar.timestamp.isoformat(),
+                                  "state": failed_state, "trigger_time": setup.trigger_time.isoformat()})
+            self.failures = self.failures[-20:]
             return self.result(bar)
         setup.closes_beyond = setup.closes_beyond + 1 if beyond > 0 else 0
         touched = ((bar.low - setup.level) * direction if direction == 1 else (setup.level - bar.high)) <= pull["retest_tolerance_atr"] * atr
@@ -158,6 +165,8 @@ class BreakoutTracker:
         out = {"state": self.state, "actionable": self.state in ACTIONABLE, "bar_utc": bar.timestamp.isoformat()}
         if self.setup:
             out["setup"] = self.setup.to_dict()
+        if self.failures:
+            out["failures"] = list(self.failures)
         if note:
             out["note"] = note
         return out

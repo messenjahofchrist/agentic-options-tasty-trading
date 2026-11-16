@@ -1,0 +1,1239 @@
+{
+  "source": "massive month chunks + Jun-Oct 2026 cache",
+  "first_day": "2024-12-01",
+  "last_day": "2026-11-10",
+  "days_replayed": 487,
+  "trade_symbols": [
+    "SPY",
+    "QQQ",
+    "IWM",
+    "DIA",
+    "TLT",
+    "NVDA",
+    "AAPL",
+    "AMZN",
+    "GOOGL",
+    "PLTR",
+    "NFLX",
+    "INTC",
+    "UBER",
+    "BAC"
+  ],
+  "strategy_version": "2.8.0",
+  "notes": [
+    "option costs: per-symbol cost table measured on recorded quotes from Oct-Nov 2026, applied to every period (spreads in earlier periods may have differed)",
+    "FOMC windows before June 2026 from the published calendar as recalled (unverified); earnings, IV and option selection are not replayed (as in every replay)",
+    "VIX: prior-session daily closes (494 sessions)"
+  ],
+  "model": "What is replayed exactly (the production code, not a re-implementation):\n  core signal and indicators (strategy_engine.evaluate_underlying_diagnostics), breakout confirmation (confirmation.py),\n  market context, regime, sector confirmation, VWAP alignment, FOMC windows, correlation clusters and the aggregate\n  cap (pipeline.evaluate_candidate stages 1-7), trailing stop and time stop (management.py).\nWhat is NOT replayed (no historical data): option selection, option bid/ask, Greeks and the expected-net-R gate,\n  IV rank/HV checks, earnings dates, the dollar daily-loss limit. Breakeven is approximated on the underlying (exit\n  when the close returns to the entry price after arming). P&L is the underlying proxy the original backtest uses:\n  100 shares, $0.01/share slippage each way, $1.40 fees per trade, R = net / (|entry - stop| x 100).\nHarness rules for both strategies: completed-bar decisions, entry at that bar's close, exits on later completed bar\ncloses (like the live exit check), flat at the session's last bar, max 4 open / 6 entries per session (original risk\nlimits), no averaging, same-minute candidates ranked by trend efficiency (expected net R needs option quotes), the\n3-consecutive-loss block reset each session (live carries it across sessions; resetting stops one streak from\nending the replay). No bar after the decision bar is ever used for a decision.",
+  "variants": {
+    "v2": {
+      "all": {
+        "trades": 2088,
+        "win_rate": 0.355,
+        "avg_win_r": 1.489,
+        "avg_loss_r": -0.825,
+        "expectancy_r": -0.004,
+        "total_r": -7.87,
+        "max_drawdown_r": 90.81,
+        "profit_factor": 0.993,
+        "net_pnl_100sh": 1549.58,
+        "fees": 2923.2,
+        "slippage": 4176.0
+      },
+      "net_of_option_cost": {
+        "available": true,
+        "coverage": "2088 of 2088 trades",
+        "gross_total_r": -7.87,
+        "cost_total_r": 423.4,
+        "net_total_r": -431.26,
+        "net_expectancy_r": -0.207,
+        "net_win_rate": 0.328,
+        "net_profit_factor": 0.691,
+        "median_cost_r": 0.16,
+        "by_symbol": {
+          "AAPL": {
+            "trades": 167,
+            "gross_r": 16.6,
+            "cost_r": 13.71,
+            "net_r": 2.89
+          },
+          "AMZN": {
+            "trades": 158,
+            "gross_r": -17.58,
+            "cost_r": 18.49,
+            "net_r": -36.06
+          },
+          "GOOGL": {
+            "trades": 189,
+            "gross_r": -3.92,
+            "cost_r": 15.24,
+            "net_r": -19.16
+          },
+          "INTC": {
+            "trades": 220,
+            "gross_r": -21.33,
+            "cost_r": 64.93,
+            "net_r": -86.27
+          },
+          "IWM": {
+            "trades": 240,
+            "gross_r": 23.5,
+            "cost_r": 49.6,
+            "net_r": -26.1
+          },
+          "NFLX": {
+            "trades": 155,
+            "gross_r": -1.47,
+            "cost_r": 64.15,
+            "net_r": -65.62
+          },
+          "NVDA": {
+            "trades": 193,
+            "gross_r": 22.06,
+            "cost_r": 30.56,
+            "net_r": -8.49
+          },
+          "PLTR": {
+            "trades": 186,
+            "gross_r": 1.84,
+            "cost_r": 20.39,
+            "net_r": -18.55
+          },
+          "QQQ": {
+            "trades": 164,
+            "gross_r": -15.66,
+            "cost_r": 23.56,
+            "net_r": -39.22
+          },
+          "SPY": {
+            "trades": 226,
+            "gross_r": 3.86,
+            "cost_r": 45.44,
+            "net_r": -41.58
+          },
+          "UBER": {
+            "trades": 190,
+            "gross_r": -15.78,
+            "cost_r": 77.33,
+            "net_r": -93.11
+          }
+        }
+      },
+      "by_quarter": {
+        "2024-Q4": {
+          "gross": {
+            "trades": 92,
+            "win_rate": 0.337,
+            "avg_win_r": 1.889,
+            "avg_loss_r": -0.922,
+            "expectancy_r": 0.025,
+            "total_r": 2.32,
+            "max_drawdown_r": 14.5,
+            "profit_factor": 1.041,
+            "net_pnl_100sh": 396.67,
+            "fees": 128.8,
+            "slippage": 184.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "92 of 92 trades",
+            "gross_total_r": 2.32,
+            "cost_total_r": 20.27,
+            "net_total_r": -17.96,
+            "net_expectancy_r": -0.195,
+            "net_win_rate": 0.326,
+            "net_profit_factor": 0.742,
+            "median_cost_r": 0.181,
+            "by_symbol": {
+              "AAPL": {
+                "trades": 8,
+                "gross_r": -2.01,
+                "cost_r": 0.74,
+                "net_r": -2.75
+              },
+              "AMZN": {
+                "trades": 13,
+                "gross_r": -4.84,
+                "cost_r": 1.98,
+                "net_r": -6.82
+              },
+              "GOOGL": {
+                "trades": 10,
+                "gross_r": 4.96,
+                "cost_r": 0.8,
+                "net_r": 4.16
+              },
+              "INTC": {
+                "trades": 3,
+                "gross_r": 2.38,
+                "cost_r": 0.96,
+                "net_r": 1.42
+              },
+              "IWM": {
+                "trades": 10,
+                "gross_r": -3.83,
+                "cost_r": 1.96,
+                "net_r": -5.79
+              },
+              "NFLX": {
+                "trades": 7,
+                "gross_r": 4.32,
+                "cost_r": 3.58,
+                "net_r": 0.74
+              },
+              "NVDA": {
+                "trades": 5,
+                "gross_r": 1.51,
+                "cost_r": 0.66,
+                "net_r": 0.85
+              },
+              "PLTR": {
+                "trades": 4,
+                "gross_r": 0.49,
+                "cost_r": 0.21,
+                "net_r": 0.28
+              },
+              "QQQ": {
+                "trades": 12,
+                "gross_r": 3.4,
+                "cost_r": 2.27,
+                "net_r": 1.13
+              },
+              "SPY": {
+                "trades": 12,
+                "gross_r": -10.6,
+                "cost_r": 3.36,
+                "net_r": -13.96
+              },
+              "UBER": {
+                "trades": 8,
+                "gross_r": 6.53,
+                "cost_r": 3.76,
+                "net_r": 2.78
+              }
+            }
+          }
+        },
+        "2025-Q1": {
+          "gross": {
+            "trades": 260,
+            "win_rate": 0.342,
+            "avg_win_r": 1.537,
+            "avg_loss_r": -0.806,
+            "expectancy_r": -0.004,
+            "total_r": -1.01,
+            "max_drawdown_r": 20.88,
+            "profit_factor": 0.993,
+            "net_pnl_100sh": 1096.2,
+            "fees": 364.0,
+            "slippage": 520.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "260 of 260 trades",
+            "gross_total_r": -1.01,
+            "cost_total_r": 50.69,
+            "net_total_r": -51.69,
+            "net_expectancy_r": -0.199,
+            "net_win_rate": 0.327,
+            "net_profit_factor": 0.701,
+            "median_cost_r": 0.139,
+            "by_symbol": {
+              "AAPL": {
+                "trades": 21,
+                "gross_r": 11.4,
+                "cost_r": 1.56,
+                "net_r": 9.84
+              },
+              "AMZN": {
+                "trades": 17,
+                "gross_r": -7.14,
+                "cost_r": 1.9,
+                "net_r": -9.04
+              },
+              "GOOGL": {
+                "trades": 22,
+                "gross_r": -3.1,
+                "cost_r": 2.0,
+                "net_r": -5.1
+              },
+              "INTC": {
+                "trades": 19,
+                "gross_r": -2.92,
+                "cost_r": 6.33,
+                "net_r": -9.24
+              },
+              "IWM": {
+                "trades": 29,
+                "gross_r": 8.53,
+                "cost_r": 5.81,
+                "net_r": 2.72
+              },
+              "NFLX": {
+                "trades": 25,
+                "gross_r": -1.55,
+                "cost_r": 11.06,
+                "net_r": -12.6
+              },
+              "NVDA": {
+                "trades": 35,
+                "gross_r": 10.71,
+                "cost_r": 3.94,
+                "net_r": 6.77
+              },
+              "PLTR": {
+                "trades": 20,
+                "gross_r": 3.62,
+                "cost_r": 1.52,
+                "net_r": 2.1
+              },
+              "QQQ": {
+                "trades": 23,
+                "gross_r": -9.59,
+                "cost_r": 3.3,
+                "net_r": -12.89
+              },
+              "SPY": {
+                "trades": 24,
+                "gross_r": -9.78,
+                "cost_r": 4.24,
+                "net_r": -14.02
+              },
+              "UBER": {
+                "trades": 25,
+                "gross_r": -1.2,
+                "cost_r": 9.04,
+                "net_r": -10.24
+              }
+            }
+          }
+        },
+        "2025-Q2": {
+          "gross": {
+            "trades": 185,
+            "win_rate": 0.341,
+            "avg_win_r": 1.568,
+            "avg_loss_r": -0.826,
+            "expectancy_r": -0.011,
+            "total_r": -2.01,
+            "max_drawdown_r": 18.41,
+            "profit_factor": 0.98,
+            "net_pnl_100sh": 1359.7,
+            "fees": 259.0,
+            "slippage": 370.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "185 of 185 trades",
+            "gross_total_r": -2.01,
+            "cost_total_r": 45.19,
+            "net_total_r": -47.2,
+            "net_expectancy_r": -0.255,
+            "net_win_rate": 0.308,
+            "net_profit_factor": 0.642,
+            "median_cost_r": 0.177,
+            "by_symbol": {
+              "AAPL": {
+                "trades": 13,
+                "gross_r": -6.66,
+                "cost_r": 1.04,
+                "net_r": -7.7
+              },
+              "AMZN": {
+                "trades": 12,
+                "gross_r": 3.02,
+                "cost_r": 1.53,
+                "net_r": 1.5
+              },
+              "GOOGL": {
+                "trades": 15,
+                "gross_r": 6.27,
+                "cost_r": 1.09,
+                "net_r": 5.17
+              },
+              "INTC": {
+                "trades": 38,
+                "gross_r": -7.79,
+                "cost_r": 14.59,
+                "net_r": -22.38
+              },
+              "IWM": {
+                "trades": 21,
+                "gross_r": -4.22,
+                "cost_r": 4.56,
+                "net_r": -8.78
+              },
+              "NFLX": {
+                "trades": 14,
+                "gross_r": -5.09,
+                "cost_r": 6.63,
+                "net_r": -11.72
+              },
+              "NVDA": {
+                "trades": 12,
+                "gross_r": 2.0,
+                "cost_r": 1.92,
+                "net_r": 0.08
+              },
+              "PLTR": {
+                "trades": 16,
+                "gross_r": 2.56,
+                "cost_r": 1.56,
+                "net_r": 1.0
+              },
+              "QQQ": {
+                "trades": 13,
+                "gross_r": 5.84,
+                "cost_r": 1.81,
+                "net_r": 4.03
+              },
+              "SPY": {
+                "trades": 11,
+                "gross_r": 2.35,
+                "cost_r": 1.86,
+                "net_r": 0.49
+              },
+              "UBER": {
+                "trades": 20,
+                "gross_r": -0.29,
+                "cost_r": 8.61,
+                "net_r": -8.9
+              }
+            }
+          }
+        },
+        "2025-Q3": {
+          "gross": {
+            "trades": 288,
+            "win_rate": 0.337,
+            "avg_win_r": 1.331,
+            "avg_loss_r": -0.828,
+            "expectancy_r": -0.101,
+            "total_r": -29.05,
+            "max_drawdown_r": 45.78,
+            "profit_factor": 0.816,
+            "net_pnl_100sh": -3138.82,
+            "fees": 403.2,
+            "slippage": 576.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "288 of 288 trades",
+            "gross_total_r": -29.05,
+            "cost_total_r": 66.9,
+            "net_total_r": -95.95,
+            "net_expectancy_r": -0.333,
+            "net_win_rate": 0.274,
+            "net_profit_factor": 0.532,
+            "median_cost_r": 0.202,
+            "by_symbol": {
+              "AAPL": {
+                "trades": 19,
+                "gross_r": 4.88,
+                "cost_r": 1.82,
+                "net_r": 3.06
+              },
+              "AMZN": {
+                "trades": 20,
+                "gross_r": -4.59,
+                "cost_r": 2.98,
+                "net_r": -7.58
+              },
+              "GOOGL": {
+                "trades": 23,
+                "gross_r": -5.22,
+                "cost_r": 1.9,
+                "net_r": -7.12
+              },
+              "INTC": {
+                "trades": 29,
+                "gross_r": -4.4,
+                "cost_r": 10.57,
+                "net_r": -14.97
+              },
+              "IWM": {
+                "trades": 37,
+                "gross_r": 5.45,
+                "cost_r": 8.26,
+                "net_r": -2.81
+              },
+              "NFLX": {
+                "trades": 21,
+                "gross_r": -4.66,
+                "cost_r": 8.88,
+                "net_r": -13.55
+              },
+              "NVDA": {
+                "trades": 24,
+                "gross_r": 7.36,
+                "cost_r": 4.51,
+                "net_r": 2.85
+              },
+              "PLTR": {
+                "trades": 33,
+                "gross_r": -14.68,
+                "cost_r": 4.7,
+                "net_r": -19.38
+              },
+              "QQQ": {
+                "trades": 22,
+                "gross_r": -0.79,
+                "cost_r": 4.09,
+                "net_r": -4.89
+              },
+              "SPY": {
+                "trades": 34,
+                "gross_r": -5.12,
+                "cost_r": 8.58,
+                "net_r": -13.71
+              },
+              "UBER": {
+                "trades": 26,
+                "gross_r": -7.26,
+                "cost_r": 10.6,
+                "net_r": -17.86
+              }
+            }
+          }
+        },
+        "2025-Q4": {
+          "gross": {
+            "trades": 287,
+            "win_rate": 0.338,
+            "avg_win_r": 1.655,
+            "avg_loss_r": -0.831,
+            "expectancy_r": 0.009,
+            "total_r": 2.66,
+            "max_drawdown_r": 21.93,
+            "profit_factor": 1.017,
+            "net_pnl_100sh": 1538.83,
+            "fees": 401.8,
+            "slippage": 574.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "287 of 287 trades",
+            "gross_total_r": 2.66,
+            "cost_total_r": 65.57,
+            "net_total_r": -62.91,
+            "net_expectancy_r": -0.219,
+            "net_win_rate": 0.317,
+            "net_profit_factor": 0.692,
+            "median_cost_r": 0.163,
+            "by_symbol": {
+              "AAPL": {
+                "trades": 27,
+                "gross_r": 11.01,
+                "cost_r": 2.27,
+                "net_r": 8.74
+              },
+              "AMZN": {
+                "trades": 19,
+                "gross_r": -0.07,
+                "cost_r": 2.44,
+                "net_r": -2.51
+              },
+              "GOOGL": {
+                "trades": 30,
+                "gross_r": -7.49,
+                "cost_r": 2.52,
+                "net_r": -10.01
+              },
+              "INTC": {
+                "trades": 25,
+                "gross_r": 2.55,
+                "cost_r": 8.6,
+                "net_r": -6.04
+              },
+              "IWM": {
+                "trades": 32,
+                "gross_r": -5.8,
+                "cost_r": 6.04,
+                "net_r": -11.83
+              },
+              "NFLX": {
+                "trades": 22,
+                "gross_r": -9.3,
+                "cost_r": 9.6,
+                "net_r": -18.91
+              },
+              "NVDA": {
+                "trades": 24,
+                "gross_r": 1.79,
+                "cost_r": 4.03,
+                "net_r": -2.23
+              },
+              "PLTR": {
+                "trades": 24,
+                "gross_r": 16.02,
+                "cost_r": 3.12,
+                "net_r": 12.91
+              },
+              "QQQ": {
+                "trades": 23,
+                "gross_r": -1.89,
+                "cost_r": 4.22,
+                "net_r": -6.11
+              },
+              "SPY": {
+                "trades": 30,
+                "gross_r": -1.01,
+                "cost_r": 5.49,
+                "net_r": -6.5
+              },
+              "UBER": {
+                "trades": 31,
+                "gross_r": -3.15,
+                "cost_r": 17.26,
+                "net_r": -20.41
+              }
+            }
+          }
+        },
+        "2026-Q1": {
+          "gross": {
+            "trades": 259,
+            "win_rate": 0.34,
+            "avg_win_r": 1.12,
+            "avg_loss_r": -0.827,
+            "expectancy_r": -0.165,
+            "total_r": -42.85,
+            "max_drawdown_r": 57.56,
+            "profit_factor": 0.697,
+            "net_pnl_100sh": -4018.21,
+            "fees": 362.6,
+            "slippage": 518.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "259 of 259 trades",
+            "gross_total_r": -42.85,
+            "cost_total_r": 43.6,
+            "net_total_r": -86.45,
+            "net_expectancy_r": -0.334,
+            "net_win_rate": 0.313,
+            "net_profit_factor": 0.493,
+            "median_cost_r": 0.14,
+            "by_symbol": {
+              "AAPL": {
+                "trades": 25,
+                "gross_r": -11.19,
+                "cost_r": 2.18,
+                "net_r": -13.37
+              },
+              "AMZN": {
+                "trades": 23,
+                "gross_r": -7.28,
+                "cost_r": 2.25,
+                "net_r": -9.53
+              },
+              "GOOGL": {
+                "trades": 22,
+                "gross_r": -2.63,
+                "cost_r": 1.64,
+                "net_r": -4.27
+              },
+              "INTC": {
+                "trades": 30,
+                "gross_r": -8.12,
+                "cost_r": 7.27,
+                "net_r": -15.38
+              },
+              "IWM": {
+                "trades": 28,
+                "gross_r": -4.96,
+                "cost_r": 4.66,
+                "net_r": -9.63
+              },
+              "NFLX": {
+                "trades": 16,
+                "gross_r": -0.15,
+                "cost_r": 4.77,
+                "net_r": -4.92
+              },
+              "NVDA": {
+                "trades": 23,
+                "gross_r": -4.26,
+                "cost_r": 3.96,
+                "net_r": -8.22
+              },
+              "PLTR": {
+                "trades": 23,
+                "gross_r": 5.03,
+                "cost_r": 2.65,
+                "net_r": 2.38
+              },
+              "QQQ": {
+                "trades": 16,
+                "gross_r": -2.52,
+                "cost_r": 1.57,
+                "net_r": -4.09
+              },
+              "SPY": {
+                "trades": 27,
+                "gross_r": -5.5,
+                "cost_r": 4.32,
+                "net_r": -9.82
+              },
+              "UBER": {
+                "trades": 26,
+                "gross_r": -1.28,
+                "cost_r": 8.33,
+                "net_r": -9.61
+              }
+            }
+          }
+        },
+        "2026-Q2": {
+          "gross": {
+            "trades": 296,
+            "win_rate": 0.399,
+            "avg_win_r": 1.605,
+            "avg_loss_r": -0.818,
+            "expectancy_r": 0.148,
+            "total_r": 43.69,
+            "max_drawdown_r": 24.68,
+            "profit_factor": 1.3,
+            "net_pnl_100sh": 597.05,
+            "fees": 414.4,
+            "slippage": 592.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "296 of 296 trades",
+            "gross_total_r": 43.69,
+            "cost_total_r": 49.74,
+            "net_total_r": -6.05,
+            "net_expectancy_r": -0.02,
+            "net_win_rate": 0.378,
+            "net_profit_factor": 0.966,
+            "median_cost_r": 0.138,
+            "by_symbol": {
+              "AAPL": {
+                "trades": 21,
+                "gross_r": 4.01,
+                "cost_r": 1.58,
+                "net_r": 2.43
+              },
+              "AMZN": {
+                "trades": 25,
+                "gross_r": 13.07,
+                "cost_r": 2.31,
+                "net_r": 10.77
+              },
+              "GOOGL": {
+                "trades": 29,
+                "gross_r": 0.45,
+                "cost_r": 2.23,
+                "net_r": -1.78
+              },
+              "INTC": {
+                "trades": 32,
+                "gross_r": -5.75,
+                "cost_r": 5.83,
+                "net_r": -11.58
+              },
+              "IWM": {
+                "trades": 31,
+                "gross_r": 23.79,
+                "cost_r": 5.72,
+                "net_r": 18.07
+              },
+              "NFLX": {
+                "trades": 22,
+                "gross_r": 9.3,
+                "cost_r": 8.23,
+                "net_r": 1.07
+              },
+              "NVDA": {
+                "trades": 29,
+                "gross_r": 2.88,
+                "cost_r": 4.45,
+                "net_r": -1.57
+              },
+              "PLTR": {
+                "trades": 32,
+                "gross_r": -1.7,
+                "cost_r": 3.47,
+                "net_r": -5.17
+              },
+              "QQQ": {
+                "trades": 24,
+                "gross_r": -9.66,
+                "cost_r": 2.51,
+                "net_r": -12.17
+              },
+              "SPY": {
+                "trades": 29,
+                "gross_r": 2.87,
+                "cost_r": 5.64,
+                "net_r": -2.76
+              },
+              "UBER": {
+                "trades": 22,
+                "gross_r": 4.42,
+                "cost_r": 7.78,
+                "net_r": -3.35
+              }
+            }
+          }
+        },
+        "2026-Q3": {
+          "gross": {
+            "trades": 293,
+            "win_rate": 0.362,
+            "avg_win_r": 1.358,
+            "avg_loss_r": -0.79,
+            "expectancy_r": -0.013,
+            "total_r": -3.8,
+            "max_drawdown_r": 19.5,
+            "profit_factor": 0.974,
+            "net_pnl_100sh": 730.61,
+            "fees": 410.2,
+            "slippage": 586.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "293 of 293 trades",
+            "gross_total_r": -3.8,
+            "cost_total_r": 52.77,
+            "net_total_r": -56.57,
+            "net_expectancy_r": -0.193,
+            "net_win_rate": 0.334,
+            "net_profit_factor": 0.691,
+            "median_cost_r": 0.158,
+            "by_symbol": {
+              "AAPL": {
+                "trades": 21,
+                "gross_r": 4.07,
+                "cost_r": 1.53,
+                "net_r": 2.53
+              },
+              "AMZN": {
+                "trades": 23,
+                "gross_r": -10.94,
+                "cost_r": 2.58,
+                "net_r": -13.52
+              },
+              "GOOGL": {
+                "trades": 29,
+                "gross_r": 3.27,
+                "cost_r": 2.31,
+                "net_r": 0.96
+              },
+              "INTC": {
+                "trades": 29,
+                "gross_r": -1.33,
+                "cost_r": 6.32,
+                "net_r": -7.65
+              },
+              "IWM": {
+                "trades": 33,
+                "gross_r": -6.33,
+                "cost_r": 7.64,
+                "net_r": -13.98
+              },
+              "NFLX": {
+                "trades": 18,
+                "gross_r": 6.98,
+                "cost_r": 6.16,
+                "net_r": 0.83
+              },
+              "NVDA": {
+                "trades": 29,
+                "gross_r": -3.25,
+                "cost_r": 5.1,
+                "net_r": -8.34
+              },
+              "PLTR": {
+                "trades": 27,
+                "gross_r": -11.66,
+                "cost_r": 2.61,
+                "net_r": -14.27
+              },
+              "QQQ": {
+                "trades": 22,
+                "gross_r": 3.45,
+                "cost_r": 2.65,
+                "net_r": 0.8
+              },
+              "SPY": {
+                "trades": 39,
+                "gross_r": 22.46,
+                "cost_r": 7.79,
+                "net_r": 14.67
+              },
+              "UBER": {
+                "trades": 23,
+                "gross_r": -10.52,
+                "cost_r": 8.09,
+                "net_r": -18.61
+              }
+            }
+          }
+        },
+        "2026-Q4": {
+          "gross": {
+            "trades": 128,
+            "win_rate": 0.406,
+            "avg_win_r": 1.681,
+            "avg_loss_r": -0.859,
+            "expectancy_r": 0.173,
+            "total_r": 22.18,
+            "max_drawdown_r": 10.68,
+            "profit_factor": 1.34,
+            "net_pnl_100sh": 2987.55,
+            "fees": 179.2,
+            "slippage": 256.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "128 of 128 trades",
+            "gross_total_r": 22.18,
+            "cost_total_r": 28.66,
+            "net_total_r": -6.49,
+            "net_expectancy_r": -0.051,
+            "net_win_rate": 0.398,
+            "net_profit_factor": 0.923,
+            "median_cost_r": 0.177,
+            "by_symbol": {
+              "AAPL": {
+                "trades": 12,
+                "gross_r": 1.1,
+                "cost_r": 1.0,
+                "net_r": 0.1
+              },
+              "AMZN": {
+                "trades": 6,
+                "gross_r": 1.19,
+                "cost_r": 0.52,
+                "net_r": 0.67
+              },
+              "GOOGL": {
+                "trades": 9,
+                "gross_r": -0.43,
+                "cost_r": 0.74,
+                "net_r": -1.17
+              },
+              "INTC": {
+                "trades": 15,
+                "gross_r": 4.03,
+                "cost_r": 4.47,
+                "net_r": -0.44
+              },
+              "IWM": {
+                "trades": 19,
+                "gross_r": 10.87,
+                "cost_r": 4.94,
+                "net_r": 5.93
+              },
+              "NFLX": {
+                "trades": 10,
+                "gross_r": -1.31,
+                "cost_r": 5.25,
+                "net_r": -6.56
+              },
+              "NVDA": {
+                "trades": 12,
+                "gross_r": 3.31,
+                "cost_r": 2.0,
+                "net_r": 1.31
+              },
+              "PLTR": {
+                "trades": 7,
+                "gross_r": 2.16,
+                "cost_r": 0.56,
+                "net_r": 1.6
+              },
+              "QQQ": {
+                "trades": 9,
+                "gross_r": -3.9,
+                "cost_r": 1.15,
+                "net_r": -5.05
+              },
+              "SPY": {
+                "trades": 20,
+                "gross_r": 8.19,
+                "cost_r": 4.15,
+                "net_r": 4.03
+              },
+              "UBER": {
+                "trades": 9,
+                "gross_r": -3.04,
+                "cost_r": 3.87,
+                "net_r": -6.91
+              }
+            }
+          }
+        }
+      },
+      "by_symbol": {
+        "AAPL": {
+          "trades": 167,
+          "win_rate": 0.383,
+          "avg_win_r": 1.485,
+          "avg_loss_r": -0.762,
+          "expectancy_r": 0.099,
+          "total_r": 16.6,
+          "max_drawdown_r": 16.77,
+          "profit_factor": 1.212,
+          "net_pnl_100sh": 2851.08,
+          "fees": 233.8,
+          "slippage": 334.0
+        },
+        "AMZN": {
+          "trades": 158,
+          "win_rate": 0.348,
+          "avg_win_r": 1.17,
+          "avg_loss_r": -0.796,
+          "expectancy_r": -0.111,
+          "total_r": -17.58,
+          "max_drawdown_r": 22.52,
+          "profit_factor": 0.785,
+          "net_pnl_100sh": -1356.28,
+          "fees": 221.2,
+          "slippage": 316.0
+        },
+        "GOOGL": {
+          "trades": 189,
+          "win_rate": 0.349,
+          "avg_win_r": 1.27,
+          "avg_loss_r": -0.713,
+          "expectancy_r": -0.021,
+          "total_r": -3.92,
+          "max_drawdown_r": 21.31,
+          "profit_factor": 0.955,
+          "net_pnl_100sh": -1944.72,
+          "fees": 264.6,
+          "slippage": 378.0
+        },
+        "INTC": {
+          "trades": 220,
+          "win_rate": 0.368,
+          "avg_win_r": 1.208,
+          "avg_loss_r": -0.858,
+          "expectancy_r": -0.097,
+          "total_r": -21.33,
+          "max_drawdown_r": 28.82,
+          "profit_factor": 0.821,
+          "net_pnl_100sh": -1282.6,
+          "fees": 308.0,
+          "slippage": 440.0
+        },
+        "IWM": {
+          "trades": 240,
+          "win_rate": 0.329,
+          "avg_win_r": 2.081,
+          "avg_loss_r": -0.875,
+          "expectancy_r": 0.098,
+          "total_r": 23.5,
+          "max_drawdown_r": 17.14,
+          "profit_factor": 1.167,
+          "net_pnl_100sh": 787.71,
+          "fees": 336.0,
+          "slippage": 480.0
+        },
+        "NFLX": {
+          "trades": 155,
+          "win_rate": 0.413,
+          "avg_win_r": 1.233,
+          "avg_loss_r": -0.883,
+          "expectancy_r": -0.009,
+          "total_r": -1.47,
+          "max_drawdown_r": 24.94,
+          "profit_factor": 0.982,
+          "net_pnl_100sh": -357.4,
+          "fees": 217.0,
+          "slippage": 310.0
+        },
+        "NVDA": {
+          "trades": 193,
+          "win_rate": 0.389,
+          "avg_win_r": 1.474,
+          "avg_loss_r": -0.75,
+          "expectancy_r": 0.114,
+          "total_r": 22.06,
+          "max_drawdown_r": 10.99,
+          "profit_factor": 1.249,
+          "net_pnl_100sh": 3225.51,
+          "fees": 270.2,
+          "slippage": 386.0
+        },
+        "PLTR": {
+          "trades": 186,
+          "win_rate": 0.371,
+          "avg_win_r": 1.347,
+          "avg_loss_r": -0.779,
+          "expectancy_r": 0.01,
+          "total_r": 1.84,
+          "max_drawdown_r": 17.95,
+          "profit_factor": 1.02,
+          "net_pnl_100sh": 1533.73,
+          "fees": 260.4,
+          "slippage": 372.0
+        },
+        "QQQ": {
+          "trades": 164,
+          "win_rate": 0.293,
+          "avg_win_r": 1.663,
+          "avg_loss_r": -0.823,
+          "expectancy_r": -0.096,
+          "total_r": -15.66,
+          "max_drawdown_r": 19.82,
+          "profit_factor": 0.836,
+          "net_pnl_100sh": -1585.29,
+          "fees": 229.6,
+          "slippage": 328.0
+        },
+        "SPY": {
+          "trades": 226,
+          "win_rate": 0.341,
+          "avg_win_r": 1.886,
+          "avg_loss_r": -0.949,
+          "expectancy_r": 0.017,
+          "total_r": 3.86,
+          "max_drawdown_r": 36.42,
+          "profit_factor": 1.027,
+          "net_pnl_100sh": 1682.76,
+          "fees": 316.4,
+          "slippage": 452.0
+        },
+        "UBER": {
+          "trades": 190,
+          "win_rate": 0.332,
+          "avg_win_r": 1.43,
+          "avg_loss_r": -0.834,
+          "expectancy_r": -0.083,
+          "total_r": -15.78,
+          "max_drawdown_r": 26.07,
+          "profit_factor": 0.851,
+          "net_pnl_100sh": -2004.92,
+          "fees": 266.0,
+          "slippage": 380.0
+        }
+      },
+      "by_side": {
+        "CALL": {
+          "trades": 1083,
+          "win_rate": 0.364,
+          "avg_win_r": 1.469,
+          "avg_loss_r": -0.817,
+          "expectancy_r": 0.015,
+          "total_r": 15.89,
+          "max_drawdown_r": 67.31,
+          "profit_factor": 1.028,
+          "net_pnl_100sh": -1926.23,
+          "fees": 1516.2,
+          "slippage": 2166.0
+        },
+        "PUT": {
+          "trades": 1005,
+          "win_rate": 0.345,
+          "avg_win_r": 1.511,
+          "avg_loss_r": -0.833,
+          "expectancy_r": -0.024,
+          "total_r": -23.76,
+          "max_drawdown_r": 68.14,
+          "profit_factor": 0.957,
+          "net_pnl_100sh": 3475.81,
+          "fees": 1407.0,
+          "slippage": 2010.0
+        }
+      },
+      "by_hour_et": {
+        "09:00": {
+          "trades": 508,
+          "win_rate": 0.337,
+          "avg_win_r": 1.922,
+          "avg_loss_r": -0.866,
+          "expectancy_r": 0.072,
+          "total_r": 36.67,
+          "max_drawdown_r": 33.13,
+          "profit_factor": 1.126,
+          "net_pnl_100sh": 5427.34,
+          "fees": 711.2,
+          "slippage": 1016.0
+        },
+        "10:00": {
+          "trades": 856,
+          "win_rate": 0.327,
+          "avg_win_r": 1.573,
+          "avg_loss_r": -0.827,
+          "expectancy_r": -0.042,
+          "total_r": -35.75,
+          "max_drawdown_r": 57.66,
+          "profit_factor": 0.925,
+          "net_pnl_100sh": -5846.34,
+          "fees": 1198.4,
+          "slippage": 1712.0
+        },
+        "11:00": {
+          "trades": 373,
+          "win_rate": 0.402,
+          "avg_win_r": 1.261,
+          "avg_loss_r": -0.804,
+          "expectancy_r": 0.026,
+          "total_r": 9.87,
+          "max_drawdown_r": 20.58,
+          "profit_factor": 1.055,
+          "net_pnl_100sh": 2137.13,
+          "fees": 522.2,
+          "slippage": 746.0
+        },
+        "12:00": {
+          "trades": 151,
+          "win_rate": 0.331,
+          "avg_win_r": 1.344,
+          "avg_loss_r": -0.845,
+          "expectancy_r": -0.12,
+          "total_r": -18.1,
+          "max_drawdown_r": 23.81,
+          "profit_factor": 0.788,
+          "net_pnl_100sh": -1283.03,
+          "fees": 211.4,
+          "slippage": 302.0
+        },
+        "13:00": {
+          "trades": 92,
+          "win_rate": 0.435,
+          "avg_win_r": 1.057,
+          "avg_loss_r": -0.826,
+          "expectancy_r": -0.007,
+          "total_r": -0.67,
+          "max_drawdown_r": 7.38,
+          "profit_factor": 0.984,
+          "net_pnl_100sh": 364.67,
+          "fees": 128.8,
+          "slippage": 184.0
+        },
+        "14:00": {
+          "trades": 81,
+          "win_rate": 0.42,
+          "avg_win_r": 0.641,
+          "avg_loss_r": -0.631,
+          "expectancy_r": -0.097,
+          "total_r": -7.88,
+          "max_drawdown_r": 15.12,
+          "profit_factor": 0.734,
+          "net_pnl_100sh": -185.17,
+          "fees": 113.4,
+          "slippage": 162.0
+        },
+        "15:00": {
+          "trades": 27,
+          "win_rate": 0.593,
+          "avg_win_r": 0.856,
+          "avg_loss_r": -0.518,
+          "expectancy_r": 0.296,
+          "total_r": 7.99,
+          "max_drawdown_r": 1.6,
+          "profit_factor": 2.403,
+          "net_pnl_100sh": 934.98,
+          "fees": 37.8,
+          "slippage": 54.0
+        }
+      }
+    }
+  }
+}

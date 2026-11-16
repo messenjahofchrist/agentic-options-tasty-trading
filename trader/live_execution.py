@@ -129,11 +129,14 @@ def parse_fills(order: dict) -> tuple[int, float | None]:
     return quantity, notional / quantity
 
 
-def verify_live_authorization(root: Path, strategy: Strategy, account_number: str) -> dict:
+def verify_live_authorization(root: Path, strategy: Strategy, account_number: str, *, v2: Any = None,
+                              profile: str | None = None) -> dict:
     """LIVE runs only an exact, separately authorized strategy hash on the configured account.
 
     The authorization lives outside strategy.txt/active_strategy.json, so the strategy and its
-    PAPER-designated manifest stay byte-for-byte unchanged.
+    PAPER-designated manifest stay byte-for-byte unchanged. An authorization covers exactly one thing: the
+    original strategy, or one PROFESSIONAL_STRATEGY_V2 configuration hash with one account profile. A new V2
+    version has a new hash, so the owner authorizes each version before it can trade real money.
     """
     path = root / LIVE_AUTHORIZATION_FILE
     if not path.is_file():
@@ -149,6 +152,16 @@ def verify_live_authorization(root: Path, strategy: Strategy, account_number: st
         problems.append("TASTYTRADE_ACCOUNT_NUMBER differs from the authorized account")
     if record.get("statement") != LIVE_AUTHORIZATION_STATEMENT:
         problems.append("authorization statement missing")
+    if v2 is None:
+        if record.get("v2_sha256") or record.get("account_profile") or profile:
+            problems.append("the authorization is for PROFESSIONAL_STRATEGY_V2, not the original strategy")
+    else:
+        if record.get("v2_sha256") != v2.sha256 or record.get("v2_version") != v2.version:
+            problems.append(f"V2 {v2.version} ({v2.sha256[:12]}) differs from the authorized V2 "
+                            f"{record.get('v2_version') or 'none'}")
+        if record.get("account_profile") != profile:
+            problems.append(f"account profile {profile or 'none'} differs from the authorized "
+                            f"{record.get('account_profile') or 'none'}")
     if problems:
         raise RuntimeError("LIVE blocked: " + "; ".join(problems) + ". Re-run authorize-live if this change is intended.")
     return record

@@ -1,0 +1,253 @@
+// V2 2.9.0 (owner, 2026-11-12): a SIDE version. It runs beside the active 2.8.0 on its own new PAPER ledgers
+// ($10K: data/v29/original_paper, $1K: data/v29/small_account_paper) and is never copied to professional_v2.json
+// by this build. Its manifest is manifest_professional_v2_2.9.0.json next to this file.
+// It is 2.8.0 with exactly the three changes from the 11/12 review:
+//   1. in_play: each morning trade only the up to 8 stocks of the ~105 on strategies/v29_universe.json whose
+//      first 15 minutes of volume is at least 2x their own 20-session average (stocks with news / a big gap).
+//   2. stop_policy + no breakeven move: stop at least 1% of the price away (2.8.0's median was 0.52%), target at
+//      least 2 stops away, winners still run (let_winners_run); management.breakeven.enabled false.
+//   3. contract_policy: 1-6 day contracts, nearest expiration first (about half the round-trip cost).
+// Everything else (filters, regime, sector, events, sizing, cost logging, advisor veto) is 2.8.0's.
+{
+  "strategy_id": "PROFESSIONAL_STRATEGY_V2",
+  "version": "2.9.0",
+  "status": "research_test",
+  "mode": "PAPER",
+  "base_strategy": {
+    "filename": "strategy.txt",
+    "strategy_id": "opening_range_breakout_options",
+    "version": "0.1.6",
+    "configuration_hash": "c597cfe86d7971a7e96b08ed71bc58eff6dca6942fcb0288b24498dedf6e902b"
+  },
+  "sector_map_file": "strategies/v29_sector_map.json",
+  "economic_calendar_file": "strategies/v2_economic_calendar.json",
+  "context": {
+    "broad_symbols": [
+      "SPY",
+      "QQQ",
+      "IWM"
+    ],
+    "sector_etfs": [
+      "XLK",
+      "XLF",
+      "XLE",
+      "XLV",
+      "XLY",
+      "XLI",
+      "XLC",
+      "XLP",
+      "XLU",
+      "XLB",
+      "XLRE"
+    ],
+    "volatility_index": "VIX",
+    "max_bar_age_seconds": 150,
+    "vix_max_age_seconds": 180,
+    "daily_history_sessions": 60,
+    "premarket_start_et": "04:00"
+  },
+  "regime": {
+    "enabled": true,
+    "vix_disorderly_level": 30.0,
+    "vix_disorderly_change_fraction": 0.15,
+    "spy_disorderly_atr_fraction": 0.0025,
+    "strong_min_index_bias": 2,
+    "strong_min_spy_efficiency": 0.3,
+    "strong_min_breadth": 0.6,
+    "weak_min_market_score": 3,
+    "weak_min_spy_bias": 1,
+    "efficiency_window_bars": 30,
+    "allowed_directions": {
+      "STRONG_BULLISH": [
+        "CALL"
+      ],
+      "WEAK_BULLISH": [
+        "CALL"
+      ],
+      "STRONG_BEARISH": [
+        "PUT"
+      ],
+      "WEAK_BEARISH": [
+        "PUT"
+      ],
+      "RANGE_BOUND": [],
+      "HIGH_VOLATILITY": [],
+      "UNCLEAR": []
+    }
+  },
+  "sector": {
+    "enabled": true,
+    "min_sector_bias": 1
+  },
+  "vwap_alignment": {
+    "enabled": true
+  },
+  "confirmation": {
+    "enabled": true,
+    "confirm_closes": 2,
+    "min_distance_atr": 0.25,
+    "max_wait_bars": 5,
+    "pullback": {
+      "enabled": true,
+      "retest_tolerance_atr": 0.25,
+      "max_wait_bars": 15
+    }
+  },
+  "correlation": {
+    "enabled": true,
+    "lookback_sessions": 60,
+    "min_observations": 40,
+    "threshold": 0.6,
+    "fallback": "sector_and_index_groups"
+  },
+  "portfolio": {
+    "enabled": true,
+    "aggregate_max_loss_fraction": {
+      "ORIGINAL_ACCOUNT_PAPER": 0.3,
+      "SMALL_ACCOUNT_PAPER": 0.4
+    },
+    "cluster_max_loss": "one_trade_budget"
+  },
+  "option_quality": {
+    "enabled": true,
+    "max_quote_age_seconds": 30,
+    "min_bid_size": 1,
+    "min_ask_size": 1,
+    "max_iv_rank": 0.85,
+    "max_iv_to_hv30": 2.5,
+    "max_contract_iv_to_index_iv": 1.3,
+    "max_metrics_age_minutes": 30,
+    "missing_volatility_data": "reject"
+  },
+  "events": {
+    "enabled": true,
+    "earnings": {
+      "reject_if_reports_today_after_close": true,
+      "reject_if_reports_next_session_before_open": true,
+      "reported_today_before_open": "review",
+      "unknown_time_of_day": "treat_as_both",
+      "estimated_date": "apply_and_flag_unverified",
+      "metrics_unavailable": "reject"
+    },
+    "economic": {
+      "FOMC_RATE_DECISION": {
+        "block_entries_from_et": "13:30",
+        "block_entries_until_et": "15:00",
+        "open_positions": "review"
+      },
+      "pre_open_release_types": [
+        "CPI",
+        "PPI",
+        "EMPLOYMENT_SITUATION",
+        "GDP",
+        "PCE"
+      ],
+      "pre_open_release_block_minutes_after_open": 0
+    },
+    "calendar_expired": "reject"
+  },
+  "sizing": {
+    "max_contracts": 1,
+    "max_fraction_of_displayed_size": 0.5,
+    "max_fraction_of_open_interest": 0.01,
+    "quality_score_affects_size": false
+  },
+  "daily_trend": {
+    "enabled": false,
+    "sma_sessions": 20
+  },
+  "entry_filters": {
+    "enabled": true,
+    "exclude_symbols": [
+      "TLT",
+      "BAC",
+      "DIA"
+    ],
+    "skip_from_et": "10:00",
+    "skip_until_et": "10:30"
+  },
+  "trade_limits": {
+    "enabled": false,
+    "max_entries_per_session": 3
+  },
+  "late_entry_cutoff": {
+    "enabled": true,
+    "no_entries_final_minutes": 30
+  },
+  "loss_streak": {
+    "reset_each_session": true
+  },
+  "min_opening_range": {
+    "enabled": false,
+    "etf_fraction": 0.003,
+    "equity_fraction": 0.006
+  },
+  "management": {
+    "breakeven": {
+      "enabled": false,
+      "trigger_r": 1.0,
+      "require_option_above_floor": true
+    },
+    "let_winners_run": {
+      "enabled": true,
+      "lock_r": 1.0,
+      "trail_r": 1.5
+    },
+    "trailing": {
+      "enabled": false,
+      "trigger_r": 1.0,
+      "atr_multiple": "rules.stop_underlying_atr"
+    },
+    "time_stop": {
+      "enabled": false,
+      "after_minutes": 60,
+      "min_progress_r": 0.25
+    },
+    "partial_profit": {
+      "enabled": false,
+      "trigger_r": 1.0,
+      "fraction": 0.5
+    }
+  },
+  "shadow_benchmark": {
+    "enabled": true
+  },
+  "cost_gate": {
+    "enabled": true,
+    "max_cost_r": {
+      "ORIGINAL_ACCOUNT_PAPER": 0.2,
+      "SMALL_ACCOUNT_PAPER": 0.2
+    },
+    "enforce": {
+      "ORIGINAL_ACCOUNT_PAPER": false,
+      "SMALL_ACCOUNT_PAPER": false
+    },
+    "replaces_expected_net_r_gate": true
+  },
+  "ai_veto": {
+    "enabled": true,
+    "enforce": true,
+    "max_age_minutes": 90
+  },
+  "contract_policy": {
+    "enabled": true,
+    "min_dte": 1,
+    "max_dte": 6,
+    "nearest_expiry_first": true
+  },
+  "in_play": {
+    "enabled": true,
+    "universe_file": "strategies/v29_universe.json",
+    "scan_at_et": "09:45",
+    "opening_minutes": 15,
+    "lookback_sessions": 20,
+    "min_relative_volume": 2.0,
+    "max_symbols": 8,
+    "min_price": 10
+  },
+  "stop_policy": {
+    "enabled": true,
+    "min_stop_fraction": 0.01,
+    "min_target_multiple": 2.0
+  }
+}

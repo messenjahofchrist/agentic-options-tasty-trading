@@ -1,0 +1,20 @@
+// Which routine emails are sent (owner 2026-11-11: fewer emails; only failures and agent decisions / assistance).
+// true = send every time; false = send only when there is something to act on. Read by trader/notifications.py.
+// Always sent, whatever is set here: engine or heartbeat failures, CRITICAL alerts, a blocked readiness check, a
+// failed supervisor workflow, a failed advisor run.
+{
+  "routine_email": {
+    // Hourly market-news advisor. false = email only when the agent issued a veto, advised exiting or tightening an
+    // open position, or logged a trade idea.
+    "advisor_hourly": false,
+    // Hourly two-agent review of each account. false = email only when a reviewer failed or rated the findings
+    // high or critical.
+    "hourly_review": false,
+    // 5:15 PM daily paper summary per account (decision counts plus the last review).
+    "daily_summary": false,
+    // End-of-day email per account: the contracts bought and the day's result.
+    "end_of_day": true,
+    // Nightly scoreboard. false = the report is still written to reports/scoreboard/latest.md.
+    "scoreboard": false
+  }
+}

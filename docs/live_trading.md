@@ -262,3 +262,41 @@ The `paper_runner.py` changes, all behind `live is not None` unless noted:
 - `_closed()` also counts `live_close` ledger rows. A paper ledger never contains them.
 
 The 69 pre-existing tests, including the end-to-end multi-symbol PAPER session, pass unchanged.
+
+## 13. LIVE for PROFESSIONAL_STRATEGY_V2 (built 2026-11-15, **not turned on**)
+
+Owner request 2026-11-15: LIVE must be able to run the V2 version that is active on PAPER (2.8.0 then), and every later version too. Before this, LIVE could run only the original strategy (0.1.6); the shared loop refused `v2` together with `live`.
+
+**How a new version reaches LIVE.** LIVE takes no version or file argument. `--strategy v2` loads the ACTIVE configuration (`strategies/professional_v2.json` plus its manifest), the same one the PAPER engines run, through the same loop (`paper_runner._run`). Activating a new version on PAPER is what moves LIVE to it. Two guards keep that honest:
+
+- `trader/v2/live_support.py` names any V2 feature the broker path cannot execute (today: `management.partial_profit`, `in_play`). A version that turns one on is refused at LIVE startup, and `tests/test_live_v2.py::ActiveVersionTests` fails for the active version, so the gap is closed when the version is built.
+- The owner's authorization is bound to the V2 configuration hash. A new version has a new hash, so real money never moves to a new version without a new `authorize-live`.
+
+**What differs from PAPER V2** (all behind `live is not None`):
+
+| Step | PAPER | LIVE |
+|---|---|---|
+| Entry fill | simulated at ask + slippage | `LiveTrader.open_position`: dry-run, limit order at the ask, booked from the broker's fill |
+| Exit fill | simulated at the bid | `LiveTrader.close_position`: limit at the live bid, re-priced only after a confirmed cancel |
+| Equity | simulated ledger | broker net liquidating value |
+| Cash for sizing | ledger cash | broker settled funds (a cash account cannot reuse same-day sale proceeds) |
+| Extra entry blocks | none | broker account not verified/reconciled, settled funds unknown |
+| Original-strategy shadow benchmark | runs | off (no simulated ledger in LIVE) |
+| Data failure on a symbol with a position | simulated protective exit | real protective sell (`data_failure_protective_exit`) plus a critical alert |
+
+Decisions, the twelve V2 stages, the advisor veto, stops, targets, break-even and the runner stop are the same code and the same configuration.
+
+**Account rules.** `--account-profile small` applies the small-account rules from `profiles/small_account.json` (the $1K PAPER ledger's rules: 40% aggregate cap, $350 per-trade cap, one open position, 20%/40% daily/weekly loss limits, tighter option quality, 4% friction gate, its 11-symbol universe). Only the rules are reused; the PAPER profile ledger and its $10,000 transition are not touched. Without it LIVE uses the original account rules, which a $1,050 account cannot afford.
+
+**Commands** (run in a terminal; `live-session` needs a person at the keyboard):
+
+```
+python -m trader.cli live-check    --strategy v2 --account-profile small      # read-only, never orders
+python -m trader.cli v2-validate                                               # shows the V2 configuration hash
+python -m trader.cli authorize-live --strategy v2 --account-profile small --strategy-hash <V2 hash> --account-suffix 6633 --statement "I AUTHORIZE LIVE EXECUTION OF THIS EXACT STRATEGY HASH"
+python -m trader.cli live-session  --strategy v2 --account-profile small
+```
+
+To run LIVE, set `TRADING_MODE=LIVE`, `ENABLE_LIVE_TRADING=true` and `LIVE_START_CONFIRMATION` **in that terminal only** (`$env:TRADING_MODE = 'LIVE'` …), not in `.env`: the PAPER engines read `.env` and refuse to start when it says LIVE.
+
+**Not built / still open** (sections 11.6 and 11.7 apply unchanged): no broker-resident stop order, so a position is unmanaged if this computer, its clock or its internet stops mid-session; the watchdog and the dashboards do not read `data/live/`; no scheduled task starts LIVE (each start needs the typed confirmation). LIVE V2 has only been tested against the in-memory broker (`tests/test_live_v2.py`, 12 tests); no order, dry-run or cancel has been sent to tastytrade.

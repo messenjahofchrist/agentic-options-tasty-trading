@@ -49,6 +49,24 @@ class ProfileError(RuntimeError):
 TIGHTEN_ONLY = {"max_spread_fraction": "max", "max_spread_dollars": "max",
                 "min_open_interest": "min", "min_option_volume": "min"}
 
+# Risk limits an account profile may override. The loss fractions are owner-set account limits (either direction,
+# as since 2026-10-16); the position and trade counts may only be lowered (owner-authorized 2026-11-04:
+# max_open_positions 1, "one trade at a time"), checked against the running strategy in ProfileLedger.runtime.
+RISK_OVERRIDES = {"max_daily_loss_fraction": "fraction", "max_weekly_loss_fraction": "fraction",
+                  "max_open_positions": "count", "max_trades_per_day": "count"}
+
+
+def tightened_risk(risk: dict[str, Any], overrides: dict[str, float]) -> dict[str, Any]:
+    """The profile's risk overrides, with position/trade counts refused if they would loosen the strategy's."""
+    out: dict[str, Any] = dict(overrides)
+    for key, value in overrides.items():
+        if RISK_OVERRIDES.get(key) == "count":
+            current = int(risk[key])
+            if value > current:
+                raise ProfileError(f"risk_overrides.{key}={value:g} would loosen the strategy's {current}")
+            out[key] = int(value)
+    return out
+
 
 def tightened_rules(rules: dict[str, Any], overrides: dict[str, float]) -> dict[str, Any]:
     """The strategy's rules with the profile's tighter contract-quality values; refuses any loosening."""
@@ -76,6 +94,9 @@ class ProfileConfig:
     small_risk_overrides: tuple[tuple[str, float], ...] = ()
     small_per_trade_cap_dollars: float | None = None
     small_rule_overrides: tuple[tuple[str, float], ...] = ()
+    # Owner-authorized 2026-11-04: reject a contract whose modeled round-trip friction (bid/ask gap plus modeled
+    # slippage, commissions and fees) exceeds this fraction of its premium. None = no gate.
+    small_max_friction_fraction: float | None = None
 
     @classmethod
     def load(cls, root: Path, name_or_path: str) -> "ProfileConfig":
@@ -90,10 +111,16 @@ class ProfileConfig:
         if not universe or any(not isinstance(s, str) or not _TICKER.fullmatch(s) for s in universe):
             raise ProfileError("expanded universe must be a non-empty list of uppercase tickers")
         overrides = {str(k): float(v) for k, v in (small.get("risk_overrides") or {}).items()}
-        if set(overrides) - {"max_daily_loss_fraction", "max_weekly_loss_fraction"}:
-            raise ProfileError("only max_daily_loss_fraction and max_weekly_loss_fraction may be overridden by an account profile")
-        if any(not 0 < v <= 1 for v in overrides.values()):
-            raise ProfileError("risk override fractions must be in (0, 1]")
+        if set(overrides) - set(RISK_OVERRIDES):
+            raise ProfileError("only " + ", ".join(RISK_OVERRIDES) + " may be overridden by an account profile")
+        for key, value in overrides.items():
+            if RISK_OVERRIDES[key] == "fraction" and not 0 < value <= 1:
+                raise ProfileError(f"risk_overrides.{key} must be in (0, 1]")
+            if RISK_OVERRIDES[key] == "count" and (value < 1 or not value.is_integer()):
+                raise ProfileError(f"risk_overrides.{key} must be a positive integer")
+        friction = small.get("max_friction_fraction")
+        if friction is not None and not 0 < float(friction) < 1:
+            raise ProfileError("max_friction_fraction must be in (0, 1)")
         rule_overrides = {str(k): float(v) for k, v in (small.get("rule_overrides") or {}).items()}
         if set(rule_overrides) - set(TIGHTEN_ONLY):
             raise ProfileError("rule_overrides may only set " + ", ".join(TIGHTEN_ONLY))
@@ -116,7 +143,8 @@ class ProfileConfig:
                    rest_requests_per_second=float(data["rest_requests_per_second"]) if data.get("rest_requests_per_second") else None,
                    small_risk_overrides=tuple(sorted(overrides.items())),
                    small_per_trade_cap_dollars=None if per_trade_cap is None else float(per_trade_cap),
-                   small_rule_overrides=tuple(sorted(rule_overrides.items())))
+                   small_rule_overrides=tuple(sorted(rule_overrides.items())),
+                   small_max_friction_fraction=None if friction is None else float(friction))
 
 
 def verify_original_baseline(strategy: Strategy, baseline: dict[str, Any]) -> None:
@@ -179,6 +207,31 @@ class AccountProfile:
             return False, (f"aggregate_allocation_cap: open max loss ${exposure:,.2f} + this ${float(modeled_risk):,.2f} "
                            f"> ${cap:,.2f} ({self.allocation_fraction:.0%} of ${equity:,.2f})")
         return True, "within_aggregate_cap"
+
+
+def small_profile_runtime(config: ProfileConfig, strategy: Strategy) -> tuple[Strategy, AccountProfile]:
+    """(strategy with the small profile's universe and account rules, its allocation policy). The one definition of
+    the small-account rules, shared by the $1K PAPER ledger and a LIVE session on a small real account."""
+    # Owner-authorized account rules: the daily (2026-10-16) and weekly (2026-10-19) loss limits for this
+    # ledger. They feed the strategy's entry blocks and daily-loss exit exactly as its own values would.
+    risk = {**strategy.risk, **tightened_risk(strategy.risk, dict(config.small_risk_overrides))}
+    # Owner-authorized 2026-11-02: tighter contract-quality rules for this ledger (rule_overrides).
+    rules = tightened_rules(strategy.rules, dict(config.small_rule_overrides)) if config.small_rule_overrides else strategy.rules
+    if config.small_max_friction_fraction is not None:
+        # Owner-authorized 2026-11-04: friction gate. An optional key the strategy's own selector honours when
+        # present (option_selector.evaluate_options); strategy.txt and its hash are untouched.
+        rules = {**rules, "max_friction_fraction": config.small_max_friction_fraction}
+    return (replace(strategy, universe=config.small_universe, risk=risk, rules=rules),
+            AccountProfile(SMALL, config.small_allocation_fraction, config.small_per_trade_cap_dollars))
+
+
+def live_profile_runtime(root: Path, strategy: Strategy, profile_name: str) -> tuple[Strategy, AccountProfile]:
+    """The small-account rules for a LIVE session (owner request 2026-11-15: the real account holds about $1,000).
+    Only the rules are reused. The PAPER profile ledger, its state file and its $10,000 transition are not touched;
+    LIVE keeps its own ledger of broker fills in data/live/."""
+    config = ProfileConfig.load(root, profile_name)
+    verify_original_baseline(strategy, config.baseline)
+    return small_profile_runtime(config, strategy)
 
 
 class ProfileLedger:
@@ -290,13 +343,7 @@ class ProfileLedger:
         verify_original_baseline(strategy, self.config.baseline)
         if self.active_profile == ORIGINAL:
             return strategy, AccountProfile(ORIGINAL, None)
-        # Owner-authorized account rules: the daily (2026-10-16) and weekly (2026-10-19) loss limits for this
-        # ledger. They feed the strategy's entry blocks and daily-loss exit exactly as its own values would.
-        risk = {**strategy.risk, **dict(self.config.small_risk_overrides)}
-        # Owner-authorized 2026-11-02: tighter contract-quality rules for this ledger (rule_overrides).
-        rules = tightened_rules(strategy.rules, dict(self.config.small_rule_overrides)) if self.config.small_rule_overrides else strategy.rules
-        return (replace(strategy, universe=self.config.small_universe, risk=risk, rules=rules),
-                AccountProfile(SMALL, self.config.small_allocation_fraction, self.config.small_per_trade_cap_dollars))
+        return small_profile_runtime(self.config, strategy)
 
     def status(self, strategy: Strategy | None = None, now: datetime | None = None) -> dict[str, Any]:
         """Dashboard / CLI summary of the profile ledger and today's scanning outcome."""
@@ -341,6 +388,8 @@ class ProfileLedger:
                 "allocation_fraction": policy.allocation_fraction,
                 "remaining_risk_budget": None if cap is None else round(max(0.0, cap - exposure), 2),
                 "per_trade_cap": policy.per_trade_cap_dollars,
+                "max_friction_fraction": self.config.small_max_friction_fraction if active == SMALL else None,
+                "risk_overrides": dict(self.config.small_risk_overrides) if active == SMALL else {},
                 "symbols_scanned": len(universe), "universe": list(universe),
                 "signals_today": signals, "affordable_candidates_today": affordable,
                 "rejected_today": sum(rejections.values()), "rejection_reasons_today": rejections,

@@ -1,6 +1,7 @@
 """End-to-end V2 engine test through trader.paper_runner._run with MOCKED tastytrade/DXLink (no network):
 breakout -> confirmation -> twelve-stage approval -> PAPER fill with V2 fields -> management on the next bar, the
-original-strategy shadow on the same bars, context symbols streamed but never traded, and LIVE refused."""
+original-strategy shadow on the same bars, context symbols streamed but never traded. With live=True the same
+session runs through LiveTrader against an in-memory broker (tests/test_live_v2.py)."""
 from __future__ import annotations
 
 import asyncio
@@ -30,7 +31,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class V2EngineTests(unittest.TestCase):
-    def _session(self, tmp: Path, overrides: dict | None = None, run_up: bool = False):
+    def _session(self, tmp: Path, overrides: dict | None = None, run_up: bool = False, live: bool = False,
+                 kill_switch: bool = False):
         root = make_root(tmp, universe=["SPY"])
         shutil.copytree(ROOT / "strategies", root / "strategies")
         (root / v2config.MANIFEST_FILE).unlink(missing_ok=True)
@@ -131,6 +133,18 @@ class V2EngineTests(unittest.TestCase):
             data = variant_config(data, overrides)
         config = replace(config, base=no_flat, data=data)
         cfg = AppConfig(mode=Mode.PAPER, data_dir=root / "data", client_id="x", client_secret="y", refresh_token="z")
+        trader = None
+        self.broker = None
+        if kill_switch:
+            (root / "KILL_SWITCH").write_text("{}")
+        if live:   # the same session, executed by LiveTrader on an in-memory broker (no network)
+            from trader.live_execution import LiveTrader
+            from tests.test_live import FAST, FakeBroker, live_cfg
+            self.broker = FakeBroker(net_liq=10_000.0, buying_power=10_000.0)
+            cfg = live_cfg(root / "data" / "live")
+            trader = LiveTrader(cfg=cfg, client=self.broker, strategy=no_flat, data_dir=cfg.data_dir,
+                                kill_switch_path=root / "KILL_SWITCH", settings=FAST)
+            trader.startup()
         with patch.object(paper_runner, "MarketCalendar", FakeCalendar), \
                 patch.object(paper_runner, "TastytradeClient", FakeClient), \
                 patch.object(paper_runner, "ProductionMarketData", FakeQuotes), \
@@ -143,11 +157,13 @@ class V2EngineTests(unittest.TestCase):
                 patch("trader.notifications.push_configured", return_value=False):
             try:
                 asyncio.run(paper_runner._run(root=root, cfg=replace(cfg, starting_cash=10_000), strategy=no_flat,
-                                              symbols=("SPY",), v2=config))
+                                              symbols=("SPY",), v2=config, live=trader))
             finally:
                 paper_runner._close_session_log_file(paper_runner._session_logger(cfg.data_dir))
         data = cfg.data_dir
         rows = [json.loads(l) for l in (data / "v2_decisions.jsonl").read_text().splitlines()]
+        if live:
+            return rows, load_or_initialize(data / "live_account.json", 0.0), None, requests, data
         account = load_or_initialize(data / "paper_account.json", 10_000)
         shadow = load_or_initialize(data / "v2_shadow_original" / "paper_account.json", 10_000)
         return rows, account, shadow, requests, data
@@ -199,16 +215,53 @@ class V2EngineTests(unittest.TestCase):
                                                                    "trailing": {"enabled": False}}, run_up=True)
         # switch off: the same trade is sold at its target (a later breakout may open a new one)
         self.assertEqual([e["reason"] for e in sold.ledger if e.get("type") == "paper_close"][:1], ["underlying_profit_target"])
+        # the close record carries the entry's forecast beside the result (2026-11-08 audit)
+        forecast = next(e for e in sold.ledger if e.get("type") == "paper_close")["forecast"]
+        self.assertGreaterEqual(forecast["expected_net_r"], 1.0)
+        self.assertIsNotNone(forecast["regime"])
+        self.assertGreater(forecast["max_favourable_r"], 1.0)               # it reached its target
+        self.assertLess(forecast["stop_underlying"], forecast["entry_underlying"])
 
-    def test_v2_with_live_execution_is_refused(self):
+    def test_v2_in_a_paper_test_session_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_root(Path(tmp), universe=["SPY"])
             shutil.copytree(ROOT / "strategies", root / "strategies")
             config = v2config.load_v2_config(root)
-            with self.assertRaises(RuntimeError):
+            with self.assertRaisesRegex(RuntimeError, "paper-test-session"):
                 asyncio.run(paper_runner._run(root=root, cfg=AppConfig(data_dir=root / "data"), strategy=config.base,
-                                              symbols=("SPY",), live=object(), v2=config))
+                                              symbols=("SPY",), test_mode=True, v2=config))
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ShadowStreakResetTests(unittest.TestCase):
+    """2026-11-04: the shadow benchmark counts only today's losses when V2's loss_streak.reset_each_session is on,
+    so the original's never-resetting streak cannot freeze it for the rest of the run (as it did from 10/26)."""
+
+    def test_streak_since_follows_the_v2_reset_switch(self):
+        import tempfile
+        from datetime import datetime, timezone
+        from pathlib import Path
+        from trader.strategy_loader import parse_strategy
+        from trader.v2.shadow import ShadowOriginal
+        root = Path(__file__).resolve().parents[1]
+        strategy = parse_strategy(root / "strategy.txt")
+        now = datetime(2026, 11, 4, 15, 0, tzinfo=timezone.utc)
+        with tempfile.TemporaryDirectory() as tmp:
+            on = ShadowOriginal(root=root, data_dir=Path(tmp), strategy=strategy, starting_cash=1000.0, helpers={},
+                                reset_loss_streak_each_session=True)
+            off = ShadowOriginal(root=root, data_dir=Path(tmp), strategy=strategy, starting_cash=1000.0, helpers={})
+        self.assertEqual(on.streak_since(now).isoformat(), "2026-11-04")
+        self.assertIsNone(off.streak_since(now))
+
+    def test_session_limit_rejection_is_recognised_through_the_cause_chain(self):
+        from trader.paper_runner import _is_session_limit
+        inner = ConnectionError('DXLink rejected the feed request: phase=AUTH_SENT_WAITING_FOR_AUTHORIZATION; '
+                                'response={"error": "UNAUTHORIZED", "message": "The number of user sessions has '
+                                'exceeded the configured limit, user=..."}')
+        outer = RuntimeError("PYPL: live-feed gap could not be recovered")
+        outer.__cause__ = inner
+        self.assertTrue(_is_session_limit(outer))
+        self.assertFalse(_is_session_limit(RuntimeError("Historical candle bootstrap incomplete")))

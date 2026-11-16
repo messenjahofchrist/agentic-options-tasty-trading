@@ -1,0 +1,13 @@
+{
+  "strategy_id": "PROFESSIONAL_STRATEGY_V2",
+  "version": "2.9.0",
+  "status": "research_test",
+  "mode": "PAPER",
+  "live_enabled": false,
+  "configuration_hash": "9ed008ba56e0b23a51bae780bbb8bfc48908060a7c297dc8c49f01dc5e01a96d",
+  "base_strategy_hash": "c597cfe86d7971a7e96b08ed71bc58eff6dca6942fcb0288b24498dedf6e902b",
+  "base_strategy_version": "0.1.6",
+  "activated_at_utc": "2026-11-12T21:45:07.943907+00:00",
+  "approved_by": "owner",
+  "note": "2026-11-12 owner: create 2.9 with its own $10K and $1K PAPER ledgers and run it all day beside 2.8.0 (side version; the active version stays 2.8.0)."
+}

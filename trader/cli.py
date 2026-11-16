@@ -35,6 +35,10 @@ def main(argv: list[str] | None = None) -> int:
     paper.add_argument("--account-profile", choices=("small",), default=None,
                        help="Run on an isolated account-profile PAPER ledger (small: $1,000, 40%% aggregate cap, "
                             "expanded universe; restores the original settings at $10,000). Default: the original ledger.")
+    side = sub.add_parser("side-session", help="Run the side V2 version (2.9.0) on its own PAPER ledger, beside the active one")
+    side.add_argument("--ledger", choices=("10k", "1k"), required=True)
+    side.add_argument("--config", default="strategies/v2_versions/professional_v2_2.9.0.json")
+    sub.add_parser("side-report", help="Write the 2.9 live page and the 2.8 vs 2.9 comparison page (read-only)")
     profile_status = sub.add_parser("profile-status", help="Show an account-profile PAPER ledger (read-only)")
     profile_status.add_argument("--account-profile", choices=("small",), default="small")
     profile_report = sub.add_parser("profile-report",
@@ -75,6 +79,13 @@ def main(argv: list[str] | None = None) -> int:
     authorize.add_argument("--account-suffix", required=True, help="Last 4 characters of TASTYTRADE_ACCOUNT_NUMBER")
     authorize.add_argument("--statement", required=True, help='Exactly: "I AUTHORIZE LIVE EXECUTION OF THIS EXACT STRATEGY HASH"')
     authorize.add_argument("--note", default="")
+    for command in (live, live_check, authorize):
+        command.add_argument("--strategy", choices=("original", "v2"), default="original",
+                             help="original: the active strategy.txt (default). v2: the ACTIVE PROFESSIONAL_STRATEGY_V2 "
+                                  "version (strategies/professional_v2.json), the same one the PAPER engines run.")
+        command.add_argument("--account-profile", choices=("small",), default=None,
+                             help="v2 only. small: the small-account rules of the $1K PAPER ledger (per-trade cap, one "
+                                  "position, tighter option quality) for a real account of about $1,000.")
     sub.add_parser("v2-validate", help="Validate PROFESSIONAL_STRATEGY_V2 config, sector map and calendar (offline)")
     v2_activate = sub.add_parser("v2-activate", help="Owner action: activate the current V2 configuration for PAPER")
     v2_activate.add_argument("--approve", action="store_true", help="Write the V2 manifest. Without it, only validate.")
@@ -90,6 +101,10 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("v2-compare", help="Original-strategy shadow vs V2 results from the PAPER ledgers (read-only)")
     sub.add_parser("spreads-run", help="CREDIT_SPREADS (PAPER): one pass - manage open spreads, consider new ones")
     sub.add_parser("spreads-status", help="CREDIT_SPREADS (PAPER): ledger summary (read-only, offline)")
+    recorder = sub.add_parser("record-options", help="Save real 1-minute option bid/ask history after the close (read-only)")
+    recorder.add_argument("--date", help="session to record (YYYY-MM-DD); default: the latest completed session")
+    recorder.add_argument("--backfill-sessions", type=int, default=0,
+                          help="also record up to this many earlier sessions not on disk yet (DXLink keeps ~10-15)")
     dash = sub.add_parser("dashboard"); dash.add_argument("--host", default="127.0.0.1"); dash.add_argument("--port", type=int, default=8765)
     sub.add_parser("status")
     args = parser.parse_args(argv)
@@ -122,6 +137,12 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 run_paper_session(root=root, cfg=cfg, strategy=strategy,
                                   symbols=tuple(args.symbols) if args.symbols else None, v2=v2)
+        elif args.command == "side-session":
+            from .v2.side import run_side_session
+            print(json.dumps(run_side_session(root=root, cfg=cfg, ledger=args.ledger, config_path=args.config)))
+        elif args.command == "side-report":
+            from .v2.side_report import write_all
+            print(json.dumps(write_all(root, cfg.data_dir)))
         elif args.command == "profile-status":
             from .account_profiles import ProfileConfig, ProfileLedger
             strategy = parse_strategy(root / "strategy.txt")
@@ -159,11 +180,13 @@ def main(argv: list[str] | None = None) -> int:
             return _activate_strategy(args, cfg, root)
         elif args.command == "live-session":
             from .live_session import run_live_session
-            run_live_session(root=root, cfg=cfg, symbols=tuple(args.symbols) if args.symbols else None)
+            run_live_session(root=root, cfg=cfg, symbols=tuple(args.symbols) if args.symbols else None,
+                             v2=_live_v2(args, root), profile_name=args.account_profile)
         elif args.command == "live-check":
             from .live_session import live_readiness, write_readiness_report
             report = live_readiness(root=root, cfg=cfg, symbols=tuple(args.symbols) if args.symbols else None,
-                                    market_data=not args.skip_market_data)
+                                    market_data=not args.skip_market_data, v2=_live_v2(args, root),
+                                    profile_name=args.account_profile)
             path = write_readiness_report(cfg, report)
             print(json.dumps({"overall": report["overall"], "blockers": report["blockers"],
                               "warnings": report["warnings"], "report": str(path)}, indent=2, default=str))
@@ -171,7 +194,8 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "authorize-live":
             from .live_session import authorize_live
             path = authorize_live(root=root, cfg=cfg, strategy_hash=args.strategy_hash,
-                                  account_suffix=args.account_suffix, statement=args.statement, note=args.note)
+                                  account_suffix=args.account_suffix, statement=args.statement, note=args.note,
+                                  v2=_live_v2(args, root), profile_name=args.account_profile)
             print(json.dumps({"authorized": True, "file": str(path)}, indent=2))
         elif args.command in ("v2-validate", "v2-activate", "v2-readiness", "v2-report", "v2-replay", "v2-compare"):
             from .v2.commands import run_command
@@ -193,6 +217,12 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "spreads-status":
             from .spreads import status
             print(json.dumps(status(root, cfg.data_dir), indent=2, default=str))
+        elif args.command == "record-options":
+            from datetime import date as _date
+            from .option_recorder import run as record_options
+            summaries = record_options(root, cfg, day=_date.fromisoformat(args.date) if args.date else None,
+                                       backfill_sessions=args.backfill_sessions)
+            print(json.dumps(summaries, indent=2, default=str))
         elif args.command == "dashboard":
             import uvicorn
             uvicorn.run(create_app(cfg.data_dir, root), host=args.host, port=args.port)
@@ -205,6 +235,19 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
+
+
+def _live_v2(args: argparse.Namespace, root: Path):
+    """The ACTIVE V2 configuration for a LIVE command, or None for the original strategy. LIVE never takes a config
+    path: it runs whatever version is active, so a new version reaches LIVE when it is activated."""
+    if args.strategy != "v2":
+        if args.account_profile:
+            raise RuntimeError("--account-profile needs --strategy v2")
+        return None
+    from .tastytrade_client import set_request_rate_limit
+    from .v2.config import load_v2_config
+    set_request_rate_limit(10)  # V2 adds metrics/VIX/chain requests; the same pacing as the PAPER V2 engines
+    return load_v2_config(root)
 
 
 def _backtest(args: argparse.Namespace, cfg: AppConfig, strategy) -> dict:

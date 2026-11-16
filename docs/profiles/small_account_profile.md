@@ -8,13 +8,19 @@ Only three things differ from the original account:
 |---|---|---|
 | Ledger | `data/profiles/small_account_paper/`, starts at $1,000 | original: `data/`, $10,000 |
 | Allocation | Combined maximum loss of open positions ≤ **40% of equity** ($400 at $1,000). One trade may use what is left of that pool (owner's choice). | strategy's own: ≤ 10% of equity per trade, no extra cap |
-| Universe | 47 symbols: the original 14 plus 33 audited additions (`profiles/small_account_universe.json`) | the original 14, from `strategy.txt` |
+| Universe | 11 of the original 14: no TLT, BAC or DIA (owner-authorized 2026-11-05; earlier 47-symbol list kept in `profiles/small_account_universe.json`). V2 2.6.0 (favorites first, 47 symbols) was built 2026-11-06 but never activated | the original 14, from `strategy.txt` |
 | Daily loss limit | **20% of equity** ($200 at $1,000). Owner-authorized 2026-10-16 as `risk_overrides` in `profiles/small_account.json` | strategy's own 2% |
 | Weekly loss limit | **40% of equity** (~$400 at $1,000). Owner-authorized 2026-10-19 as `risk_overrides` in `profiles/small_account.json` | strategy's own 5% |
-| Per-trade cap | **$150** of modeled maximum loss (premium x 100 plus modeled round-trip costs). Owner-authorized as `max_per_trade_dollars` in `profiles/small_account.json`: $150 from 2026-10-19, $225 from 2026-10-29, $150 again from 2026-11-04 (`scripts\set_small_account_bet.ps1 <dollars>` changes it; `225` reverts); the budget is the remaining 40% pool or the cap, whichever is smaller | none (strategy's own sizing) |
+| Per-trade cap | **$350** of modeled maximum loss (premium x 100 plus modeled round-trip costs). Owner-authorized as `max_per_trade_dollars` in `profiles/small_account.json`: $150 from 2026-10-19, $225 from 2026-10-29, $150 early on 2026-11-04, **$350 later on 2026-11-04** (`scripts\set_small_account_bet.ps1 <dollars>` changes it); the budget is the remaining 40% pool or the cap, whichever is smaller, so the 40% pool binds below about $875 of equity | none (strategy's own sizing) |
+| Open positions | **1** (owner, 2026-11-04, `risk_overrides.max_open_positions`): one trade at a time. Counts may only be lowered; the strategy's 4 is restored at the transition | strategy's own 4 |
+| Friction gate | **4%** (owner, 2026-11-04, `max_friction_fraction`): V2 removes a contract before selection when its bid/ask gap x 100 plus the modeled round-trip costs exceed 4% of its premium; a signal with nothing left is logged with `friction_above_maximum`. The scheduled engines run V2; the gate does not apply to a non-V2 session | none |
 | Option quality | **Tighter** (owner, 2026-11-02, `rule_overrides`): bid/ask gap at most 5% of the option's price (strategy 10%), open interest at least 500 (100), traded today at least 50 (10). Tighten-only; delta, expiration and the $0.10 gap ceiling unchanged. `scripts\set_small_account_options.ps1 tight`; `original` reverts | strategy's own rules |
 
-Everything else is the strategy's own and identical in both profiles: candles, indicators, opening range, signals, filters, contract selection, exits, the 1-contract limit, 4 open positions, 6 trades a day, and the weekly and consecutive-loss limits.
+Everything else is the strategy's own and identical in both profiles: candles, indicators, opening range, signals, filters, contract selection, exits, the 1-contract limit, 6 trades a day, and the consecutive-loss limit.
+
+## Why the 2026-11-04 changes (analysis of 10/26-11/03)
+
+Both ledgers ran V2 2.4.0. Trades they had in common produced the same result. The $1K's options averaged $107 of premium and paid 7.1% round trip in bid/ask gap and fees, against $582 and 1.7% on the $10K; before those costs the $1K was about flat (+$12). Replaying the 4% gate on its 16 trades blocks 13 (-$124) and keeps 3 (+$15), though a blocked signal could have selected a different contract. Expect far fewer trades. The $350 cap does not reach the contracts behind most of the $10K's profit: its four biggest winners cost $275 to $970, and only the $275 one fits. `min_opening_range` stays off: the replay scored it worse than 2.3.0 in every period.
 
 ## Run it
 
@@ -128,7 +134,7 @@ All of these are verified by `tests/test_profiles.py` or a live read-only check:
 ## Things to know
 
 - **Daily limit:** 20% ($200 at $1,000) by owner decision on 2026-10-16. It feeds the strategy's daily-loss entry block and its daily-loss exit, just as the strategy's own 2% would. 
-- **Weekly limit:** 40% (~$400 at $1,000) by owner decision on 2026-10-19, after the strategy's 5% (~$48) blocked entries following a single stopped trade. It counts realized P/L since Monday plus open positions' marks. Only `max_daily_loss_fraction` and `max_weekly_loss_fraction` can be overridden; the loader rejects anything else.
+- **Weekly limit:** 40% (~$400 at $1,000) by owner decision on 2026-10-19, after the strategy's 5% (~$48) blocked entries following a single stopped trade. It counts realized P/L since Monday plus open positions' marks. Besides these two, `max_open_positions` and `max_trades_per_day` can be overridden, but only downward; the loader rejects anything else.
 - **Weekly limit:** still the strategy's 5% ($50 at $1,000), along with 3 consecutive losses. The weekly limit will usually bind before the daily one.
 - **No LIVE:** this profile is PAPER-only. Nothing here sends broker orders or changes LIVE behavior.
 

@@ -37,6 +37,17 @@ MAX_CLOCK_OFFSET_SECONDS = 2.0
 # A one-minute live-feed gap is backfilled from history; the provider can lag a few seconds behind.
 GAP_RECOVERY_ATTEMPTS = 3
 GAP_RECOVERY_RETRY_SECONDS = 5.0
+# A traded symbol's history may lack a minute in which it did not trade (DXLink publishes no candle for it). Runs of
+# up to this many missing minutes are filled with flat zero-volume bars at the previous close instead of disabling
+# the symbol (2026-11-04: 53 of the 72 symbol disables on the $1K ledger since 10/26 were one missing minute, and
+# one forced a held position out). The opening minute itself is never invented; longer runs still fail as before.
+MAX_FILLED_GAP_MINUTES = 3
+# tastytrade caps concurrent DXLink sessions per user ("The number of user sessions has exceeded the configured
+# limit", eight engine failures on 2026-11-02). History fetches now wait for one of these slots, and that rejection
+# is retried after a longer pause instead of failing the symbol (and the session) on the third quick attempt.
+HISTORY_FETCH_CONCURRENCY = 4
+SESSION_LIMIT_RETRY_SECONDS = 20.0
+SESSION_LIMIT_ATTEMPTS = 6
 # V2 sessions retry a failed startup history request (validation unchanged); the original engine does not.
 BOOTSTRAP_ATTEMPTS = 3
 BOOTSTRAP_RETRY_SECONDS = 4.0
@@ -144,12 +155,19 @@ def _write_recovery_report(data_dir: Path, report: dict) -> Path:
 
 def _validated_session_history(rows: list[dict], *, session_open: datetime,
                                last_completed_bar: datetime, audit: dict | None = None,
-                               allow_missing_minutes: bool = False) -> list[Bar]:
+                               allow_missing_minutes: bool = False, fill_missing_up_to: int = 0,
+                               previous_close: float | None = None) -> list[Bar]:
     """Convert and validate a complete, contiguous session history for a late PAPER start.
 
     allow_missing_minutes is used only for V2 market-context symbols that are never traded (thin sector ETFs can
     have minutes with no trades, which DXLink reports as no candle). Missing minutes are then counted in the audit
-    instead of refused; nothing is filled in, and every other check (order, conflicts, OHLCV bounds) still applies."""
+    instead of refused; nothing is filled in, and every other check (order, conflicts, OHLCV bounds) still applies.
+
+    fill_missing_up_to (traded symbols, 2026-11-04): a run of at most this many consecutive missing minutes is
+    filled with flat zero-volume bars at the close before it, which is what a minute without a trade looks like.
+    previous_close is the close before the first expected minute (the last bar a live-feed gap follows). The filled
+    minutes are listed in the audit. A longer run, or a run with no earlier close (the session's opening minute),
+    is refused exactly as before."""
     if session_open.tzinfo is None or last_completed_bar.tzinfo is None:
         raise ValueError("Historical session bounds must be timezone-aware")
     expected: list[datetime] = []
@@ -195,13 +213,34 @@ def _validated_session_history(rows: list[dict], *, session_open: datetime,
         parsed[timestamp] = bar
 
     missing = [stamp for stamp in expected if stamp not in parsed]
+    received = len(parsed)
+    filled: list[datetime] = []
+    if missing and not allow_missing_minutes and fill_missing_up_to > 0:
+        runs: list[list[datetime]] = []
+        for stamp in missing:
+            if runs and stamp - runs[-1][-1] == timedelta(minutes=1):
+                runs[-1].append(stamp)
+            else:
+                runs.append([stamp])
+        def close_before(run: list[datetime]) -> float | None:
+            before = parsed.get(run[0] - timedelta(minutes=1))
+            return before.close if before is not None else previous_close if run[0] == expected[0] else None
+        if all(len(run) <= fill_missing_up_to and close_before(run) is not None for run in runs):
+            for run in runs:
+                close = close_before(run)
+                for stamp in run:
+                    parsed[stamp] = Bar(stamp, close, close, close, close, 0.0)
+                    filled.append(stamp)
+            missing = []
     if audit is not None:
-        audit.update({"expected_candle_count": len(expected), "received_candle_count": len(parsed),
+        audit.update({"expected_candle_count": len(expected), "received_candle_count": received,
                       "missing_candle_count": len(missing),
                       "first_missing_timestamp_utc": missing[0].isoformat() if missing else None,
                       "duplicate_candle_count": int(audit.get("duplicate_candle_count", 0)) + duplicates,
                       "out_of_order_count": int(audit.get("out_of_order_count", 0)) + out_of_order,
-                      "missing_timestamps_utc": [stamp.isoformat() for stamp in missing]})
+                      "missing_timestamps_utc": [stamp.isoformat() for stamp in missing],
+                      "filled_candle_count": len(filled),
+                      "filled_timestamps_utc": [stamp.isoformat() for stamp in filled]})
     if missing and not allow_missing_minutes:
         raise RuntimeError(
             "Historical candle bootstrap incomplete; blocking entries. "
@@ -251,6 +290,18 @@ def _classify_live_transition(previous: datetime, current: datetime) -> str:
 def _same_market_bar(left: Bar, right: Bar) -> bool:
     return (left.timestamp == right.timestamp and left.open == right.open and left.high == right.high and
             left.low == right.low and left.close == right.close and left.volume == right.volume)
+
+
+def _is_session_limit(exc: BaseException) -> bool:
+    """True when DXLink refused a new connection because the account's concurrent-session limit is reached."""
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        if "number of user sessions" in str(current).lower():
+            return True
+        seen.add(id(current))
+        current = current.__cause__
+    return False
 
 
 def _is_connection_failure(exc: BaseException) -> bool:
@@ -405,6 +456,21 @@ class _SymbolState:
         return self.report_path
 
 
+def _forecast_fields(position_data: dict) -> dict:
+    """The entry's forecast beside its result on every paper_close record (2026-11-08 audit): the gate's expected net R
+    (the net payoff if the target is reached, per unit of modeled loss at the stop; not a probability-weighted
+    expectation), the stop/target levels, the market regime and how far the stock moved in the trade's favour."""
+    entry = position_data.get("v2_entry") or {}
+    management = position_data.get("v2_management") or {}
+    return {"forecast": {"expected_net_r": position_data.get("expected_net_r"),
+                         "entry_underlying": position_data.get("entry_underlying"),
+                         "stop_underlying": position_data.get("stop_underlying"),
+                         "target_underlying": position_data.get("target_underlying"),
+                         "regime": entry.get("regime"), "setup_type": entry.get("setup_type"),
+                         "entry_delta": position_data.get("entry_delta"),
+                         "max_favourable_r": management.get("max_favourable_r")}}
+
+
 class _EntryArbiter:
     """Rank same-minute entry candidates across symbols so the best ones get the limited slots.
 
@@ -444,17 +510,24 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
 
     `live` is None for PAPER (simulated fills, unchanged). For LIVE it is a `live_execution.LiveTrader`
     that executes the same entry/exit decisions on the broker at the points PAPER calls PaperExecutor.
-    `profile` is None for the original account. For an account profile (`account_profiles.AccountProfile`,
-    PAPER only) it sets the per-trade sizing budget to the remaining aggregate allocation and re-checks the
-    aggregate cap at the fill; the strategy's analysis and decisions are otherwise identical.
+    `profile` is None for the original account. For an account profile (`account_profiles.AccountProfile`)
+    it sets the per-trade sizing budget to the remaining aggregate allocation and re-checks the aggregate cap
+    at the fill; the strategy's analysis and decisions are otherwise identical.
+    `v2` is the PROFESSIONAL_STRATEGY_V2 configuration. With `live` it runs the same V2 decisions and
+    management as PAPER (owner request 2026-11-15); only the fill goes to the broker. LIVE V2 has no
+    original-strategy shadow benchmark, and it refuses a V2 feature the broker path cannot execute.
     """
     if live is not None and test_mode:
         raise RuntimeError("paper-test-session cannot run with LIVE execution")
-    if profile is not None and (live is not None or test_mode):
-        raise RuntimeError("account profiles run only in a normal PAPER session")
-    if v2 is not None and (live is not None or test_mode):
-        # LIVE V2 needs its own production-readiness audit; the shared loop refuses it outright.
-        raise RuntimeError("PROFESSIONAL_STRATEGY_V2 runs only in a normal PAPER session")
+    if test_mode and (profile is not None or v2 is not None):
+        raise RuntimeError("account profiles and PROFESSIONAL_STRATEGY_V2 run only in a normal session, not paper-test-session")
+    if live is not None and profile is not None and v2 is None:
+        raise RuntimeError("an account profile runs LIVE only with PROFESSIONAL_STRATEGY_V2")
+    if live is not None and v2 is not None:
+        from .v2.live_support import unsupported_for_live
+        unsupported = unsupported_for_live(v2)
+        if unsupported:
+            raise RuntimeError("LIVE blocked: this V2 version uses features LIVE cannot execute: " + "; ".join(unsupported))
     mode_label = "LIVE" if live is not None else "PAPER"
     logger = _session_logger(cfg.data_dir, test_mode=test_mode)
     label = ",".join(symbols)
@@ -525,6 +598,7 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
     history_provider = create_history_provider(
         cfg.historical_data_provider, dxlink_url=token_data["dxlink-url"], quote_token=token_data["token"],
         massive_api_key=cfg.massive_api_key)
+    history_gate = asyncio.Semaphore(HISTORY_FETCH_CONCURRENCY)   # at most this many history connections at once
     v2s = None
     context_symbols: tuple[str, ...] = ()
     if v2 is not None:
@@ -535,7 +609,10 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
                         client=client, calendar=calendar, session_open=session_open, session_close=session_close,
                         logger=logger, starting_cash=account.starting_capital, profile_policy=profile, trade_symbols=symbols,
                         arbiter_factory=lambda slots: _EntryArbiter(slots, ENTRY_ARBITRATION_SECONDS),
-                        helpers={"daily_realized": _daily_realized, "weekly_realized": _weekly_realized,
+                        # helpers=None switches the original-strategy shadow benchmark off: LIVE keeps no simulated
+                        # ledger and spends no broker requests on one.
+                        helpers=None if live is not None else
+                                {"daily_realized": _daily_realized, "weekly_realized": _weekly_realized,
                                  "consecutive_losses": _consecutive_losses, "trades_today": _trades_today,
                                  "unrealized_pnl": _unrealized_pnl, "position_from_record": _position_from_record,
                                  "option_marks": _option_marks, "fresh_quote": _fresh_quote})
@@ -624,8 +701,9 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
             attempts = BOOTSTRAP_ATTEMPTS if v2s is not None else 1
             for attempt in range(1, attempts + 1):
                 try:
-                    history_batch = await history_provider.fetch(
-                        symbol=symbol, start=session_open.astimezone(timezone.utc), end=last_completed_bar)
+                    async with history_gate:
+                        history_batch = await history_provider.fetch(
+                            symbol=symbol, start=session_open.astimezone(timezone.utc), end=last_completed_bar)
                     break
                 except Exception as exc:
                     # A snapshot requested on a minute rollover can arrive with the in-progress candle out of
@@ -644,7 +722,9 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
                            "history_requested_end_utc": history_batch.requested_end_utc.isoformat()})
             state.bars = _validated_session_history(list(history_batch.candles), session_open=session_open,
                                                     last_completed_bar=last_completed_bar, audit=history_audit,
-                                                    allow_missing_minutes=context_only)
+                                                    allow_missing_minutes=context_only,
+                                                    # PAPER only: LIVE keeps refusing incomplete history.
+                                                    fill_missing_up_to=0 if context_only or live is not None else MAX_FILLED_GAP_MINUTES)
             if state.bars:
                 _write_recovery_checkpoint(cfg.data_dir, symbol=symbol,
                     trading_date=now.astimezone(market_tz).date().isoformat(), provider=history_batch.provider,
@@ -710,7 +790,8 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
                                "strategy_id": position_data.get("strategy_id"),
                                "strategy_version": position_data["strategy_version"],
                                "strategy_hash": position_data["strategy_hash"],
-                               "underlying": position_data["underlying"], "reason": why, "timestamp": when.isoformat()})
+                               "underlying": position_data["underlying"], "reason": why, "timestamp": when.isoformat(),
+                               **_forecast_fields(position_data)})
         account.positions.remove(position_data)
         account.unrealized_pnl = _unrealized_pnl(account, executor)
         print(f"PAPER EXIT {position_data['underlying']} {position.symbol} {why}; net=${realized:.2f}", flush=True)
@@ -736,7 +817,7 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
                                "strategy_id": position_data.get("strategy_id"),
                                "strategy_version": position_data["strategy_version"],
                                "strategy_hash": position_data["strategy_hash"], "underlying": position_data["underlying"],
-                               "reason": why, "timestamp": when.isoformat()})
+                               "reason": why, "timestamp": when.isoformat(), **_forecast_fields(position_data)})
         for key in ("modeled_risk_dollars", "initial_risk_dollars", "planned_risk_dollars", "premium_exposure_dollars"):
             if position_data.get(key) is not None:
                 position_data[key] = float(position_data[key]) * (1 - share)
@@ -765,6 +846,26 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
                          "underlying": symbol, "realized_pnl": round(realized, 2),
                          "error_type": type(exc).__name__, "error": str(exc)}, data_dir=cfg.data_dir)
 
+    async def live_protective_exit(symbol: str, exc: Exception) -> None:
+        """LIVE V2: the same rule as protective_exit, with real sell orders at the live bid. A position that cannot
+        be sold stays open at the broker, and disable() then fails the session with a critical alert."""
+        for position_data in [p for p in account.positions if p["underlying"] == symbol]:
+            try:
+                realized = await live.close_position(record=position_data, reason="data_failure_protective_exit",
+                                                     now=datetime.now(timezone.utc),
+                                                     requote=lambda record: _option_marks(client, [record])[0],
+                                                     quote_fresh=_fresh_quote)
+            except Exception:
+                logger.exception("LIVE protective exit failed symbol=%s option=%s", symbol, position_data["symbol"])
+                realized = None
+            record_critical_alert("live_position_protective_exit", mode="LIVE",
+                details={"trade_id": str(position_data["trade_id"]), "option_symbol": position_data["symbol"],
+                         "underlying": symbol, "closed": realized is not None,
+                         "realized_pnl": None if realized is None else round(realized, 2),
+                         "error_type": type(exc).__name__, "error": str(exc)[:300]}, data_dir=cfg.data_dir)
+        account.unrealized_pnl = _unrealized_pnl(account, executor)
+        save_account(account_path, account)
+
     arbiter = _EntryArbiter(available_slots, ENTRY_ARBITRATION_SECONDS)
     queues: dict[str, asyncio.Queue] = {symbol: asyncio.Queue() for symbol in symbols + context_symbols}
 
@@ -792,6 +893,12 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
             if matching is not None and _same_market_bar(matching, bar):
                 report["duplicate_candle_count"] = int(report.get("duplicate_candle_count", 0)) + 1
                 return
+            if (matching is not None and matching.volume == 0 and
+                    matching.open == matching.high == matching.low == matching.close):
+                # The real candle for a minute we filled as "no trade" arrived late: it replaces the placeholder.
+                bars[bars.index(matching)] = bar
+                report["late_candle_replaced_fill_count"] = int(report.get("late_candle_replaced_fill_count", 0)) + 1
+                return
             state.data_valid = False
             report.update({"historical_to_live_transition_status": "FAILED", "final_readiness": "BLOCKED",
                            "transition_error": "live candle is out of order or conflicts with recovered history",
@@ -817,21 +924,33 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
                 # gap, which the provider rejects as start==end); _validated_session_history trims the
                 # result back to [gap_start, gap_end], so the extra trailing minute is dropped.
                 # The provider often publishes a just-missed minute a few seconds later, so retry briefly.
-                for attempt in range(1, GAP_RECOVERY_ATTEMPTS + 1):
+                attempt = 0
+                while True:
+                    attempt += 1
                     try:
                         gap_audit = {"gap_recovery_attempts": attempt}
-                        recovered_batch = await history_provider.fetch(symbol=symbol, start=gap_start, end=bar.timestamp)
+                        async with history_gate:
+                            recovered_batch = await history_provider.fetch(symbol=symbol, start=gap_start, end=bar.timestamp)
                         gap_audit.update(recovered_batch.audit)
                         recovered = _validated_session_history(list(recovered_batch.candles), session_open=gap_start,
                                                                last_completed_bar=gap_end, audit=gap_audit,
-                                                               allow_missing_minutes=context_only)
+                                                               allow_missing_minutes=context_only,
+                                                               # The provider often publishes a late minute within
+                                                               # seconds, so fill only once the retries are used up.
+                                                               fill_missing_up_to=(MAX_FILLED_GAP_MINUTES if not context_only and live is None
+                                                                                   and attempt >= GAP_RECOVERY_ATTEMPTS else 0),
+                                                               previous_close=bars[-1].close if bars else None)
                         break
-                    except Exception:
-                        if attempt == GAP_RECOVERY_ATTEMPTS:
+                    except Exception as exc:
+                        session_limit = _is_session_limit(exc)
+                        attempts = SESSION_LIMIT_ATTEMPTS if session_limit else GAP_RECOVERY_ATTEMPTS
+                        if attempt >= attempts:
                             raise
-                        logger.warning("%s: live-feed gap recovery attempt %d/%d failed; retrying",
-                                       symbol, attempt, GAP_RECOVERY_ATTEMPTS)
-                        await asyncio.sleep(GAP_RECOVERY_RETRY_SECONDS * attempt)
+                        wait = (SESSION_LIMIT_RETRY_SECONDS if session_limit else GAP_RECOVERY_RETRY_SECONDS) * attempt
+                        logger.warning("%s: live-feed gap recovery attempt %d/%d failed (%s); retrying in %.0fs",
+                                       symbol, attempt, attempts,
+                                       "DXLink session limit" if session_limit else type(exc).__name__, wait)
+                        await asyncio.sleep(wait)
                 bars.extend(recovered)
                 if recovered:
                     _write_recovery_checkpoint(cfg.data_dir, symbol=symbol,
@@ -940,7 +1059,7 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
                     why = managed["exit_reason"]
                 elif why == "underlying_profit_target" and managed.get("hold_past_target"):
                     why = None   # let_winners_run: the V2 runner stop (gain already locked in) replaces the target
-                elif not why and managed["partial_quantity"]:
+                elif not why and managed["partial_quantity"] and live is None:   # LIVE refuses partial_profit at startup
                     book_paper_partial_exit(position_data, quote, int(managed["partial_quantity"]), "v2_partial_profit", bar_now)
                     position_data["v2_management"]["partial_taken"] = True
                     position = _position_from_record(position_data)
@@ -1098,8 +1217,12 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
         symbol, bars = state.symbol, state.bars
         entry_window = calendar.entry_window_ok(bar_now, active_strategy.entry_window_et["start"],
                                                 active_strategy.entry_window_et["end"])
-        cycle_equity = max(0.0, account.starting_capital + account.deposits - account.withdrawals +
-                           account.realized_pnl + account.unrealized_pnl)
+        # LIVE: equity is the broker's net liquidating value and spendable cash is the broker's settled funds
+        # (a cash account cannot reuse same-day sale proceeds). PAPER: both come from the simulated ledger.
+        live_cash = live.settled_funds_available(bar_now) if live is not None else None
+        cycle_equity = (live.equity() if live is not None else
+                        max(0.0, account.starting_capital + account.deposits - account.withdrawals +
+                            account.realized_pnl + account.unrealized_pnl))
         cycle_strategy = active_strategy if profile is None else profile.cycle_strategy(active_strategy, cycle_equity, account)
         risk_state = RiskState(
             equity=cycle_equity,
@@ -1112,10 +1235,15 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
             open_underlyings=tuple(str(position["underlying"]) for position in account.positions))
         blocked = ("kill_switch_active" if (root / "KILL_SWITCH").exists() else
                    "market_closed_or_outside_entry_window" if not (calendar.is_open(bar_now) and entry_window) else
-                   "open_position_marks_not_fresh" if not positions_mark_fresh else None)
+                   "open_position_marks_not_fresh" if not positions_mark_fresh else
+                   "broker_account_not_verified" if live is not None and not (
+                       live.account_certain and live.reconciled and live.protection_verified) else
+                   "broker_settled_funds_unknown" if live is not None and live_cash is None else None)
+        cash_override = None if live is None else float(live_cash or 0.0)
         report = await v2s.evaluate(symbol=symbol, bars=bars, now=bar_now, account=account, equity=cycle_equity,
                                     strategy=cycle_strategy, risk_state=risk_state,
-                                    data_fresh=state.data_valid and quote_fresh, entries_blocked=blocked, pending=[])
+                                    data_fresh=state.data_valid and quote_fresh, entries_blocked=blocked, pending=[],
+                                    cash=cash_override)
         if report is None:
             return
         if report.outcome != "APPROVED":
@@ -1137,12 +1265,34 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
             if not within_cap:
                 v2s.log_outcome(symbol, bar_now, "PROFILE_CAP", cap_reason)
                 return
-        ok, why_not = v2s.portfolio_recheck(report, account, cycle_equity, cycle_strategy, [])
+        ok, why_not = v2s.portfolio_recheck(report, account, cycle_equity, cycle_strategy, [], cash=cash_override)
         if not ok:
             v2s.log_outcome(symbol, bar_now, "PORTFOLIO_RECHECK", why_not)
             print(f"V2 NO TRADE {symbol}: {why_not}", flush=True)
             return
         selected, quantity = entry["option"], int(entry["quantity"])
+        if live is not None:
+            # The same position record PAPER books; the broker's actual fill supplies quantity, price and fees.
+            extra = v2s.entry_record_fields(report, bar_now)
+            booked = await live.open_position(template={
+                "trade_id": str(uuid.uuid4()), "symbol": selected.symbol, "underlying": symbol, "right": selected.right,
+                "entry_underlying": entry["entry_underlying"], "stop_underlying": entry["stop_underlying"],
+                "target_underlying": entry["target_underlying"], "entry_time": bar_now.isoformat(),
+                "max_holding_minutes": int(strategy.rules["max_holding_minutes"]),
+                "initial_risk_dollars": entry["modeled_risk_dollars"], "planned_risk_dollars": entry["planned_risk_dollars"],
+                "modeled_risk_dollars": entry["modeled_risk_dollars"],
+                "premium_exposure_dollars": entry["premium_exposure_dollars"],
+                "expected_net_r": entry["expected_net_r"], "mfe": 0.0, "mae": 0.0, "last_bid": selected.bid, **extra},
+                quote=selected, quantity=quantity, decision_option=selected.symbol, readiness=state.report,
+                now=datetime.now(timezone.utc), quote_fresh=_fresh_quote)
+            account.unrealized_pnl = _unrealized_pnl(account, executor)
+            if booked is None:
+                v2s.log_outcome(symbol, bar_now, "LIVE_NOT_FILLED", "the broker order was blocked, rejected or not filled")
+                return
+            v2s.record_entry(report, booked)
+            print(f"V2 LIVE ENTRY {symbol} {selected.symbol} x{booked['quantity']} @ ${float(booked['entry_price']):.2f} "
+                  f"({extra['v2_entry']['setup_type']}, {extra['v2_entry']['regime']}, net R {score[0]:.2f})", flush=True)
+            return
         try:
             fill = executor.fill(selected, "BUY", quantity, "v2_strategy_entry", bar_now)
         except ValueError as exc:
@@ -1183,6 +1333,9 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
             except Exception as exc:
                 if live is None and has_position(state.symbol) and not _is_connection_failure(exc):
                     await protective_exit(state.symbol, exc)
+                elif (live is not None and v2s is not None and has_position(state.symbol)
+                      and not _is_connection_failure(exc)):
+                    await live_protective_exit(state.symbol, exc)   # LIVE V2: same rule, real sell orders
                 disable(state, exc)  # re-raises if the symbol still holds a position or the feed failed
                 return
 
@@ -1204,7 +1357,10 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
         async with asyncio.timeout(remaining):
             if v2s is not None:
                 await v2s.startup(token_data, datetime.now(timezone.utc))
-            if not test_mode and now >= session_open.astimezone(timezone.utc) + timedelta(minutes=1):
+            # In the first minute after the open the only completed bar is the open itself, and a history request
+            # for it has start==end, which the providers refuse (2026-11-04: SPY, QQQ, IWM and DIA disabled for the
+            # day). Such a start, like one before it, recovers the opening minutes from the first live bar instead.
+            if not test_mode and now >= session_open.astimezone(timezone.utc) + timedelta(minutes=2):
                 for state in states.values():
                     try:
                         await bootstrap(state)
@@ -1270,7 +1426,8 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
                                        "strategy_version": position_data["strategy_version"],
                                        "strategy_hash": position_data["strategy_hash"],
                                        "underlying": position_data["underlying"],
-                                       "reason": "end_of_session_close", "timestamp": close_now.isoformat()})
+                                       "reason": "end_of_session_close", "timestamp": close_now.isoformat(),
+                                       **_forecast_fields(position_data)})
                 account.positions.remove(position_data)
                 print(f"PAPER EXIT {position_data['underlying']} {position_data['symbol']} end_of_session_close; net=${realized:.2f}", flush=True)
             account.unrealized_pnl = _unrealized_pnl(account, executor)

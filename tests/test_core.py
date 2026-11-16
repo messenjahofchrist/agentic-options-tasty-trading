@@ -163,6 +163,39 @@ class CoreTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "out of order"):
             parse_candle_feed(late_in_window, start=start, end=start + timedelta(minutes=2), symbol="SPY")
 
+    def test_forming_minute_update_closes_a_pending_snapshot_end(self):
+        # 2026-11-04: the fetch stopped on this ending and the parser refused it, disabling IWM on the $1K ledger.
+        start = datetime(2024, 1, 2, 14, 30, tzinfo=timezone.utc)
+        end = start + timedelta(minutes=2)
+        symbol = "SPY{=1m,a=s,tho=true}"
+        tx_pending, begin, snapshot_end = 1, 4, 8
+        def candle(minute, close, flags):
+            stamp = int((start + timedelta(minutes=minute)).timestamp() * 1000)
+            return ["Candle", symbol, 0, stamp, 0, 1, 470, 472, 469, close, 1000, flags]
+        snapshot = [{"data": ["Candle", candle(3, 471, begin | tx_pending)]},
+                    {"data": ["Candle", candle(2, 470.5, tx_pending)]},
+                    {"data": ["Candle", candle(1, 470.25, tx_pending)]},
+                    {"data": ["Candle", candle(0, 470, snapshot_end | tx_pending)]}]
+        closing = {"data": ["Candle", candle(3, 471.5, 0)]}
+
+        async def events(*args, **kwargs):
+            for message in snapshot + [closing]:
+                yield message
+
+        with patch("trader.market_data.dxlink_events", events):
+            rows = asyncio.run(fetch_historical_candles(dxlink_url="wss://example", quote_token="test",
+                symbol="SPY", start=start, end=end, timeout_seconds=1))
+        self.assertEqual([row["close"] for row in rows], [470, 470.25, 470.5])
+
+        # The same update proves nothing without a SNAPSHOT_END before it, or while it is itself still pending.
+        with self.assertRaisesRegex(RuntimeError, "did not complete.*end seen False"):
+            parse_candle_feed(snapshot[:3] + [closing], start=start, end=end, symbol="SPY")
+        with self.assertRaisesRegex(RuntimeError, "did not complete.*end seen True"):
+            parse_candle_feed(snapshot + [{"data": ["Candle", candle(3, 471.5, tx_pending)]}],
+                              start=start, end=end, symbol="SPY")
+        with self.assertRaisesRegex(RuntimeError, "did not complete.*end seen True"):
+            parse_candle_feed(snapshot, start=start, end=end, symbol="SPY")
+
     def test_massive_403_reports_provider_entitlement_without_secret(self):
         start = datetime(2026, 10, 12, 13, 30, tzinfo=timezone.utc)
         error_body = json.dumps({"status": "NOT_AUTHORIZED", "message": "Your plan doesn't include this data timeframe"}).encode()
@@ -898,3 +931,63 @@ class CoreTests(unittest.TestCase):
 
 
 if __name__ == "__main__": unittest.main()
+
+
+class FilledGapTests(unittest.TestCase):
+    """2026-11-04: a traded symbol's short no-trade gap is filled with flat zero-volume bars instead of disabling it."""
+
+    @staticmethod
+    def _rows(start, count, skip=()):
+        rows = []
+        for i in range(count):
+            if i in skip:
+                continue
+            stamp = start + timedelta(minutes=i)
+            price = 100 + i * 0.1
+            rows.append({"timestamp": stamp.isoformat(), "open": price, "high": price + .05, "low": price - .05,
+                         "close": price + .02, "volume": 1000})
+        return rows
+
+    def test_one_or_three_missing_minutes_are_filled_at_the_previous_close_and_audited(self):
+        start = datetime(2026, 11, 4, 14, 30, tzinfo=timezone.utc)
+        end = start + timedelta(minutes=9)
+        for skip in ((4,), (3, 4, 5)):
+            audit = {}
+            bars = _validated_session_history(self._rows(start, 10, skip=skip), session_open=start,
+                                              last_completed_bar=end, audit=audit, fill_missing_up_to=3)
+            self.assertEqual(len(bars), 10)
+            self.assertEqual([b.timestamp for b in bars], [start + timedelta(minutes=i) for i in range(10)])
+            previous_close = bars[min(skip) - 1].close
+            for i in skip:
+                self.assertEqual((bars[i].open, bars[i].high, bars[i].low, bars[i].close, bars[i].volume),
+                                 (previous_close, previous_close, previous_close, previous_close, 0.0))
+            self.assertEqual((audit["received_candle_count"], audit["missing_candle_count"], audit["filled_candle_count"]),
+                             (10 - len(skip), 0, len(skip)))
+            self.assertEqual(audit["filled_timestamps_utc"], [(start + timedelta(minutes=i)).isoformat() for i in skip])
+
+    def test_a_one_minute_live_gap_with_no_candle_fills_from_the_bar_before_the_gap(self):
+        """The common case: the recovery request covers only the missing minute, so the close comes from the caller."""
+        stamp = datetime(2026, 11, 4, 15, 0, tzinfo=timezone.utc)
+        audit = {}
+        bars = _validated_session_history([], session_open=stamp, last_completed_bar=stamp, audit=audit,
+                                          fill_missing_up_to=3, previous_close=101.5)
+        self.assertEqual([(b.timestamp, b.open, b.close, b.volume) for b in bars], [(stamp, 101.5, 101.5, 0.0)])
+        self.assertEqual((audit["received_candle_count"], audit["filled_candle_count"]), (0, 1))
+        with self.assertRaisesRegex(RuntimeError, "bootstrap incomplete"):   # during the retries: no fill yet
+            _validated_session_history([], session_open=stamp, last_completed_bar=stamp, previous_close=101.5)
+
+    def test_longer_gaps_the_opening_minute_and_the_default_still_fail(self):
+        start = datetime(2026, 11, 4, 14, 30, tzinfo=timezone.utc)
+        end = start + timedelta(minutes=9)
+        with self.assertRaisesRegex(RuntimeError, "bootstrap incomplete"):
+            _validated_session_history(self._rows(start, 10, skip=(3, 4, 5, 6)), session_open=start,
+                                       last_completed_bar=end, fill_missing_up_to=3)
+        with self.assertRaisesRegex(RuntimeError, "bootstrap incomplete"):
+            _validated_session_history(self._rows(start, 10, skip=(0,)), session_open=start,
+                                       last_completed_bar=end, fill_missing_up_to=3)
+        with self.assertRaisesRegex(RuntimeError, "bootstrap incomplete"):   # default: unchanged behaviour
+            _validated_session_history(self._rows(start, 10, skip=(4,)), session_open=start, last_completed_bar=end)
+        audit = {}   # context symbols: counted, never filled (unchanged)
+        bars = _validated_session_history(self._rows(start, 10, skip=(4,)), session_open=start, last_completed_bar=end,
+                                          audit=audit, allow_missing_minutes=True, fill_missing_up_to=3)
+        self.assertEqual((len(bars), audit["missing_candle_count"], audit["filled_candle_count"]), (9, 1, 0))

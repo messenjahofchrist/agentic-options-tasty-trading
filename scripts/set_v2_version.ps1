@@ -5,12 +5,26 @@
 #   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.2.0   # 2.1.0 + no new entries in the last 30 minutes
 #   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.3.0   # 2.2.0 + the 3-loss streak resets each day
 #   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.4.0   # 2.3.0 + hold winners longer
+#   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.5.0   # 2.4.0 + no entries in BAC or DIA
+#   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.6.0   # 2.5.0 + favorites first, volatile-day lean
+#   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.7.0   # 2.5.0 + no re-entry after a failed breakout, target must be reachable, runner trail 1.0R
+#   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.8.0   # 2.5.0 + option cost in R logged on every entry (not blocking), advisor veto
 #
 # The saved versions live in strategies\v2_versions\. Ledgers (balances, open trades) are never touched: a running
 # engine is stopped and started again with the chosen version and keeps managing its open trades.
-param([Parameter(Mandatory = $true)][string]$Version)
+#
+# Version freeze (review 2026-11-11): while strategies\FREEZE.json exists and its "until" date has not passed, a switch
+# is refused unless -Force is given. Eight versions in three weeks, all tuned on the same five months, made it
+# impossible to say what worked; the freeze keeps one version running long enough to judge it.
+param([Parameter(Mandatory = $true)][string]$Version, [switch]$Force)
 $ErrorActionPreference = "Stop"
 Set-Location (Split-Path $PSScriptRoot -Parent)
+if ((Test-Path strategies\FREEZE.json) -and -not $Force) {
+    $freeze = Get-Content strategies\FREEZE.json -Raw | ConvertFrom-Json
+    if ((Get-Date) -lt [datetime]$freeze.until) {
+        throw "V2 is frozen on $($freeze.version) until $($freeze.until): $($freeze.reason) Add -Force to switch anyway."
+    }
+}
 $source = "strategies\v2_versions\professional_v2_$Version.json"
 if (-not (Test-Path $source)) { throw "No saved V2 version $Version ($source)" }
 

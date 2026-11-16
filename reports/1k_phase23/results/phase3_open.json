@@ -1,0 +1,3626 @@
+{
+ "fill_model": "open",
+ "signals": 508,
+ "signal_sources": {
+  "real": 44,
+  "proxy": 464
+ },
+ "calibration": {
+  "SPY": {
+   "spread_frac": 0.009237875288683646,
+   "spread_floor": 0.02999999999999936,
+   "n": 12242,
+   "spread_by_delta": {
+    "0.05-0.2": 0.03,
+    "0.2-0.35": 0.04,
+    "0.35-0.45": 0.05,
+    "0.45-0.65": 0.09,
+    "0.65-0.95": 0.2
+   },
+   "iv_ratio": 1.466377313236302
+  },
+  "QQQ": {
+   "spread_frac": 0.008282526280085283,
+   "spread_floor": 0.049999999999998934,
+   "n": 13750,
+   "spread_by_delta": {
+    "0.05-0.2": 0.04,
+    "0.2-0.35": 0.06,
+    "0.35-0.45": 0.08,
+    "0.45-0.65": 0.11,
+    "0.65-0.95": 0.27
+   },
+   "iv_ratio": 1.2254741217219933
+  },
+  "IWM": {
+   "spread_frac": 0.01769911504424788,
+   "spread_floor": 0.030000000000000027,
+   "n": 7969,
+   "spread_by_delta": {
+    "0.05-0.2": 0.03,
+    "0.2-0.35": 0.04,
+    "0.35-0.45": 0.05,
+    "0.45-0.65": 0.07,
+    "0.65-0.95": 0.12
+   },
+   "iv_ratio": 1.3338579994806492
+  },
+  "NVDA": {
+   "spread_frac": 0.02020202020202013,
+   "spread_floor": 0.03999999999999959,
+   "n": 2693,
+   "spread_by_delta": {
+    "0.05-0.2": 0.03,
+    "0.2-0.35": 0.1,
+    "0.35-0.45": 0.1,
+    "0.45-0.65": 0.15,
+    "0.65-0.95": 0.35
+   },
+   "iv_ratio": 1.4389553556252919
+  },
+  "AAPL": {
+   "spread_frac": 0.06228373702422151,
+   "spread_floor": 0.15000000000000036,
+   "n": 3075,
+   "spread_by_delta": {
+    "0.05-0.2": 0.14,
+    "0.2-0.35": 0.25,
+    "0.35-0.45": 0.35,
+    "0.45-0.65": 0.45,
+    "0.65-0.95": 2.35
+   },
+   "iv_ratio": 1.9049133248244037
+  },
+  "AMZN": {
+   "spread_frac": 0.050314465408805034,
+   "spread_floor": 0.14999999999999947,
+   "n": 3182,
+   "spread_by_delta": {
+    "0.05-0.2": 0.12,
+    "0.2-0.35": 0.25,
+    "0.35-0.45": 0.3,
+    "0.45-0.65": 0.4,
+    "0.65-0.95": 2.1
+   },
+   "iv_ratio": 1.0373572870225511
+  },
+  "GOOGL": {
+   "spread_frac": 0.0727272727272728,
+   "spread_floor": 0.1999999999999993,
+   "n": 2931,
+   "spread_by_delta": {
+    "0.05-0.2": 0.15,
+    "0.2-0.35": 0.3,
+    "0.35-0.45": 0.4,
+    "0.45-0.65": 0.55,
+    "0.65-0.95": 2.35
+   },
+   "iv_ratio": 0.738542599515963
+  },
+  "PLTR": {
+   "spread_frac": 0.020020040080160284,
+   "spread_floor": 0.09999999999999964,
+   "n": 2390,
+   "spread_by_delta": {
+    "0.05-0.2": 0.08,
+    "0.2-0.35": 0.15,
+    "0.35-0.45": 0.2,
+    "0.45-0.65": 0.2,
+    "0.65-0.95": 0.45
+   },
+   "iv_ratio": 1.6600715332406695
+  },
+  "NFLX": {
+   "spread_frac": 0.04100227790432815,
+   "spread_floor": 0.029999999999999805,
+   "n": 1173,
+   "spread_by_delta": {
+    "0.05-0.2": 0.02,
+    "0.2-0.35": 0.04,
+    "0.35-0.45": 0.05,
+    "0.45-0.65": 0.07,
+    "0.65-0.95": 0.55
+   },
+   "iv_ratio": 0.9785285902826655
+  },
+  "INTC": {
+   "spread_frac": 0.03821656050955412,
+   "spread_floor": 0.05999999999999983,
+   "n": 2362,
+   "spread_by_delta": {
+    "0.05-0.2": 0.06,
+    "0.2-0.35": 0.1,
+    "0.35-0.45": 0.15,
+    "0.45-0.65": 0.2,
+    "0.65-0.95": 0.6
+   },
+   "iv_ratio": 1.3634084165237794
+  },
+  "UBER": {
+   "spread_frac": 0.0598006644518273,
+   "spread_floor": 0.06000000000000005,
+   "n": 1804,
+   "spread_by_delta": {
+    "0.05-0.2": 0.07,
+    "0.2-0.35": 0.09,
+    "0.35-0.45": 0.11,
+    "0.45-0.65": 0.15,
+    "0.65-0.95": 0.7
+   },
+   "iv_ratio": 1.7753449021424415
+  }
+ },
+ "strike_steps": {
+  "SPY": 1.0,
+  "QQQ": 1.0,
+  "IWM": 0.5,
+  "NVDA": 2.5,
+  "AAPL": 2.5,
+  "AMZN": 2.5,
+  "GOOGL": 2.5,
+  "PLTR": 2.5,
+  "NFLX": 0.5,
+  "INTC": 0.5,
+  "UBER": 0.5
+ },
+ "single": {
+  "account": {
+   "tuning (Jun-Aug, proxy)": {
+    "n": 0
+   },
+   "validation (Sep-Nov 6)": {
+    "n": 0
+   },
+   "real quotes only (Oct 26-Nov 6)": {
+    "n": 0
+   }
+  },
+  "every_signal_no_limits": {
+   "tuning (Jun-Aug, proxy)": {
+    "n": 89,
+    "win%": 40,
+    "net": 1014.19,
+    "PF": 1.48,
+    "exp$": 11.4,
+    "exp%risk": 1.1,
+    "avg_win": 86.85,
+    "avg_loss": -39.86,
+    "net_without_best2": 214.77,
+    "gross_mid": 1891.5,
+    "costs": 877.31,
+    "avg_risk": 897.2
+   },
+   "validation (Sep-Nov 6)": {
+    "n": 98,
+    "win%": 32,
+    "net": -418.42,
+    "PF": 0.85,
+    "exp$": -4.27,
+    "exp%risk": -0.9,
+    "avg_win": 79.29,
+    "avg_loss": -42.93,
+    "net_without_best2": -904.84,
+    "gross_mid": 561.0,
+    "costs": 979.42,
+    "avg_risk": 737.17
+   },
+   "real quotes only (Oct 26-Nov 6)": {
+    "n": 39,
+    "win%": 33,
+    "net": -376.31,
+    "PF": 0.75,
+    "exp$": -9.65,
+    "exp%risk": -0.3,
+    "avg_win": 87.56,
+    "avg_loss": -58.25,
+    "net_without_best2": -862.73,
+    "gross_mid": 61.5,
+    "costs": 437.81,
+    "avg_risk": 859.73
+   }
+  },
+  "skips": {
+   "over the per-trade risk limit": 187,
+   "no contract passes the strategy's filters": 321
+  },
+  "end_equity": 1000.0,
+  "max_dd%": 0.0,
+  "gates": {
+   "1 >=40 OOS trades": false,
+   "2 PF > 1.25": false,
+   "3 positive in >=2 market types": false,
+   "4 max drawdown <= 20%": true,
+   "5a positive without best 2": false,
+   "5b positive in each half": false,
+   "7 real-quote expectancy >= 0": false,
+   "(6 robustness: checked separately)": null
+  }
+ },
+ "single_350": {
+  "account": {
+   "tuning (Jun-Aug, proxy)": {
+    "n": 8,
+    "win%": 62,
+    "net": 73.68,
+    "PF": 1.7,
+    "exp$": 9.21,
+    "exp%risk": 4.5,
+    "avg_win": 35.91,
+    "avg_loss": -35.29,
+    "net_without_best2": -45.74,
+    "gross_mid": 140.0,
+    "costs": 66.32,
+    "avg_risk": 273.42
+   },
+   "validation (Sep-Nov 6)": {
+    "n": 12,
+    "win%": 17,
+    "net": -199.48,
+    "PF": 0.18,
+    "exp$": -16.62,
+    "exp%risk": -7.1,
+    "avg_win": 21.21,
+    "avg_loss": -24.19,
+    "net_without_best2": -241.9,
+    "gross_mid": -97.5,
+    "costs": 101.98,
+    "avg_risk": 254.71
+   },
+   "real quotes only (Oct 26-Nov 6)": {
+    "n": 3,
+    "win%": 0,
+    "net": -56.87,
+    "PF": 0.0,
+    "exp$": -18.96,
+    "exp%risk": -10.2,
+    "avg_win": 0,
+    "avg_loss": -18.96,
+    "net_without_best2": -30.29,
+    "gross_mid": -29.5,
+    "costs": 27.37,
+    "avg_risk": 230.96
+   }
+  },
+  "every_signal_no_limits": {
+   "tuning (Jun-Aug, proxy)": {
+    "n": 8,
+    "win%": 62,
+    "net": 73.68,
+    "PF": 1.7,
+    "exp$": 9.21,
+    "exp%risk": 4.5,
+    "avg_win": 35.91,
+    "avg_loss": -35.29,
+    "net_without_best2": -45.74,
+    "gross_mid": 140.0,
+    "costs": 66.32,
+    "avg_risk": 273.42
+   },
+   "validation (Sep-Nov 6)": {
+    "n": 12,
+    "win%": 17,
+    "net": -199.48,
+    "PF": 0.18,
+    "exp$": -16.62,
+    "exp%risk": -7.1,
+    "avg_win": 21.21,
+    "avg_loss": -24.19,
+    "net_without_best2": -241.9,
+    "gross_mid": -97.5,
+    "costs": 101.98,
+    "avg_risk": 254.71
+   },
+   "real quotes only (Oct 26-Nov 6)": {
+    "n": 3,
+    "win%": 0,
+    "net": -56.87,
+    "PF": 0.0,
+    "exp$": -18.96,
+    "exp%risk": -10.2,
+    "avg_win": 0,
+    "avg_loss": -18.96,
+    "net_without_best2": -30.29,
+    "gross_mid": -29.5,
+    "costs": 27.37,
+    "avg_risk": 230.96
+   }
+  },
+  "skips": {
+   "single option over $350": 135,
+   "friction over 4%": 14,
+   "no contract passes the strategy's filters": 302,
+   "position already open": 37
+  },
+  "end_equity": 874.2,
+  "max_dd%": 19.5,
+  "gates": {
+   "1 >=40 OOS trades": false,
+   "2 PF > 1.25": false,
+   "3 positive in >=2 market types": false,
+   "4 max drawdown <= 20%": true,
+   "5a positive without best 2": false,
+   "5b positive in each half": false,
+   "7 real-quote expectancy >= 0": false,
+   "(6 robustness: checked separately)": null
+  }
+ },
+ "single_budget": {
+  "account": {
+   "tuning (Jun-Aug, proxy)": {
+    "n": 0
+   },
+   "validation (Sep-Nov 6)": {
+    "n": 0
+   },
+   "real quotes only (Oct 26-Nov 6)": {
+    "n": 0
+   }
+  },
+  "every_signal_no_limits": {
+   "tuning (Jun-Aug, proxy)": {
+    "n": 89,
+    "win%": 40,
+    "net": 1014.19,
+    "PF": 1.48,
+    "exp$": 11.4,
+    "exp%risk": 1.1,
+    "avg_win": 86.85,
+    "avg_loss": -39.86,
+    "net_without_best2": 214.77,
+    "gross_mid": 1891.5,
+    "costs": 877.31,
+    "avg_risk": 897.2
+   },
+   "validation (Sep-Nov 6)": {
+    "n": 98,
+    "win%": 32,
+    "net": -418.42,
+    "PF": 0.85,
+    "exp$": -4.27,
+    "exp%risk": -0.9,
+    "avg_win": 79.29,
+    "avg_loss": -42.93,
+    "net_without_best2": -904.84,
+    "gross_mid": 561.0,
+    "costs": 979.42,
+    "avg_risk": 737.17
+   },
+   "real quotes only (Oct 26-Nov 6)": {
+    "n": 39,
+    "win%": 33,
+    "net": -376.31,
+    "PF": 0.75,
+    "exp$": -9.65,
+    "exp%risk": -0.3,
+    "avg_win": 87.56,
+    "avg_loss": -58.25,
+    "net_without_best2": -862.73,
+    "gross_mid": 61.5,
+    "costs": 437.81,
+    "avg_risk": 859.73
+   }
+  },
+  "skips": {
+   "single option over budget": 187,
+   "no contract passes the strategy's filters": 321
+  },
+  "end_equity": 1000.0,
+  "max_dd%": 0.0,
+  "gates": {
+   "1 >=40 OOS trades": false,
+   "2 PF > 1.25": false,
+   "3 positive in >=2 market types": false,
+   "4 max drawdown <= 20%": true,
+   "5a positive without best 2": false,
+   "5b positive in each half": false,
+   "7 real-quote expectancy >= 0": false,
+   "(6 robustness: checked separately)": null
+  }
+ },
+ "single_otm_budget": {
+  "account": {
+   "tuning (Jun-Aug, proxy)": {
+    "n": 24,
+    "win%": 42,
+    "net": 41.04,
+    "PF": 1.16,
+    "exp$": 1.71,
+    "exp%risk": 2.5,
+    "avg_win": 30.11,
+    "avg_loss": -18.58,
+    "net_without_best2": -93.38,
+    "gross_mid": 190.0,
+    "costs": 148.96,
+    "avg_risk": 92.71
+   },
+   "validation (Sep-Nov 6)": {
+    "n": 25,
+    "win%": 16,
+    "net": -253.25,
+    "PF": 0.17,
+    "exp$": -10.13,
+    "exp%risk": -11.9,
+    "avg_win": 13.21,
+    "avg_loss": -14.58,
+    "net_without_best2": -292.67,
+    "gross_mid": -119.0,
+    "costs": 134.25,
+    "avg_risk": 82.01
+   },
+   "real quotes only (Oct 26-Nov 6)": {
+    "n": 3,
+    "win%": 0,
+    "net": -33.87,
+    "PF": 0.0,
+    "exp$": -11.29,
+    "exp%risk": -18.9,
+    "avg_win": 0,
+    "avg_loss": -11.29,
+    "net_without_best2": -15.29,
+    "gross_mid": -20.0,
+    "costs": 13.87,
+    "avg_risk": 60.96
+   }
+  },
+  "every_signal_no_limits": {
+   "tuning (Jun-Aug, proxy)": {
+    "n": 27,
+    "win%": 37,
+    "net": -36.83,
+    "PF": 0.89,
+    "exp$": -1.36,
+    "exp%risk": -0.5,
+    "avg_win": 30.61,
+    "avg_loss": -20.17,
+    "net_without_best2": -171.25,
+    "gross_mid": 132.0,
+    "costs": 168.83,
+    "avg_risk": 93.22
+   },
+   "validation (Sep-Nov 6)": {
+    "n": 50,
+    "win%": 20,
+    "net": -411.5,
+    "PF": 0.34,
+    "exp$": -8.23,
+    "exp%risk": -8.7,
+    "avg_win": 21.41,
+    "avg_loss": -15.64,
+    "net_without_best2": -523.92,
+    "gross_mid": -111.0,
+    "costs": 300.5,
+    "avg_risk": 92.39
+   },
+   "real quotes only (Oct 26-Nov 6)": {
+    "n": 9,
+    "win%": 22,
+    "net": -74.61,
+    "PF": 0.21,
+    "exp$": -8.29,
+    "exp%risk": -9.0,
+    "avg_win": 9.71,
+    "avg_loss": -13.43,
+    "net_without_best2": -94.03,
+    "gross_mid": -26.5,
+    "costs": 48.11,
+    "avg_risk": 91.73
+   }
+  },
+  "skips": {
+   "no 0.20-0.45 delta option fits the budget": 379,
+   "position already open": 79,
+   "2 losses in a row today": 1
+  },
+  "end_equity": 787.79,
+  "max_dd%": 25.0,
+  "gates": {
+   "1 >=40 OOS trades": false,
+   "2 PF > 1.25": false,
+   "3 positive in >=2 market types": false,
+   "4 max drawdown <= 20%": false,
+   "5a positive without best 2": false,
+   "5b positive in each half": false,
+   "7 real-quote expectancy >= 0": false,
+   "(6 robustness: checked separately)": null
+  }
+ },
+ "debit_spread": {
+  "account": {
+   "tuning (Jun-Aug, proxy)": {
+    "n": 37,
+    "win%": 0,
+    "net": -662.46,
+    "PF": 0.0,
+    "exp$": -17.9,
+    "exp%risk": -36.4,
+    "avg_win": 0,
+    "avg_loss": -17.9,
+    "net_without_best2": -643.3,
+    "gross_mid": 10.5,
+    "costs": 672.96,
+    "avg_risk": 53.99
+   },
+   "validation (Sep-Nov 6)": {
+    "n": 1,
+    "win%": 0,
+    "net": -16.58,
+    "PF": 0.0,
+    "exp$": -16.58,
+    "exp%risk": -49.4,
+    "avg_win": 0,
+    "avg_loss": -16.58,
+    "net_without_best2": 0,
+    "gross_mid": 0.0,
+    "costs": 16.58,
+    "avg_risk": 33.58
+   },
+   "real quotes only (Oct 26-Nov 6)": {
+    "n": 0
+   }
+  },
+  "every_signal_no_limits": {
+   "tuning (Jun-Aug, proxy)": {
+    "n": 89,
+    "win%": 3,
+    "net": -1576.62,
+    "PF": 0.01,
+    "exp$": -17.71,
+    "exp%risk": -23.4,
+    "avg_win": 3.09,
+    "avg_loss": -18.44,
+    "net_without_best2": -1585.46,
+    "gross_mid": 94.0,
+    "costs": 1670.62,
+    "avg_risk": 79.01
+   },
+   "validation (Sep-Nov 6)": {
+    "n": 84,
+    "win%": 0,
+    "net": -1493.72,
+    "PF": 0.0,
+    "exp$": -17.78,
+    "exp%risk": -24.1,
+    "avg_win": 0,
+    "avg_loss": -17.78,
+    "net_without_best2": -1489.56,
+    "gross_mid": 9.5,
+    "costs": 1503.22,
+    "avg_risk": 76.81
+   },
+   "real quotes only (Oct 26-Nov 6)": {
+    "n": 25,
+    "win%": 0,
+    "net": -449.5,
+    "PF": 0.0,
+    "exp$": -17.98,
+    "exp%risk": -26.3,
+    "avg_win": 0,
+    "avg_loss": -17.98,
+    "net_without_best2": -434.34,
+    "gross_mid": 3.0,
+    "costs": 452.5,
+    "avg_risk": 71.1
+   }
+  },
+  "skips": {
+   "position already open": 37,
+   "no contract passes the strategy's filters": 289,
+   "2 losses in a row today": 3,
+   "no spread fits the budget": 141
+  },
+  "end_equity": 320.96,
+  "max_dd%": 67.9,
+  "gates": {
+   "1 >=40 OOS trades": false,
+   "2 PF > 1.25": false,
+   "3 positive in >=2 market types": false,
+   "4 max drawdown <= 20%": true,
+   "5a positive without best 2": false,
+   "5b positive in each half": false,
+   "7 real-quote expectancy >= 0": false,
+   "(6 robustness: checked separately)": null
+  }
+ },
+ "debit_spread_costcap": {
+  "account": {
+   "tuning (Jun-Aug, proxy)": {
+    "n": 14,
+    "win%": 7,
+    "net": -193.12,
+    "PF": 0.0,
+    "exp$": -13.79,
+    "exp%risk": -16.1,
+    "avg_win": 0.42,
+    "avg_loss": -14.89,
+    "net_without_best2": -191.96,
+    "gross_mid": 55.0,
+    "costs": 248.12,
+    "avg_risk": 85.44
+   },
+   "validation (Sep-Nov 6)": {
+    "n": 11,
+    "win%": 0,
+    "net": -148.38,
+    "PF": 0.0,
+    "exp$": -13.49,
+    "exp%risk": -19.8,
+    "avg_win": 0,
+    "avg_loss": -13.49,
+    "net_without_best2": -137.22,
+    "gross_mid": -14.5,
+    "costs": 133.88,
+    "avg_risk": 68.03
+   },
+   "real quotes only (Oct 26-Nov 6)": {
+    "n": 7,
+    "win%": 0,
+    "net": -86.06,
+    "PF": 0.0,
+    "exp$": -12.29,
+    "exp%risk": -19.4,
+    "avg_win": 0,
+    "avg_loss": -12.29,
+    "net_without_best2": -68.9,
+    "gross_mid": -10.5,
+    "costs": 75.56,
+    "avg_risk": 63.87
+   }
+  },
+  "every_signal_no_limits": {
+   "tuning (Jun-Aug, proxy)": {
+    "n": 47,
+    "win%": 6,
+    "net": -745.26,
+    "PF": 0.01,
+    "exp$": -15.86,
+    "exp%risk": -17.6,
+    "avg_win": 3.09,
+    "avg_loss": -17.15,
+    "net_without_best2": -754.1,
+    "gross_mid": 54.0,
+    "costs": 799.26,
+    "avg_risk": 90.39
+   },
+   "validation (Sep-Nov 6)": {
+    "n": 43,
+    "win%": 0,
+    "net": -668.94,
+    "PF": 0.0,
+    "exp$": -15.56,
+    "exp%risk": -18.0,
+    "avg_win": 0,
+    "avg_loss": -15.56,
+    "net_without_best2": -664.78,
+    "gross_mid": -14.0,
+    "costs": 654.94,
+    "avg_risk": 86.86
+   },
+   "real quotes only (Oct 26-Nov 6)": {
+    "n": 10,
+    "win%": 0,
+    "net": -136.8,
+    "PF": 0.0,
+    "exp$": -13.68,
+    "exp%risk": -18.2,
+    "avg_win": 0,
+    "avg_loss": -13.68,
+    "net_without_best2": -119.64,
+    "gross_mid": -2.5,
+    "costs": 134.3,
+    "avg_risk": 77.28
+   }
+  },
+  "skips": {
+   "position already open": 28,
+   "no contract passes the strategy's filters": 303,
+   "spread costs over 20% of the risk": 138,
+   "no spread fits the budget": 12,
+   "2 losses in a row today": 2
+  },
+  "end_equity": 658.5,
+  "max_dd%": 34.2,
+  "gates": {
+   "1 >=40 OOS trades": false,
+   "2 PF > 1.25": false,
+   "3 positive in >=2 market types": false,
+   "4 max drawdown <= 20%": true,
+   "5a positive without best 2": false,
+   "5b positive in each half": false,
+   "7 real-quote expectancy >= 0": false,
+   "(6 robustness: checked separately)": null
+  }
+ },
+ "robustness": {
+  "single_otm_budget": {
+   "budget=0.08": {
+    "validation": {
+     "n": 21,
+     "win%": 10,
+     "net": -213.09,
+     "PF": 0.12,
+     "exp$": -10.15,
+     "exp%risk": -13.9,
+     "avg_win": 15.21,
+     "avg_loss": -12.82,
+     "net_without_best2": -243.51,
+     "gross_mid": -106.0,
+     "costs": 107.09,
+     "avg_risk": 72.62
+    },
+    "end_equity": 879.98,
+    "gates": {
+     "1 >=40 OOS trades": false,
+     "2 PF > 1.25": false,
+     "3 positive in >=2 market types": false,
+     "4 max drawdown <= 20%": false,
+     "5a positive without best 2": false,
+     "5b positive in each half": false,
+     "7 real-quote expectancy >= 0": false,
+     "(6 robustness: checked separately)": null
+    }
+   },
+   "budget=0.12": {
+    "validation": {
+     "n": 28,
+     "win%": 18,
+     "net": -291.12,
+     "PF": 0.17,
+     "exp$": -10.4,
+     "exp%risk": -11.8,
+     "avg_win": 12.11,
+     "avg_loss": -15.29,
+     "net_without_best2": -333.54,
+     "gross_mid": -124.5,
+     "costs": 166.62,
+     "avg_risk": 86.93
+    },
+    "end_equity": 665.15,
+    "gates": {
+     "1 >=40 OOS trades": false,
+     "2 PF > 1.25": false,
+     "3 positive in >=2 market types": false,
+     "4 max drawdown <= 20%": false,
+     "5a positive without best 2": false,
+     "5b positive in each half": false,
+     "7 real-quote expectancy >= 0": false,
+     "(6 robustness: checked separately)": null
+    }
+   }
+  },
+  "debit_spread": {
+   "budget=0.08": {
+    "validation": {
+     "n": 0
+    },
+    "end_equity": 413.02,
+    "gates": {
+     "1 >=40 OOS trades": false,
+     "2 PF > 1.25": false,
+     "3 positive in >=2 market types": false,
+     "4 max drawdown <= 20%": true,
+     "5a positive without best 2": false,
+     "5b positive in each half": false,
+     "7 real-quote expectancy >= 0": false,
+     "(6 robustness: checked separately)": null
+    }
+   },
+   "budget=0.12": {
+    "validation": {
+     "n": 1,
+     "win%": 0,
+     "net": -16.58,
+     "PF": 0.0,
+     "exp$": -16.58,
+     "exp%risk": -49.4,
+     "avg_win": 0,
+     "avg_loss": -16.58,
+     "net_without_best2": 0,
+     "gross_mid": 0.0,
+     "costs": 16.58,
+     "avg_risk": 33.58
+    },
+    "end_equity": 265.22,
+    "gates": {
+     "1 >=40 OOS trades": false,
+     "2 PF > 1.25": false,
+     "3 positive in >=2 market types": false,
+     "4 max drawdown <= 20%": true,
+     "5a positive without best 2": false,
+     "5b positive in each half": false,
+     "7 real-quote expectancy >= 0": false,
+     "(6 robustness: checked separately)": null
+    }
+   },
+   "delta=0.5": {
+    "validation": {
+     "n": 1,
+     "win%": 0,
+     "net": -16.58,
+     "PF": 0.0,
+     "exp$": -16.58,
+     "exp%risk": -54.2,
+     "avg_win": 0,
+     "avg_loss": -16.58,
+     "net_without_best2": 0,
+     "gross_mid": -2.0,
+     "costs": 14.58,
+     "avg_risk": 30.58
+    },
+    "end_equity": 291.64,
+    "gates": {
+     "1 >=40 OOS trades": false,
+     "2 PF > 1.25": false,
+     "3 positive in >=2 market types": false,
+     "4 max drawdown <= 20%": true,
+     "5a positive without best 2": false,
+     "5b positive in each half": false,
+     "7 real-quote expectancy >= 0": false,
+     "(6 robustness: checked separately)": null
+    }
+   },
+   "delta=0.6": {
+    "validation": {
+     "n": 0
+    },
+    "end_equity": 318.28,
+    "gates": {
+     "1 >=40 OOS trades": false,
+     "2 PF > 1.25": false,
+     "3 positive in >=2 market types": false,
+     "4 max drawdown <= 20%": true,
+     "5a positive without best 2": false,
+     "5b positive in each half": false,
+     "7 real-quote expectancy >= 0": false,
+     "(6 robustness: checked separately)": null
+    }
+   }
+  },
+  "debit_spread_costcap": {
+   "budget=0.08": {
+    "validation": {
+     "n": 10,
+     "win%": 0,
+     "net": -123.8,
+     "PF": 0.0,
+     "exp$": -12.38,
+     "exp%risk": -18.6,
+     "avg_win": 0,
+     "avg_loss": -12.38,
+     "net_without_best2": -112.64,
+     "gross_mid": -4.5,
+     "costs": 119.3,
+     "avg_risk": 67.08
+    },
+    "end_equity": 830.04,
+    "gates": {
+     "1 >=40 OOS trades": false,
+     "2 PF > 1.25": false,
+     "3 positive in >=2 market types": false,
+     "4 max drawdown <= 20%": true,
+     "5a positive without best 2": false,
+     "5b positive in each half": false,
+     "7 real-quote expectancy >= 0": false,
+     "(6 robustness: checked separately)": null
+    }
+   },
+   "budget=0.12": {
+    "validation": {
+     "n": 9,
+     "win%": 0,
+     "net": -131.22,
+     "PF": 0.0,
+     "exp$": -14.58,
+     "exp%risk": -21.5,
+     "avg_win": 0,
+     "avg_loss": -14.58,
+     "net_without_best2": -114.06,
+     "gross_mid": -20.5,
+     "costs": 110.72,
+     "avg_risk": 67.36
+    },
+    "end_equity": 528.6,
+    "gates": {
+     "1 >=40 OOS trades": false,
+     "2 PF > 1.25": false,
+     "3 positive in >=2 market types": false,
+     "4 max drawdown <= 20%": true,
+     "5a positive without best 2": false,
+     "5b positive in each half": false,
+     "7 real-quote expectancy >= 0": false,
+     "(6 robustness: checked separately)": null
+    }
+   },
+   "delta=0.5": {
+    "validation": {
+     "n": 5,
+     "win%": 0,
+     "net": -54.9,
+     "PF": 0.0,
+     "exp$": -10.98,
+     "exp%risk": -17.5,
+     "avg_win": 0,
+     "avg_loss": -10.98,
+     "net_without_best2": -39.74,
+     "gross_mid": -3.5,
+     "costs": 51.4,
+     "avg_risk": 62.38
+    },
+    "end_equity": 668.5,
+    "gates": {
+     "1 >=40 OOS trades": false,
+     "2 PF > 1.25": false,
+     "3 positive in >=2 market types": false,
+     "4 max drawdown <= 20%": true,
+     "5a positive without best 2": false,
+     "5b positive in each half": false,
+     "7 real-quote expectancy >= 0": false,
+     "(6 robustness: checked separately)": null
+    }
+   },
+   "delta=0.6": {
+    "validation": {
+     "n": 4,
+     "win%": 0,
+     "net": -68.32,
+     "PF": 0.0,
+     "exp$": -17.08,
+     "exp%risk": -22.1,
+     "avg_win": 0,
+     "avg_loss": -17.08,
+     "net_without_best2": -49.16,
+     "gross_mid": -18.0,
+     "costs": 50.32,
+     "avg_risk": 75.08
+    },
+    "end_equity": 765.04,
+    "gates": {
+     "1 >=40 OOS trades": false,
+     "2 PF > 1.25": false,
+     "3 positive in >=2 market types": false,
+     "4 max drawdown <= 20%": true,
+     "5a positive without best 2": false,
+     "5b positive in each half": false,
+     "7 real-quote expectancy >= 0": false,
+     "(6 robustness: checked separately)": null
+    }
+   },
+   "costcap=0.16": {
+    "validation": {
+     "n": 5,
+     "win%": 0,
+     "net": -56.9,
+     "PF": 0.0,
+     "exp$": -11.38,
+     "exp%risk": -14.7,
+     "avg_win": 0,
+     "avg_loss": -11.38,
+     "net_without_best2": -43.74,
+     "gross_mid": -5.0,
+     "costs": 51.9,
+     "avg_risk": 79.78
+    },
+    "end_equity": 861.36,
+    "gates": {
+     "1 >=40 OOS trades": false,
+     "2 PF > 1.25": false,
+     "3 positive in >=2 market types": false,
+     "4 max drawdown <= 20%": true,
+     "5a positive without best 2": false,
+     "5b positive in each half": false,
+     "7 real-quote expectancy >= 0": false,
+     "(6 robustness: checked separately)": null
+    }
+   },
+   "costcap=0.24": {
+    "validation": {
+     "n": 10,
+     "win%": 0,
+     "net": -143.8,
+     "PF": 0.0,
+     "exp$": -14.38,
+     "exp%risk": -21.2,
+     "avg_win": 0,
+     "avg_loss": -14.38,
+     "net_without_best2": -128.64,
+     "gross_mid": -18.5,
+     "costs": 125.3,
+     "avg_risk": 67.18
+    },
+    "end_equity": 637.5,
+    "gates": {
+     "1 >=40 OOS trades": false,
+     "2 PF > 1.25": false,
+     "3 positive in >=2 market types": false,
+     "4 max drawdown <= 20%": true,
+     "5a positive without best 2": false,
+     "5b positive in each half": false,
+     "7 real-quote expectancy >= 0": false,
+     "(6 robustness: checked separately)": null
+    }
+   }
+  }
+ },
+ "trades": {
+  "single": [],
+  "single_350": [
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-07-21T14:53:00+00:00",
+    "exit_time": "2026-07-21T15:02:00+00:00",
+    "exit_reason": "stop",
+    "risk": 297.29,
+    "pnl": -25.29,
+    "gross_mid": -17.0,
+    "costs": 8.29,
+    "legs": [
+     "NFLX  260807C00067500"
+    ],
+    "delta": 0.55,
+    "premium": 296.0,
+    "r_underlying": -1.1275409836065287,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-07-21T19:10:00+00:00",
+    "exit_time": "2026-07-21T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 290.29,
+    "pnl": 36.71,
+    "gross_mid": 45.0,
+    "costs": 8.29,
+    "legs": [
+     "NFLX  260807C00067500"
+    ],
+    "delta": 0.55,
+    "premium": 289.0,
+    "r_underlying": 2.445901639344211,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-07-28T13:57:00+00:00",
+    "exit_time": "2026-07-28T15:13:00+00:00",
+    "exit_reason": "stop",
+    "risk": 325.29,
+    "pnl": -45.29,
+    "gross_mid": -37.0,
+    "costs": 8.29,
+    "legs": [
+     "IWM   260806P00292500"
+    ],
+    "delta": -0.55,
+    "premium": 324.0,
+    "r_underlying": -1.0727272727273067,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-08-10T14:30:00+00:00",
+    "exit_time": "2026-08-10T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 244.29,
+    "pnl": 70.71,
+    "gross_mid": 79.0,
+    "costs": 8.29,
+    "legs": [
+     "NFLX  260828C00074500"
+    ],
+    "delta": 0.54,
+    "premium": 243.0,
+    "r_underlying": 3.85341614906831,
+    "source": "proxy",
+    "regime": "STRONG_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-08-13T13:54:00+00:00",
+    "exit_time": "2026-08-13T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 240.29,
+    "pnl": 48.71,
+    "gross_mid": 57.0,
+    "costs": 8.29,
+    "legs": [
+     "NFLX  260828C00077000"
+    ],
+    "delta": 0.54,
+    "premium": 239.0,
+    "r_underlying": 1.4902097902097917,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-08-21T15:07:00+00:00",
+    "exit_time": "2026-08-21T17:40:00+00:00",
+    "exit_reason": "stop",
+    "risk": 268.29,
+    "pnl": -35.29,
+    "gross_mid": -27.0,
+    "costs": 8.29,
+    "legs": [
+     "NFLX  260911C00080000"
+    ],
+    "delta": 0.55,
+    "premium": 267.0,
+    "r_underlying": -1.1063043478260823,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-08-25T15:30:00+00:00",
+    "exit_time": "2026-08-25T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 237.29,
+    "pnl": 17.71,
+    "gross_mid": 26.0,
+    "costs": 8.29,
+    "legs": [
+     "NFLX  260911C00081500"
+    ],
+    "delta": 0.54,
+    "premium": 236.0,
+    "r_underlying": 0.5634615384615258,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-08-28T14:34:00+00:00",
+    "exit_time": "2026-08-28T16:23:00+00:00",
+    "exit_reason": "v2_runner_stop",
+    "risk": 284.29,
+    "pnl": 5.71,
+    "gross_mid": 14.0,
+    "costs": 8.29,
+    "legs": [
+     "NFLX  260918C00081000"
+    ],
+    "delta": 0.55,
+    "premium": 283.0,
+    "r_underlying": 0.8494117647058788,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-09-01T15:41:00+00:00",
+    "exit_time": "2026-09-01T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 253.29,
+    "pnl": -29.29,
+    "gross_mid": -21.0,
+    "costs": 8.29,
+    "legs": [
+     "NFLX  260918C00080500"
+    ],
+    "delta": 0.56,
+    "premium": 252.0,
+    "r_underlying": -0.4388387193074186,
+    "source": "proxy",
+    "regime": "STRONG_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-09-02T13:54:00+00:00",
+    "exit_time": "2026-09-02T17:19:00+00:00",
+    "exit_reason": "stop",
+    "risk": 239.29,
+    "pnl": -54.29,
+    "gross_mid": -46.0,
+    "costs": 8.29,
+    "legs": [
+     "NFLX  260918C00082500"
+    ],
+    "delta": 0.54,
+    "premium": 238.0,
+    "r_underlying": -1.0889036544850474,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-09-17T14:48:00+00:00",
+    "exit_time": "2026-09-17T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 260.29,
+    "pnl": 3.71,
+    "gross_mid": 12.0,
+    "costs": 8.29,
+    "legs": [
+     "NFLX  261002P00076500"
+    ],
+    "delta": -0.54,
+    "premium": 259.0,
+    "r_underlying": 0.48168180426574,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-09-18T18:47:00+00:00",
+    "exit_time": "2026-09-18T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 258.29,
+    "pnl": -9.29,
+    "gross_mid": -1.0,
+    "costs": 8.29,
+    "legs": [
+     "NFLX  261009C00071500"
+    ],
+    "delta": 0.55,
+    "premium": 257.0,
+    "r_underlying": -0.2554054054054038,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-09-22T17:18:00+00:00",
+    "exit_time": "2026-09-22T17:53:00+00:00",
+    "exit_reason": "stop",
+    "risk": 326.29,
+    "pnl": -40.29,
+    "gross_mid": -32.0,
+    "costs": 8.29,
+    "legs": [
+     "IWM   261001P00288000"
+    ],
+    "delta": -0.55,
+    "premium": 325.0,
+    "r_underlying": -1.233254156769603,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-09-23T13:54:00+00:00",
+    "exit_time": "2026-09-23T14:08:00+00:00",
+    "exit_reason": "v2_breakeven_stop",
+    "risk": 286.29,
+    "pnl": -20.29,
+    "gross_mid": -12.0,
+    "costs": 8.29,
+    "legs": [
+     "NFLX  261009P00072500"
+    ],
+    "delta": -0.56,
+    "premium": 285.0,
+    "r_underlying": -0.43018867924527565,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-09-28T13:57:00+00:00",
+    "exit_time": "2026-09-28T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 271.29,
+    "pnl": 38.71,
+    "gross_mid": 47.0,
+    "costs": 8.29,
+    "legs": [
+     "NFLX  261016P00071000"
+    ],
+    "delta": -0.54,
+    "premium": 270.0,
+    "r_underlying": 0.8251572327043978,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-10-05T13:59:00+00:00",
+    "exit_time": "2026-10-05T14:03:00+00:00",
+    "exit_reason": "stop",
+    "risk": 245.29,
+    "pnl": -16.29,
+    "gross_mid": -8.0,
+    "costs": 8.29,
+    "legs": [
+     "NFLX  261023P00067500"
+    ],
+    "delta": -0.54,
+    "premium": 244.0,
+    "r_underlying": -1.367257774351116,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-10-05T14:51:00+00:00",
+    "exit_time": "2026-10-05T15:07:00+00:00",
+    "exit_reason": "stop",
+    "risk": 223.29,
+    "pnl": -15.29,
+    "gross_mid": -7.0,
+    "costs": 8.29,
+    "legs": [
+     "NFLX  261023C00067000"
+    ],
+    "delta": 0.54,
+    "premium": 222.0,
+    "r_underlying": -1.356977640709303,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-10-28T14:38:00+00:00",
+    "exit_time": "2026-10-28T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 235.29,
+    "pnl": -30.29,
+    "gross_mid": -18.0,
+    "costs": 12.29,
+    "legs": [
+     "NFLX  261113P00063000"
+    ],
+    "delta": -0.59,
+    "premium": 234.0,
+    "r_underlying": -0.689230769230778,
+    "source": "real",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "UBER",
+    "side": "CALL",
+    "entry_time": "2026-10-29T14:45:00+00:00",
+    "exit_time": "2026-10-29T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 311.29,
+    "pnl": -1.29,
+    "gross_mid": 10.0,
+    "costs": 11.29,
+    "legs": [
+     "UBER  261113C00065000"
+    ],
+    "delta": 0.55,
+    "premium": 310.0,
+    "r_underlying": 0.40816326530611197,
+    "source": "real",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-11-06T15:57:00+00:00",
+    "exit_time": "2026-11-06T17:32:00+00:00",
+    "exit_reason": "stop",
+    "risk": 146.29,
+    "pnl": -25.29,
+    "gross_mid": -21.5,
+    "costs": 3.79,
+    "legs": [
+     "NFLX  261113C00064000"
+    ],
+    "delta": 0.55,
+    "premium": 145.0,
+    "r_underlying": -1.1183144246353482,
+    "source": "real",
+    "regime": "WEAK_BULLISH"
+   }
+  ],
+  "single_budget": [],
+  "single_otm_budget": [
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-06-01T14:38:00+00:00",
+    "exit_time": "2026-06-01T15:59:00+00:00",
+    "exit_reason": "stop",
+    "risk": 93.29,
+    "pnl": -25.29,
+    "gross_mid": -19.5,
+    "costs": 5.79,
+    "legs": [
+     "NFLX  260612P00084500"
+    ],
+    "delta": -0.37,
+    "premium": 92.0,
+    "r_underlying": -1.1327731092437008,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-06-09T17:11:00+00:00",
+    "exit_time": "2026-06-09T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 94.29,
+    "pnl": -5.29,
+    "gross_mid": 1.0,
+    "costs": 6.29,
+    "legs": [
+     "NFLX  260619P00081000"
+    ],
+    "delta": -0.4,
+    "premium": 93.0,
+    "r_underlying": 0.46567164179102694,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-06-12T13:54:00+00:00",
+    "exit_time": "2026-06-12T15:24:00+00:00",
+    "exit_reason": "stop",
+    "risk": 92.29,
+    "pnl": -38.29,
+    "gross_mid": -32.5,
+    "costs": 5.79,
+    "legs": [
+     "NFLX  260626P00079000"
+    ],
+    "delta": -0.39,
+    "premium": 91.0,
+    "r_underlying": -1.0555223880597224,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-06-22T14:30:00+00:00",
+    "exit_time": "2026-06-22T17:47:00+00:00",
+    "exit_reason": "v2_runner_stop",
+    "risk": 81.29,
+    "pnl": 88.71,
+    "gross_mid": 96.0,
+    "costs": 7.29,
+    "legs": [
+     "NFLX  260703P00074000"
+    ],
+    "delta": -0.39,
+    "premium": 80.0,
+    "r_underlying": 3.2766101694914913,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "UBER",
+    "side": "CALL",
+    "entry_time": "2026-06-26T14:32:00+00:00",
+    "exit_time": "2026-06-26T18:45:00+00:00",
+    "exit_reason": "v2_runner_stop",
+    "risk": 101.29,
+    "pnl": 13.71,
+    "gross_mid": 24.0,
+    "costs": 10.29,
+    "legs": [
+     "UBER  260703C00080500"
+    ],
+    "delta": 0.23,
+    "premium": 100.0,
+    "r_underlying": 1.871285693578778,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "UBER",
+    "side": "CALL",
+    "entry_time": "2026-07-09T14:58:00+00:00",
+    "exit_time": "2026-07-09T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 101.29,
+    "pnl": -2.29,
+    "gross_mid": 8.0,
+    "costs": 10.29,
+    "legs": [
+     "UBER  260717C00082500"
+    ],
+    "delta": 0.2,
+    "premium": 100.0,
+    "r_underlying": 1.0099999999999867,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-07-15T16:20:00+00:00",
+    "exit_time": "2026-07-15T16:53:00+00:00",
+    "exit_reason": "stop",
+    "risk": 96.29,
+    "pnl": -17.29,
+    "gross_mid": -12.0,
+    "costs": 5.29,
+    "legs": [
+     "IWM   260722P00289500"
+    ],
+    "delta": -0.22,
+    "premium": 95.0,
+    "r_underlying": -1.062399999999993,
+    "source": "proxy",
+    "regime": "STRONG_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "CALL",
+    "entry_time": "2026-07-15T17:48:00+00:00",
+    "exit_time": "2026-07-15T18:45:00+00:00",
+    "exit_reason": "stop",
+    "risk": 93.29,
+    "pnl": -17.29,
+    "gross_mid": -12.5,
+    "costs": 4.79,
+    "legs": [
+     "IWM   260722C00302000"
+    ],
+    "delta": 0.22,
+    "premium": 92.0,
+    "r_underlying": -1.1823999999999746,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "CALL",
+    "entry_time": "2026-07-17T16:11:00+00:00",
+    "exit_time": "2026-07-17T19:09:00+00:00",
+    "exit_reason": "stop",
+    "risk": 91.29,
+    "pnl": -28.29,
+    "gross_mid": -23.5,
+    "costs": 4.79,
+    "legs": [
+     "IWM   260724C00300000"
+    ],
+    "delta": 0.22,
+    "premium": 90.0,
+    "r_underlying": -1.0362573099415124,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "CALL",
+    "entry_time": "2026-07-21T14:31:00+00:00",
+    "exit_time": "2026-07-21T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 93.29,
+    "pnl": 35.71,
+    "gross_mid": 41.0,
+    "costs": 5.29,
+    "legs": [
+     "IWM   260728C00299000"
+    ],
+    "delta": 0.26,
+    "premium": 92.0,
+    "r_underlying": 1.7130434782609605,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-07-22T14:30:00+00:00",
+    "exit_time": "2026-07-22T15:26:00+00:00",
+    "exit_reason": "v2_breakeven_stop",
+    "risk": 91.29,
+    "pnl": -5.29,
+    "gross_mid": 0.0,
+    "costs": 5.29,
+    "legs": [
+     "IWM   260729P00291000"
+    ],
+    "delta": -0.24,
+    "premium": 90.0,
+    "r_underlying": -0.2144000000000364,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "UBER",
+    "side": "PUT",
+    "entry_time": "2026-07-23T14:32:00+00:00",
+    "exit_time": "2026-07-23T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 97.29,
+    "pnl": -1.29,
+    "gross_mid": 9.0,
+    "costs": 10.29,
+    "legs": [
+     "UBER  260731P00064000"
+    ],
+    "delta": -0.2,
+    "premium": 96.0,
+    "r_underlying": 0.8511278195488556,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-07-27T14:30:00+00:00",
+    "exit_time": "2026-07-27T15:00:00+00:00",
+    "exit_reason": "stop",
+    "risk": 95.29,
+    "pnl": -28.29,
+    "gross_mid": -23.0,
+    "costs": 5.29,
+    "legs": [
+     "IWM   260803P00288500"
+    ],
+    "delta": -0.25,
+    "premium": 94.0,
+    "r_underlying": -1.107920792079254,
+    "source": "proxy",
+    "regime": "STRONG_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-07-28T13:57:00+00:00",
+    "exit_time": "2026-07-28T15:13:00+00:00",
+    "exit_reason": "stop",
+    "risk": 93.29,
+    "pnl": -22.29,
+    "gross_mid": -17.0,
+    "costs": 5.29,
+    "legs": [
+     "IWM   260804P00287500"
+    ],
+    "delta": -0.25,
+    "premium": 92.0,
+    "r_underlying": -1.0727272727273067,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-07-30T14:56:00+00:00",
+    "exit_time": "2026-07-30T15:47:00+00:00",
+    "exit_reason": "stop",
+    "risk": 85.29,
+    "pnl": -28.29,
+    "gross_mid": -23.5,
+    "costs": 4.79,
+    "legs": [
+     "IWM   260806P00284500"
+    ],
+    "delta": -0.22,
+    "premium": 84.0,
+    "r_underlying": -1.082291666666685,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-07-30T15:49:00+00:00",
+    "exit_time": "2026-07-30T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 87.29,
+    "pnl": 45.71,
+    "gross_mid": 51.5,
+    "costs": 5.79,
+    "legs": [
+     "NFLX  260807C00074000"
+    ],
+    "delta": 0.32,
+    "premium": 86.0,
+    "r_underlying": 3.335897435897451,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-08-06T15:20:00+00:00",
+    "exit_time": "2026-08-06T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 96.29,
+    "pnl": 0.71,
+    "gross_mid": 7.0,
+    "costs": 6.29,
+    "legs": [
+     "NFLX  260814P00072500"
+    ],
+    "delta": -0.35,
+    "premium": 95.0,
+    "r_underlying": 0.10676691729321897,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-08-10T14:30:00+00:00",
+    "exit_time": "2026-08-10T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 91.29,
+    "pnl": 43.71,
+    "gross_mid": 49.5,
+    "costs": 5.79,
+    "legs": [
+     "NFLX  260821C00077000"
+    ],
+    "delta": 0.32,
+    "premium": 90.0,
+    "r_underlying": 3.85341614906831,
+    "source": "proxy",
+    "regime": "STRONG_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-08-12T13:54:00+00:00",
+    "exit_time": "2026-08-12T17:51:00+00:00",
+    "exit_reason": "stop",
+    "risk": 87.29,
+    "pnl": -16.29,
+    "gross_mid": -11.0,
+    "costs": 5.29,
+    "legs": [
+     "NFLX  260821P00072000"
+    ],
+    "delta": -0.31,
+    "premium": 86.0,
+    "r_underlying": -1.086666666666656,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-08-13T13:54:00+00:00",
+    "exit_time": "2026-08-13T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 94.29,
+    "pnl": 31.71,
+    "gross_mid": 37.5,
+    "costs": 5.79,
+    "legs": [
+     "NFLX  260821C00079000"
+    ],
+    "delta": 0.34,
+    "premium": 93.0,
+    "r_underlying": 1.4902097902097917,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-08-17T14:30:00+00:00",
+    "exit_time": "2026-08-17T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 88.29,
+    "pnl": 26.71,
+    "gross_mid": 32.5,
+    "costs": 5.79,
+    "legs": [
+     "NFLX  260828P00075500"
+    ],
+    "delta": -0.33,
+    "premium": 87.0,
+    "r_underlying": 1.0244224422442179,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-08-21T15:07:00+00:00",
+    "exit_time": "2026-08-21T17:40:00+00:00",
+    "exit_reason": "stop",
+    "risk": 95.29,
+    "pnl": -24.29,
+    "gross_mid": -18.5,
+    "costs": 5.79,
+    "legs": [
+     "NFLX  260828C00081500"
+    ],
+    "delta": 0.39,
+    "premium": 94.0,
+    "r_underlying": -1.1063043478260823,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-08-25T15:30:00+00:00",
+    "exit_time": "2026-08-25T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 98.29,
+    "pnl": 11.71,
+    "gross_mid": 17.5,
+    "costs": 5.79,
+    "legs": [
+     "NFLX  260904C00083500"
+    ],
+    "delta": 0.35,
+    "premium": 97.0,
+    "r_underlying": 0.5634615384615258,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-08-28T14:34:00+00:00",
+    "exit_time": "2026-08-28T16:23:00+00:00",
+    "exit_reason": "v2_runner_stop",
+    "risk": 86.29,
+    "pnl": 2.71,
+    "gross_mid": 8.5,
+    "costs": 5.79,
+    "legs": [
+     "NFLX  260904C00083000"
+    ],
+    "delta": 0.35,
+    "premium": 85.0,
+    "r_underlying": 0.8494117647058788,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-09-01T15:41:00+00:00",
+    "exit_time": "2026-09-01T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 93.29,
+    "pnl": -18.29,
+    "gross_mid": -13.0,
+    "costs": 5.29,
+    "legs": [
+     "NFLX  260911C00083000"
+    ],
+    "delta": 0.33,
+    "premium": 92.0,
+    "r_underlying": -0.4388387193074186,
+    "source": "proxy",
+    "regime": "STRONG_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-09-02T13:54:00+00:00",
+    "exit_time": "2026-09-02T17:19:00+00:00",
+    "exit_reason": "stop",
+    "risk": 97.29,
+    "pnl": -34.29,
+    "gross_mid": -29.0,
+    "costs": 5.29,
+    "legs": [
+     "NFLX  260911C00084500"
+    ],
+    "delta": 0.35,
+    "premium": 96.0,
+    "r_underlying": -1.0889036544850474,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "CALL",
+    "entry_time": "2026-09-10T14:30:00+00:00",
+    "exit_time": "2026-09-10T14:44:00+00:00",
+    "exit_reason": "stop",
+    "risk": 92.29,
+    "pnl": -13.29,
+    "gross_mid": -8.0,
+    "costs": 5.29,
+    "legs": [
+     "IWM   260917C00294500"
+    ],
+    "delta": 0.23,
+    "premium": 91.0,
+    "r_underlying": -1.0916179337231469,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "UBER",
+    "side": "PUT",
+    "entry_time": "2026-09-15T14:44:00+00:00",
+    "exit_time": "2026-09-15T16:55:00+00:00",
+    "exit_reason": "stop",
+    "risk": 96.29,
+    "pnl": -19.29,
+    "gross_mid": -10.0,
+    "costs": 9.29,
+    "legs": [
+     "UBER  260925P00066500"
+    ],
+    "delta": -0.22,
+    "premium": 95.0,
+    "r_underlying": -1.1234972677595814,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-09-17T14:48:00+00:00",
+    "exit_time": "2026-09-17T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 89.29,
+    "pnl": 0.71,
+    "gross_mid": 6.0,
+    "costs": 5.29,
+    "legs": [
+     "NFLX  260925P00074000"
+    ],
+    "delta": -0.32,
+    "premium": 88.0,
+    "r_underlying": 0.48168180426574,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-09-18T13:55:00+00:00",
+    "exit_time": "2026-09-18T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 93.29,
+    "pnl": -26.29,
+    "gross_mid": -21.5,
+    "costs": 4.79,
+    "legs": [
+     "IWM   260925P00279000"
+    ],
+    "delta": -0.24,
+    "premium": 92.0,
+    "r_underlying": -0.8777464788731918,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-09-22T17:18:00+00:00",
+    "exit_time": "2026-09-22T17:53:00+00:00",
+    "exit_reason": "stop",
+    "risk": 92.29,
+    "pnl": -18.29,
+    "gross_mid": -13.0,
+    "costs": 5.29,
+    "legs": [
+     "IWM   260930P00282500"
+    ],
+    "delta": -0.24,
+    "premium": 91.0,
+    "r_underlying": -1.233254156769603,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-09-23T13:54:00+00:00",
+    "exit_time": "2026-09-23T14:08:00+00:00",
+    "exit_reason": "v2_breakeven_stop",
+    "risk": 76.29,
+    "pnl": -11.29,
+    "gross_mid": -6.0,
+    "costs": 5.29,
+    "legs": [
+     "NFLX  261002P00069000"
+    ],
+    "delta": -0.27,
+    "premium": 75.0,
+    "r_underlying": -0.43018867924527565,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-09-24T14:46:00+00:00",
+    "exit_time": "2026-09-24T16:16:00+00:00",
+    "exit_reason": "v2_runner_stop",
+    "risk": 89.29,
+    "pnl": -23.29,
+    "gross_mid": -18.5,
+    "costs": 4.79,
+    "legs": [
+     "IWM   261001P00275500"
+    ],
+    "delta": -0.22,
+    "premium": 88.0,
+    "r_underlying": -0.10535714285720334,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-09-28T13:57:00+00:00",
+    "exit_time": "2026-09-28T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 74.29,
+    "pnl": 17.71,
+    "gross_mid": 23.0,
+    "costs": 5.29,
+    "legs": [
+     "NFLX  261009P00067500"
+    ],
+    "delta": -0.26,
+    "premium": 73.0,
+    "r_underlying": 0.8251572327043978,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-09-30T14:35:00+00:00",
+    "exit_time": "2026-09-30T14:43:00+00:00",
+    "exit_reason": "stop",
+    "risk": 78.29,
+    "pnl": -11.29,
+    "gross_mid": -6.5,
+    "costs": 4.79,
+    "legs": [
+     "IWM   261007P00274500"
+    ],
+    "delta": -0.21,
+    "premium": 77.0,
+    "r_underlying": -1.1065217391303968,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-09-30T17:16:00+00:00",
+    "exit_time": "2026-09-30T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 80.29,
+    "pnl": 21.71,
+    "gross_mid": 27.0,
+    "costs": 5.29,
+    "legs": [
+     "IWM   261007P00274500"
+    ],
+    "delta": -0.22,
+    "premium": 79.0,
+    "r_underlying": 2.2521739130432854,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-10-01T13:54:00+00:00",
+    "exit_time": "2026-10-01T18:01:00+00:00",
+    "exit_reason": "v2_breakeven_stop",
+    "risk": 84.29,
+    "pnl": -6.29,
+    "gross_mid": -1.0,
+    "costs": 5.29,
+    "legs": [
+     "NFLX  261009P00067000"
+    ],
+    "delta": -0.33,
+    "premium": 83.0,
+    "r_underlying": -0.1285714285714186,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-10-02T15:07:00+00:00",
+    "exit_time": "2026-10-02T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 83.29,
+    "pnl": -5.29,
+    "gross_mid": 0.0,
+    "costs": 5.29,
+    "legs": [
+     "IWM   261009P00278000"
+    ],
+    "delta": -0.24,
+    "premium": 82.0,
+    "r_underlying": 0.2321678321678244,
+    "source": "proxy",
+    "regime": "STRONG_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-10-05T13:59:00+00:00",
+    "exit_time": "2026-10-05T14:03:00+00:00",
+    "exit_reason": "stop",
+    "risk": 88.29,
+    "pnl": -10.29,
+    "gross_mid": -5.0,
+    "costs": 5.29,
+    "legs": [
+     "NFLX  261016P00065000"
+    ],
+    "delta": -0.32,
+    "premium": 87.0,
+    "r_underlying": -1.367257774351116,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-10-05T14:51:00+00:00",
+    "exit_time": "2026-10-05T15:07:00+00:00",
+    "exit_reason": "stop",
+    "risk": 77.29,
+    "pnl": -9.29,
+    "gross_mid": -4.0,
+    "costs": 5.29,
+    "legs": [
+     "NFLX  261016C00069500"
+    ],
+    "delta": 0.3,
+    "premium": 76.0,
+    "r_underlying": -1.356977640709303,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-10-07T14:32:00+00:00",
+    "exit_time": "2026-10-07T16:14:00+00:00",
+    "exit_reason": "v2_breakeven_stop",
+    "risk": 87.29,
+    "pnl": -2.29,
+    "gross_mid": 3.0,
+    "costs": 5.29,
+    "legs": [
+     "IWM   261016P00273000"
+    ],
+    "delta": -0.21,
+    "premium": 86.0,
+    "r_underlying": -0.1350427350426698,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-10-07T16:14:00+00:00",
+    "exit_time": "2026-10-07T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 73.29,
+    "pnl": 12.71,
+    "gross_mid": 18.5,
+    "costs": 5.79,
+    "legs": [
+     "NFLX  261016C00071000"
+    ],
+    "delta": 0.32,
+    "premium": 72.0,
+    "r_underlying": 1.1913043478260712,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-10-08T14:54:00+00:00",
+    "exit_time": "2026-10-08T16:18:00+00:00",
+    "exit_reason": "v2_breakeven_stop",
+    "risk": 86.29,
+    "pnl": -20.29,
+    "gross_mid": -15.0,
+    "costs": 5.29,
+    "legs": [
+     "IWM   261015P00271500"
+    ],
+    "delta": -0.24,
+    "premium": 85.0,
+    "r_underlying": -2.1185929648241886,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-10-15T14:46:00+00:00",
+    "exit_time": "2026-10-15T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 80.29,
+    "pnl": -15.29,
+    "gross_mid": -9.5,
+    "costs": 5.79,
+    "legs": [
+     "NFLX  261023C00074000"
+    ],
+    "delta": 0.37,
+    "premium": 79.0,
+    "r_underlying": -0.3055118110236434,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-10-20T13:55:00+00:00",
+    "exit_time": "2026-10-20T14:05:00+00:00",
+    "exit_reason": "v2_breakeven_stop",
+    "risk": 83.29,
+    "pnl": -15.29,
+    "gross_mid": -9.5,
+    "costs": 5.79,
+    "legs": [
+     "NFLX  261030C00071500"
+    ],
+    "delta": 0.38,
+    "premium": 82.0,
+    "r_underlying": -0.2319327731092327,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-10-20T15:12:00+00:00",
+    "exit_time": "2026-10-20T15:26:00+00:00",
+    "exit_reason": "stop",
+    "risk": 71.29,
+    "pnl": -12.29,
+    "gross_mid": -7.0,
+    "costs": 5.29,
+    "legs": [
+     "NFLX  261030C00071500"
+    ],
+    "delta": 0.34,
+    "premium": 70.0,
+    "r_underlying": -1.1226890756302446,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-10-27T13:54:00+00:00",
+    "exit_time": "2026-10-27T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 65.29,
+    "pnl": -5.29,
+    "gross_mid": 1.5,
+    "costs": 6.79,
+    "legs": [
+     "NFLX  261106P00061000"
+    ],
+    "delta": -0.27,
+    "premium": 64.0,
+    "r_underlying": 1.2997142857142894,
+    "source": "real",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-10-28T14:38:00+00:00",
+    "exit_time": "2026-10-28T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 54.29,
+    "pnl": -13.29,
+    "gross_mid": -9.0,
+    "costs": 4.29,
+    "legs": [
+     "NFLX  261106P00060000"
+    ],
+    "delta": -0.26,
+    "premium": 53.0,
+    "r_underlying": -0.689230769230778,
+    "source": "real",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-11-06T15:57:00+00:00",
+    "exit_time": "2026-11-06T17:32:00+00:00",
+    "exit_reason": "stop",
+    "risk": 63.29,
+    "pnl": -15.29,
+    "gross_mid": -12.5,
+    "costs": 2.79,
+    "legs": [
+     "NFLX  261113C00066000"
+    ],
+    "delta": 0.31,
+    "premium": 62.0,
+    "r_underlying": -1.1183144246353482,
+    "source": "real",
+    "regime": "WEAK_BULLISH"
+   }
+  ],
+  "debit_spread": [
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-06-01T13:59:00+00:00",
+    "exit_time": "2026-06-01T15:06:00+00:00",
+    "exit_reason": "v2_breakeven_stop",
+    "risk": 92.58,
+    "pnl": -18.58,
+    "gross_mid": -2.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260619P00290000",
+     "IWM   260619P00288500"
+    ],
+    "width": 1.5,
+    "debit": 90.0,
+    "r_underlying": -0.19527559055114452,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "SPY",
+    "side": "CALL",
+    "entry_time": "2026-06-02T14:41:00+00:00",
+    "exit_time": "2026-06-02T16:02:00+00:00",
+    "exit_reason": "v2_runner_stop",
+    "risk": 63.58,
+    "pnl": -18.58,
+    "gross_mid": 2.0,
+    "costs": 20.58,
+    "legs": [
+     "SPY   260623C00758000",
+     "SPY   260623C00759000"
+    ],
+    "width": 1.0,
+    "debit": 61.0,
+    "r_underlying": 2.082828282828144,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-06-03T13:54:00+00:00",
+    "exit_time": "2026-06-03T14:11:00+00:00",
+    "exit_reason": "stop",
+    "risk": 91.58,
+    "pnl": -22.58,
+    "gross_mid": -6.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260618P00290000",
+     "IWM   260618P00288500"
+    ],
+    "width": 1.5,
+    "debit": 89.0,
+    "r_underlying": -1.198058252427139,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "SPY",
+    "side": "PUT",
+    "entry_time": "2026-06-03T14:51:00+00:00",
+    "exit_time": "2026-06-03T18:26:00+00:00",
+    "exit_reason": "v2_breakeven_stop",
+    "risk": 65.58,
+    "pnl": -19.58,
+    "gross_mid": 1.0,
+    "costs": 20.58,
+    "legs": [
+     "SPY   260611P00759000",
+     "SPY   260611P00758000"
+    ],
+    "width": 1.0,
+    "debit": 63.0,
+    "r_underlying": -0.07225806451619336,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "SPY",
+    "side": "CALL",
+    "entry_time": "2026-06-04T14:30:00+00:00",
+    "exit_time": "2026-06-04T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 64.58,
+    "pnl": -16.58,
+    "gross_mid": 4.0,
+    "costs": 20.58,
+    "legs": [
+     "SPY   260625C00753000",
+     "SPY   260625C00754000"
+    ],
+    "width": 1.0,
+    "debit": 62.0,
+    "r_underlying": 3.1312499999998438,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "SPY",
+    "side": "PUT",
+    "entry_time": "2026-06-05T13:54:00+00:00",
+    "exit_time": "2026-06-05T14:11:00+00:00",
+    "exit_reason": "v2_breakeven_stop",
+    "risk": 66.58,
+    "pnl": -19.58,
+    "gross_mid": 1.0,
+    "costs": 20.58,
+    "legs": [
+     "SPY   260626P00755000",
+     "SPY   260626P00754000"
+    ],
+    "width": 1.0,
+    "debit": 64.0,
+    "r_underlying": -0.12870588235290872,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-06-05T15:18:00+00:00",
+    "exit_time": "2026-06-05T19:50:00+00:00",
+    "exit_reason": "v2_runner_stop",
+    "risk": 65.58,
+    "pnl": -9.58,
+    "gross_mid": 12.0,
+    "costs": 21.58,
+    "legs": [
+     "IWM   260616P00289000",
+     "IWM   260616P00288000"
+    ],
+    "width": 1.0,
+    "debit": 63.0,
+    "r_underlying": 3.936886993603395,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-06-09T14:47:00+00:00",
+    "exit_time": "2026-06-09T17:03:00+00:00",
+    "exit_reason": "v2_runner_stop",
+    "risk": 65.58,
+    "pnl": -9.58,
+    "gross_mid": 9.5,
+    "costs": 19.08,
+    "legs": [
+     "IWM   260623P00288000",
+     "IWM   260623P00287000"
+    ],
+    "width": 1.0,
+    "debit": 63.0,
+    "r_underlying": 3.929056603773626,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-06-09T17:11:00+00:00",
+    "exit_time": "2026-06-09T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 75.58,
+    "pnl": -11.58,
+    "gross_mid": 2.0,
+    "costs": 13.58,
+    "legs": [
+     "NFLX  260619P00082000",
+     "NFLX  260619P00080500"
+    ],
+    "width": 1.5,
+    "debit": 73.0,
+    "r_underlying": 0.46567164179102694,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "SPY",
+    "side": "PUT",
+    "entry_time": "2026-06-10T15:12:00+00:00",
+    "exit_time": "2026-06-10T18:03:00+00:00",
+    "exit_reason": "v2_breakeven_stop",
+    "risk": 67.58,
+    "pnl": -21.58,
+    "gross_mid": -1.0,
+    "costs": 20.58,
+    "legs": [
+     "SPY   260625P00736000",
+     "SPY   260625P00735000"
+    ],
+    "width": 1.0,
+    "debit": 65.0,
+    "r_underlying": -0.024547368421069176,
+    "source": "proxy",
+    "regime": "STRONG_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "CALL",
+    "entry_time": "2026-06-11T14:43:00+00:00",
+    "exit_time": "2026-06-11T14:53:00+00:00",
+    "exit_reason": "stop",
+    "risk": 61.58,
+    "pnl": -18.58,
+    "gross_mid": -2.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260702C00285000",
+     "IWM   260702C00286000"
+    ],
+    "width": 1.0,
+    "debit": 59.0,
+    "r_underlying": -1.149999999999981,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-06-12T13:54:00+00:00",
+    "exit_time": "2026-06-12T15:24:00+00:00",
+    "exit_reason": "stop",
+    "risk": 71.58,
+    "pnl": -34.58,
+    "gross_mid": -23.0,
+    "costs": 11.58,
+    "legs": [
+     "NFLX  260619P00080000",
+     "NFLX  260619P00078500"
+    ],
+    "width": 1.5,
+    "debit": 69.0,
+    "r_underlying": -1.0555223880597224,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "SPY",
+    "side": "CALL",
+    "entry_time": "2026-06-15T14:30:00+00:00",
+    "exit_time": "2026-06-15T17:56:00+00:00",
+    "exit_reason": "v2_runner_stop",
+    "risk": 63.58,
+    "pnl": -17.58,
+    "gross_mid": 3.0,
+    "costs": 20.58,
+    "legs": [
+     "SPY   260703C00751000",
+     "SPY   260703C00752000"
+    ],
+    "width": 1.0,
+    "debit": 61.0,
+    "r_underlying": 1.7952941176470802,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-06-16T14:30:00+00:00",
+    "exit_time": "2026-06-16T15:11:00+00:00",
+    "exit_reason": "v2_breakeven_stop",
+    "risk": 66.58,
+    "pnl": -17.58,
+    "gross_mid": -1.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260701P00297000",
+     "IWM   260701P00296000"
+    ],
+    "width": 1.0,
+    "debit": 64.0,
+    "r_underlying": -0.17122302158278785,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "CALL",
+    "entry_time": "2026-06-22T13:54:00+00:00",
+    "exit_time": "2026-06-22T14:17:00+00:00",
+    "exit_reason": "stop",
+    "risk": 60.58,
+    "pnl": -20.58,
+    "gross_mid": -4.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260629C00298000",
+     "IWM   260629C00299000"
+    ],
+    "width": 1.0,
+    "debit": 58.0,
+    "r_underlying": -1.190697674418675,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "SPY",
+    "side": "PUT",
+    "entry_time": "2026-06-22T14:30:00+00:00",
+    "exit_time": "2026-06-22T15:02:00+00:00",
+    "exit_reason": "v2_runner_stop",
+    "risk": 67.58,
+    "pnl": -19.58,
+    "gross_mid": 1.0,
+    "costs": 20.58,
+    "legs": [
+     "SPY   260706P00752000",
+     "SPY   260706P00751000"
+    ],
+    "width": 1.0,
+    "debit": 65.0,
+    "r_underlying": 0.9546218487394176,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "CALL",
+    "entry_time": "2026-06-24T14:32:00+00:00",
+    "exit_time": "2026-06-24T17:08:00+00:00",
+    "exit_reason": "v2_breakeven_stop",
+    "risk": 61.58,
+    "pnl": -17.58,
+    "gross_mid": -1.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260714C00296500",
+     "IWM   260714C00297500"
+    ],
+    "width": 1.0,
+    "debit": 59.0,
+    "r_underlying": -0.28105726872244113,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "CALL",
+    "entry_time": "2026-06-25T14:55:00+00:00",
+    "exit_time": "2026-06-25T15:02:00+00:00",
+    "exit_reason": "stop",
+    "risk": 61.58,
+    "pnl": -19.58,
+    "gross_mid": -3.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260702C00300000",
+     "IWM   260702C00301000"
+    ],
+    "width": 1.0,
+    "debit": 59.0,
+    "r_underlying": -1.2019323671497097,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "SPY",
+    "side": "CALL",
+    "entry_time": "2026-06-26T13:58:00+00:00",
+    "exit_time": "2026-06-26T16:13:00+00:00",
+    "exit_reason": "v2_runner_stop",
+    "risk": 64.58,
+    "pnl": -15.58,
+    "gross_mid": 5.0,
+    "costs": 20.58,
+    "legs": [
+     "SPY   260703C00729000",
+     "SPY   260703C00730000"
+    ],
+    "width": 1.0,
+    "debit": 62.0,
+    "r_underlying": 1.9327857142857703,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "SPY",
+    "side": "CALL",
+    "entry_time": "2026-06-30T13:54:00+00:00",
+    "exit_time": "2026-06-30T14:43:00+00:00",
+    "exit_reason": "v2_runner_stop",
+    "risk": 64.58,
+    "pnl": -18.58,
+    "gross_mid": 2.0,
+    "costs": 20.58,
+    "legs": [
+     "SPY   260707C00741000",
+     "SPY   260707C00742000"
+    ],
+    "width": 1.0,
+    "debit": 62.0,
+    "r_underlying": 1.3676056338027403,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "CALL",
+    "entry_time": "2026-07-01T15:04:00+00:00",
+    "exit_time": "2026-07-01T17:07:00+00:00",
+    "exit_reason": "v2_breakeven_stop",
+    "risk": 61.58,
+    "pnl": -17.58,
+    "gross_mid": -1.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260708C00300500",
+     "IWM   260708C00301500"
+    ],
+    "width": 1.0,
+    "debit": 59.0,
+    "r_underlying": -0.04861878453037816,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "CALL",
+    "entry_time": "2026-07-06T18:13:00+00:00",
+    "exit_time": "2026-07-06T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 35.58,
+    "pnl": -16.58,
+    "gross_mid": 0.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260727C00298500",
+     "IWM   260727C00299000"
+    ],
+    "width": 0.5,
+    "debit": 33.0,
+    "r_underlying": -0.9203703703703651,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-07-07T13:54:00+00:00",
+    "exit_time": "2026-07-07T15:09:00+00:00",
+    "exit_reason": "v2_breakeven_stop",
+    "risk": 37.58,
+    "pnl": -16.58,
+    "gross_mid": -0.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260720P00299500",
+     "IWM   260720P00299000"
+    ],
+    "width": 0.5,
+    "debit": 35.0,
+    "r_underlying": -0.038159371492703986,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "CALL",
+    "entry_time": "2026-07-09T13:54:00+00:00",
+    "exit_time": "2026-07-09T14:21:00+00:00",
+    "exit_reason": "stop",
+    "risk": 35.58,
+    "pnl": -17.58,
+    "gross_mid": -1.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260729C00295500",
+     "IWM   260729C00296000"
+    ],
+    "width": 0.5,
+    "debit": 33.0,
+    "r_underlying": -1.59999999999991,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "CALL",
+    "entry_time": "2026-07-09T14:30:00+00:00",
+    "exit_time": "2026-07-09T15:19:00+00:00",
+    "exit_reason": "v2_breakeven_stop",
+    "risk": 35.58,
+    "pnl": -16.58,
+    "gross_mid": 0.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260727C00296000",
+     "IWM   260727C00296500"
+    ],
+    "width": 0.5,
+    "debit": 33.0,
+    "r_underlying": -0.22944444444443593,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-07-15T16:20:00+00:00",
+    "exit_time": "2026-07-15T16:53:00+00:00",
+    "exit_reason": "stop",
+    "risk": 36.58,
+    "pnl": -17.58,
+    "gross_mid": -1.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260724P00296000",
+     "IWM   260724P00295500"
+    ],
+    "width": 0.5,
+    "debit": 34.0,
+    "r_underlying": -1.062399999999993,
+    "source": "proxy",
+    "regime": "STRONG_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "CALL",
+    "entry_time": "2026-07-15T17:48:00+00:00",
+    "exit_time": "2026-07-15T18:45:00+00:00",
+    "exit_reason": "stop",
+    "risk": 35.58,
+    "pnl": -16.58,
+    "gross_mid": 0.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260730C00295500",
+     "IWM   260730C00296000"
+    ],
+    "width": 0.5,
+    "debit": 33.0,
+    "r_underlying": -1.1823999999999746,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "CALL",
+    "entry_time": "2026-07-17T16:11:00+00:00",
+    "exit_time": "2026-07-17T19:09:00+00:00",
+    "exit_reason": "stop",
+    "risk": 35.58,
+    "pnl": -18.58,
+    "gross_mid": -2.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260807C00294000",
+     "IWM   260807C00294500"
+    ],
+    "width": 0.5,
+    "debit": 33.0,
+    "r_underlying": -1.0362573099415124,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "CALL",
+    "entry_time": "2026-07-21T14:31:00+00:00",
+    "exit_time": "2026-07-21T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 35.58,
+    "pnl": -12.58,
+    "gross_mid": 4.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260803C00294500",
+     "IWM   260803C00295000"
+    ],
+    "width": 0.5,
+    "debit": 33.0,
+    "r_underlying": 1.7130434782609605,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-07-22T14:30:00+00:00",
+    "exit_time": "2026-07-22T15:26:00+00:00",
+    "exit_reason": "v2_breakeven_stop",
+    "risk": 36.58,
+    "pnl": -15.58,
+    "gross_mid": 1.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260807P00297000",
+     "IWM   260807P00296500"
+    ],
+    "width": 0.5,
+    "debit": 34.0,
+    "r_underlying": -0.2144000000000364,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-07-27T14:30:00+00:00",
+    "exit_time": "2026-07-27T15:00:00+00:00",
+    "exit_reason": "stop",
+    "risk": 36.58,
+    "pnl": -17.58,
+    "gross_mid": -1.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260814P00294000",
+     "IWM   260814P00293500"
+    ],
+    "width": 0.5,
+    "debit": 34.0,
+    "r_underlying": -1.107920792079254,
+    "source": "proxy",
+    "regime": "STRONG_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-07-28T13:57:00+00:00",
+    "exit_time": "2026-07-28T15:13:00+00:00",
+    "exit_reason": "stop",
+    "risk": 36.58,
+    "pnl": -17.58,
+    "gross_mid": -1.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260806P00292500",
+     "IWM   260806P00292000"
+    ],
+    "width": 0.5,
+    "debit": 34.0,
+    "r_underlying": -1.0727272727273067,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-07-30T14:56:00+00:00",
+    "exit_time": "2026-07-30T15:47:00+00:00",
+    "exit_reason": "stop",
+    "risk": 37.58,
+    "pnl": -19.58,
+    "gross_mid": -3.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260813P00291000",
+     "IWM   260813P00290500"
+    ],
+    "width": 0.5,
+    "debit": 35.0,
+    "r_underlying": -1.082291666666685,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-07-30T15:49:00+00:00",
+    "exit_time": "2026-07-30T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 34.58,
+    "pnl": -33.58,
+    "gross_mid": 7.0,
+    "costs": 40.58,
+    "legs": [
+     "NFLX  260807C00071500",
+     "NFLX  260807C00072000"
+    ],
+    "width": 0.5,
+    "debit": 32.0,
+    "r_underlying": 3.335897435897451,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "CALL",
+    "entry_time": "2026-08-06T13:59:00+00:00",
+    "exit_time": "2026-08-06T14:47:00+00:00",
+    "exit_reason": "v2_runner_stop",
+    "risk": 35.58,
+    "pnl": -15.58,
+    "gross_mid": 1.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260824C00299000",
+     "IWM   260824C00299500"
+    ],
+    "width": 0.5,
+    "debit": 33.0,
+    "r_underlying": 0.5732142857142144,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-08-10T14:30:00+00:00",
+    "exit_time": "2026-08-10T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 33.58,
+    "pnl": -11.58,
+    "gross_mid": 5.0,
+    "costs": 16.58,
+    "legs": [
+     "NFLX  260828C00074500",
+     "NFLX  260828C00075000"
+    ],
+    "width": 0.5,
+    "debit": 31.0,
+    "r_underlying": 3.85341614906831,
+    "source": "proxy",
+    "regime": "STRONG_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-08-13T13:54:00+00:00",
+    "exit_time": "2026-08-13T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 34.58,
+    "pnl": -13.58,
+    "gross_mid": 3.0,
+    "costs": 16.58,
+    "legs": [
+     "NFLX  260828C00077000",
+     "NFLX  260828C00077500"
+    ],
+    "width": 0.5,
+    "debit": 32.0,
+    "r_underlying": 1.4902097902097917,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-10-05T14:51:00+00:00",
+    "exit_time": "2026-10-05T15:07:00+00:00",
+    "exit_reason": "stop",
+    "risk": 33.58,
+    "pnl": -16.58,
+    "gross_mid": 0.0,
+    "costs": 16.58,
+    "legs": [
+     "NFLX  261023C00067000",
+     "NFLX  261023C00067500"
+    ],
+    "width": 0.5,
+    "debit": 31.0,
+    "r_underlying": -1.356977640709303,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   }
+  ],
+  "debit_spread_costcap": [
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-06-01T13:59:00+00:00",
+    "exit_time": "2026-06-01T15:06:00+00:00",
+    "exit_reason": "v2_breakeven_stop",
+    "risk": 92.58,
+    "pnl": -18.58,
+    "gross_mid": -2.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260619P00290000",
+     "IWM   260619P00288500"
+    ],
+    "width": 1.5,
+    "debit": 90.0,
+    "r_underlying": -0.19527559055114452,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-06-03T13:54:00+00:00",
+    "exit_time": "2026-06-03T14:11:00+00:00",
+    "exit_reason": "stop",
+    "risk": 91.58,
+    "pnl": -22.58,
+    "gross_mid": -6.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260618P00290000",
+     "IWM   260618P00288500"
+    ],
+    "width": 1.5,
+    "debit": 89.0,
+    "r_underlying": -1.198058252427139,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-06-03T19:02:00+00:00",
+    "exit_time": "2026-06-03T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 91.58,
+    "pnl": -16.58,
+    "gross_mid": 0.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260617P00290000",
+     "IWM   260617P00288500"
+    ],
+    "width": 1.5,
+    "debit": 89.0,
+    "r_underlying": -0.24660194174753702,
+    "source": "proxy",
+    "regime": "STRONG_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-06-05T15:18:00+00:00",
+    "exit_time": "2026-06-05T19:50:00+00:00",
+    "exit_reason": "v2_runner_stop",
+    "risk": 91.58,
+    "pnl": 0.42,
+    "gross_mid": 19.5,
+    "costs": 19.08,
+    "legs": [
+     "IWM   260616P00289000",
+     "IWM   260616P00287500"
+    ],
+    "width": 1.5,
+    "debit": 89.0,
+    "r_underlying": 3.936886993603395,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "PUT",
+    "entry_time": "2026-06-09T14:47:00+00:00",
+    "exit_time": "2026-06-09T17:03:00+00:00",
+    "exit_reason": "v2_runner_stop",
+    "risk": 92.58,
+    "pnl": -3.58,
+    "gross_mid": 15.5,
+    "costs": 19.08,
+    "legs": [
+     "IWM   260623P00288000",
+     "IWM   260623P00286500"
+    ],
+    "width": 1.5,
+    "debit": 90.0,
+    "r_underlying": 3.929056603773626,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-06-09T17:11:00+00:00",
+    "exit_time": "2026-06-09T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 91.58,
+    "pnl": -11.58,
+    "gross_mid": 2.0,
+    "costs": 13.58,
+    "legs": [
+     "NFLX  260619P00082000",
+     "NFLX  260619P00080000"
+    ],
+    "width": 2.0,
+    "debit": 89.0,
+    "r_underlying": 0.46567164179102694,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "CALL",
+    "entry_time": "2026-06-11T14:43:00+00:00",
+    "exit_time": "2026-06-11T14:53:00+00:00",
+    "exit_reason": "stop",
+    "risk": 86.58,
+    "pnl": -19.58,
+    "gross_mid": -3.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260702C00285000",
+     "IWM   260702C00286500"
+    ],
+    "width": 1.5,
+    "debit": 84.0,
+    "r_underlying": -1.149999999999981,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-06-12T13:54:00+00:00",
+    "exit_time": "2026-06-12T15:24:00+00:00",
+    "exit_reason": "stop",
+    "risk": 84.58,
+    "pnl": -40.58,
+    "gross_mid": -29.0,
+    "costs": 11.58,
+    "legs": [
+     "NFLX  260619P00080000",
+     "NFLX  260619P00078000"
+    ],
+    "width": 2.0,
+    "debit": 82.0,
+    "r_underlying": -1.0555223880597224,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "CALL",
+    "entry_time": "2026-06-22T13:54:00+00:00",
+    "exit_time": "2026-06-22T14:17:00+00:00",
+    "exit_reason": "stop",
+    "risk": 85.58,
+    "pnl": -22.58,
+    "gross_mid": -6.0,
+    "costs": 16.58,
+    "legs": [
+     "IWM   260629C00298000",
+     "IWM   260629C00299500"
+    ],
+    "width": 1.5,
+    "debit": 83.0,
+    "r_underlying": -1.190697674418675,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-07-30T15:49:00+00:00",
+    "exit_time": "2026-07-30T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 76.58,
+    "pnl": -19.58,
+    "gross_mid": 20.0,
+    "costs": 39.58,
+    "legs": [
+     "NFLX  260807C00071500",
+     "NFLX  260807C00073000"
+    ],
+    "width": 1.5,
+    "debit": 74.0,
+    "r_underlying": 3.335897435897451,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-08-10T14:30:00+00:00",
+    "exit_time": "2026-08-10T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 77.58,
+    "pnl": -1.58,
+    "gross_mid": 14.0,
+    "costs": 15.58,
+    "legs": [
+     "NFLX  260828C00074500",
+     "NFLX  260828C00076000"
+    ],
+    "width": 1.5,
+    "debit": 75.0,
+    "r_underlying": 3.85341614906831,
+    "source": "proxy",
+    "regime": "STRONG_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-08-13T13:54:00+00:00",
+    "exit_time": "2026-08-13T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 76.58,
+    "pnl": -4.58,
+    "gross_mid": 11.0,
+    "costs": 15.58,
+    "legs": [
+     "NFLX  260828C00077000",
+     "NFLX  260828C00078500"
+    ],
+    "width": 1.5,
+    "debit": 74.0,
+    "r_underlying": 1.4902097902097917,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "PUT",
+    "entry_time": "2026-08-17T14:30:00+00:00",
+    "exit_time": "2026-08-17T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 80.58,
+    "pnl": -1.58,
+    "gross_mid": 14.0,
+    "costs": 15.58,
+    "legs": [
+     "NFLX  260828P00077500",
+     "NFLX  260828P00076000"
+    ],
+    "width": 1.5,
+    "debit": 78.0,
+    "r_underlying": 1.0244224422442179,
+    "source": "proxy",
+    "regime": "WEAK_BEARISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-08-25T15:30:00+00:00",
+    "exit_time": "2026-08-25T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 76.58,
+    "pnl": -10.58,
+    "gross_mid": 5.0,
+    "costs": 15.58,
+    "legs": [
+     "NFLX  260911C00081500",
+     "NFLX  260911C00083000"
+    ],
+    "width": 1.5,
+    "debit": 74.0,
+    "r_underlying": 0.5634615384615258,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-09-02T13:54:00+00:00",
+    "exit_time": "2026-09-02T17:19:00+00:00",
+    "exit_reason": "stop",
+    "risk": 77.58,
+    "pnl": -24.58,
+    "gross_mid": -10.0,
+    "costs": 14.58,
+    "legs": [
+     "NFLX  260918C00082500",
+     "NFLX  260918C00084000"
+    ],
+    "width": 1.5,
+    "debit": 75.0,
+    "r_underlying": -1.0889036544850474,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-10-05T14:51:00+00:00",
+    "exit_time": "2026-10-05T15:07:00+00:00",
+    "exit_reason": "stop",
+    "risk": 75.58,
+    "pnl": -15.58,
+    "gross_mid": -1.0,
+    "costs": 14.58,
+    "legs": [
+     "NFLX  261023C00067000",
+     "NFLX  261023C00068500"
+    ],
+    "width": 1.5,
+    "debit": 73.0,
+    "r_underlying": -1.356977640709303,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-10-07T16:14:00+00:00",
+    "exit_time": "2026-10-07T20:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 74.58,
+    "pnl": -5.58,
+    "gross_mid": 9.0,
+    "costs": 14.58,
+    "legs": [
+     "NFLX  261016C00069000",
+     "NFLX  261016C00070500"
+    ],
+    "width": 1.5,
+    "debit": 72.0,
+    "r_underlying": 1.1913043478260712,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-10-20T15:12:00+00:00",
+    "exit_time": "2026-10-20T15:26:00+00:00",
+    "exit_reason": "stop",
+    "risk": 73.58,
+    "pnl": -16.58,
+    "gross_mid": -2.0,
+    "costs": 14.58,
+    "legs": [
+     "NFLX  261106C00070000",
+     "NFLX  261106C00071500"
+    ],
+    "width": 1.5,
+    "debit": 71.0,
+    "r_underlying": -1.1226890756302446,
+    "source": "proxy",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "CALL",
+    "entry_time": "2026-10-26T13:58:00+00:00",
+    "exit_time": "2026-10-26T14:27:00+00:00",
+    "exit_reason": "v2_runner_stop",
+    "risk": 63.58,
+    "pnl": -5.58,
+    "gross_mid": 6.0,
+    "costs": 11.58,
+    "legs": [
+     "IWM   261106C00276000",
+     "IWM   261106C00277000"
+    ],
+    "width": 1.0,
+    "debit": 61.0,
+    "r_underlying": 2.638961038961131,
+    "source": "real",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "SPY",
+    "side": "CALL",
+    "entry_time": "2026-10-29T16:01:00+00:00",
+    "exit_time": "2026-10-29T16:12:00+00:00",
+    "exit_reason": "stop",
+    "risk": 68.58,
+    "pnl": -15.58,
+    "gross_mid": -3.5,
+    "costs": 12.08,
+    "legs": [
+     "SPY   261106C00769000",
+     "SPY   261106C00770000"
+    ],
+    "width": 1.0,
+    "debit": 66.0,
+    "r_underlying": -1.1802383577467714,
+    "source": "real",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "CALL",
+    "entry_time": "2026-11-02T14:57:00+00:00",
+    "exit_time": "2026-11-02T17:23:00+00:00",
+    "exit_reason": "stop",
+    "risk": 63.58,
+    "pnl": -14.58,
+    "gross_mid": -3.0,
+    "costs": 11.58,
+    "legs": [
+     "IWM   261109C00282000",
+     "IWM   261109C00283000"
+    ],
+    "width": 1.0,
+    "debit": 61.0,
+    "r_underlying": -1.1357859531774135,
+    "source": "real",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "CALL",
+    "entry_time": "2026-11-03T14:59:00+00:00",
+    "exit_time": "2026-11-03T15:05:00+00:00",
+    "exit_reason": "stop",
+    "risk": 63.58,
+    "pnl": -11.58,
+    "gross_mid": -2.5,
+    "costs": 9.08,
+    "legs": [
+     "IWM   261120C00280000",
+     "IWM   261120C00281000"
+    ],
+    "width": 1.0,
+    "debit": 61.0,
+    "r_underlying": -1.369072164948406,
+    "source": "real",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "IWM",
+    "side": "CALL",
+    "entry_time": "2026-11-03T15:30:00+00:00",
+    "exit_time": "2026-11-03T16:23:00+00:00",
+    "exit_reason": "v2_runner_stop",
+    "risk": 65.58,
+    "pnl": -12.58,
+    "gross_mid": 1.5,
+    "costs": 14.08,
+    "legs": [
+     "IWM   261113C00280000",
+     "IWM   261113C00281000"
+    ],
+    "width": 1.0,
+    "debit": 63.0,
+    "r_underlying": 0.8371134020618275,
+    "source": "real",
+    "regime": "WEAK_BULLISH"
+   },
+   {
+    "symbol": "SPY",
+    "side": "CALL",
+    "entry_time": "2026-11-04T16:54:00+00:00",
+    "exit_time": "2026-11-04T21:00:00+00:00",
+    "exit_reason": "session_close",
+    "risk": 67.58,
+    "pnl": -11.58,
+    "gross_mid": -3.0,
+    "costs": 8.58,
+    "legs": [
+     "SPY   261112C00767000",
+     "SPY   261112C00768000"
+    ],
+    "width": 1.0,
+    "debit": 65.0,
+    "r_underlying": -0.5871595330739274,
+    "source": "real",
+    "regime": "STRONG_BULLISH"
+   },
+   {
+    "symbol": "NFLX",
+    "side": "CALL",
+    "entry_time": "2026-11-06T15:57:00+00:00",
+    "exit_time": "2026-11-06T17:32:00+00:00",
+    "exit_reason": "stop",
+    "risk": 54.58,
+    "pnl": -14.58,
+    "gross_mid": -6.0,
+    "costs": 8.58,
+    "legs": [
+     "NFLX  261113C00064000",
+     "NFLX  261113C00065000"
+    ],
+    "width": 1.0,
+    "debit": 52.0,
+    "r_underlying": -1.1183144246353482,
+    "source": "real",
+    "regime": "WEAK_BULLISH"
+   }
+  ]
+ }
+}

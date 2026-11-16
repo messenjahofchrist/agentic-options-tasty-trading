@@ -1,0 +1,508 @@
+{
+ "description": "V2 2.9.0 sector map: the 2.8.0 map plus every symbol on strategies/v29_universe.json. PROFESSIONAL_STRATEGY_V2 symbol-to-sector map. Each single stock maps to the SPDR Select Sector ETF of its GICS sector. Non-sector instruments carry a group and no sector ETF; their sector check is reported as not_applicable, and the market-regime and correlation stages still apply to them. tastytrade's market-metrics 'sector' field uses a non-GICS taxonomy (e.g. AMZN 'Services', NVDA 'Technology/Computer Hardware'), so it is recorded for cross-reference only.",
+ "classification": "GICS sector (manually maintained)",
+ "maintained_at": "2026-11-12",
+ "review_due": "2027-01-23",
+ "review_note": "Re-check at each quarterly review and whenever a symbol is added to a universe; GICS reclassifications (e.g. PYPL and UBER in 2023) change the sector ETF.",
+ "sector_etfs": {
+  "XLK": "Information Technology",
+  "XLF": "Financials",
+  "XLE": "Energy",
+  "XLV": "Health Care",
+  "XLY": "Consumer Discretionary",
+  "XLI": "Industrials",
+  "XLC": "Communication Services",
+  "XLP": "Consumer Staples",
+  "XLU": "Utilities",
+  "XLB": "Materials",
+  "XLRE": "Real Estate"
+ },
+ "symbols": {
+  "AAPL": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "NVDA": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "INTC": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "SMCI": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "PLTR": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "MARA": {
+   "sector_etf": "XLK",
+   "group": "us_equity",
+   "note": "bitcoin miner; trades with crypto (see IBIT) more than with XLK"
+  },
+  "RIOT": {
+   "sector_etf": "XLK",
+   "group": "us_equity",
+   "note": "bitcoin miner; trades with crypto (see IBIT) more than with XLK"
+  },
+  "AMZN": {
+   "sector_etf": "XLY",
+   "group": "us_equity"
+  },
+  "F": {
+   "sector_etf": "XLY",
+   "group": "us_equity"
+  },
+  "RIVN": {
+   "sector_etf": "XLY",
+   "group": "us_equity"
+  },
+  "NKE": {
+   "sector_etf": "XLY",
+   "group": "us_equity"
+  },
+  "CCL": {
+   "sector_etf": "XLY",
+   "group": "us_equity"
+  },
+  "DKNG": {
+   "sector_etf": "XLY",
+   "group": "us_equity"
+  },
+  "BABA": {
+   "sector_etf": "XLY",
+   "group": "china_adr"
+  },
+  "JD": {
+   "sector_etf": "XLY",
+   "group": "china_adr"
+  },
+  "PDD": {
+   "sector_etf": "XLY",
+   "group": "china_adr"
+  },
+  "NIO": {
+   "sector_etf": "XLY",
+   "group": "china_adr"
+  },
+  "GOOGL": {
+   "sector_etf": "XLC",
+   "group": "us_equity"
+  },
+  "NFLX": {
+   "sector_etf": "XLC",
+   "group": "us_equity"
+  },
+  "CMCSA": {
+   "sector_etf": "XLC",
+   "group": "us_equity"
+  },
+  "T": {
+   "sector_etf": "XLC",
+   "group": "us_equity"
+  },
+  "VZ": {
+   "sector_etf": "XLC",
+   "group": "us_equity"
+  },
+  "BAC": {
+   "sector_etf": "XLF",
+   "group": "us_equity"
+  },
+  "SOFI": {
+   "sector_etf": "XLF",
+   "group": "us_equity"
+  },
+  "UPST": {
+   "sector_etf": "XLF",
+   "group": "us_equity"
+  },
+  "PYPL": {
+   "sector_etf": "XLF",
+   "group": "us_equity"
+  },
+  "HOOD": {
+   "sector_etf": "XLF",
+   "group": "us_equity"
+  },
+  "UBER": {
+   "sector_etf": "XLI",
+   "group": "us_equity"
+  },
+  "AAL": {
+   "sector_etf": "XLI",
+   "group": "us_equity"
+  },
+  "PFE": {
+   "sector_etf": "XLV",
+   "group": "us_equity"
+  },
+  "KO": {
+   "sector_etf": "XLP",
+   "group": "us_equity"
+  },
+  "WMT": {
+   "sector_etf": "XLP",
+   "group": "us_equity"
+  },
+  "XLF": {
+   "sector_etf": "XLF",
+   "group": "sector_etf"
+  },
+  "XLE": {
+   "sector_etf": "XLE",
+   "group": "sector_etf"
+  },
+  "XLU": {
+   "sector_etf": "XLU",
+   "group": "sector_etf"
+  },
+  "SPY": {
+   "sector_etf": null,
+   "group": "broad_index"
+  },
+  "QQQ": {
+   "sector_etf": null,
+   "group": "broad_index"
+  },
+  "IWM": {
+   "sector_etf": null,
+   "group": "broad_index"
+  },
+  "DIA": {
+   "sector_etf": null,
+   "group": "broad_index"
+  },
+  "TQQQ": {
+   "sector_etf": null,
+   "group": "broad_index",
+   "tracks": "QQQ",
+   "direction": 1
+  },
+  "SQQQ": {
+   "sector_etf": null,
+   "group": "broad_index",
+   "tracks": "QQQ",
+   "direction": -1
+  },
+  "TLT": {
+   "sector_etf": null,
+   "group": "rates"
+  },
+  "LQD": {
+   "sector_etf": null,
+   "group": "rates"
+  },
+  "SLV": {
+   "sector_etf": null,
+   "group": "commodity"
+  },
+  "UNG": {
+   "sector_etf": null,
+   "group": "commodity"
+  },
+  "EEM": {
+   "sector_etf": null,
+   "group": "international"
+  },
+  "IBIT": {
+   "sector_etf": null,
+   "group": "crypto"
+  },
+  "MSFT": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "META": {
+   "sector_etf": "XLC",
+   "group": "us_equity"
+  },
+  "TSLA": {
+   "sector_etf": "XLY",
+   "group": "us_equity"
+  },
+  "AVGO": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "AMD": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "ORCL": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "CRM": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "ADBE": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "QCOM": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "MU": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "AMAT": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "LRCX": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "MRVL": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "ARM": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "TSM": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "SHOP": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "SNOW": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "CRWD": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "PANW": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "NET": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "DDOG": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "ZS": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "MDB": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "COIN": {
+   "sector_etf": "XLF",
+   "group": "us_equity"
+  },
+  "MSTR": {
+   "sector_etf": "XLK",
+   "group": "us_equity"
+  },
+  "AFRM": {
+   "sector_etf": "XLF",
+   "group": "us_equity"
+  },
+  "ABNB": {
+   "sector_etf": "XLY",
+   "group": "us_equity"
+  },
+  "DASH": {
+   "sector_etf": "XLY",
+   "group": "us_equity"
+  },
+  "SBUX": {
+   "sector_etf": "XLY",
+   "group": "us_equity"
+  },
+  "MCD": {
+   "sector_etf": "XLY",
+   "group": "us_equity"
+  },
+  "DIS": {
+   "sector_etf": "XLC",
+   "group": "us_equity"
+  },
+  "COST": {
+   "sector_etf": "XLP",
+   "group": "us_equity"
+  },
+  "TGT": {
+   "sector_etf": "XLP",
+   "group": "us_equity"
+  },
+  "HD": {
+   "sector_etf": "XLY",
+   "group": "us_equity"
+  },
+  "LOW": {
+   "sector_etf": "XLY",
+   "group": "us_equity"
+  },
+  "CMG": {
+   "sector_etf": "XLY",
+   "group": "us_equity"
+  },
+  "LULU": {
+   "sector_etf": "XLY",
+   "group": "us_equity"
+  },
+  "ROKU": {
+   "sector_etf": "XLC",
+   "group": "us_equity"
+  },
+  "SPOT": {
+   "sector_etf": "XLC",
+   "group": "us_equity"
+  },
+  "CVNA": {
+   "sector_etf": "XLY",
+   "group": "us_equity"
+  },
+  "GM": {
+   "sector_etf": "XLY",
+   "group": "us_equity"
+  },
+  "LCID": {
+   "sector_etf": "XLY",
+   "group": "us_equity"
+  },
+  "BA": {
+   "sector_etf": "XLI",
+   "group": "us_equity"
+  },
+  "CAT": {
+   "sector_etf": "XLI",
+   "group": "us_equity"
+  },
+  "DE": {
+   "sector_etf": "XLI",
+   "group": "us_equity"
+  },
+  "GE": {
+   "sector_etf": "XLI",
+   "group": "us_equity"
+  },
+  "LMT": {
+   "sector_etf": "XLI",
+   "group": "us_equity"
+  },
+  "RTX": {
+   "sector_etf": "XLI",
+   "group": "us_equity"
+  },
+  "JPM": {
+   "sector_etf": "XLF",
+   "group": "us_equity"
+  },
+  "C": {
+   "sector_etf": "XLF",
+   "group": "us_equity"
+  },
+  "WFC": {
+   "sector_etf": "XLF",
+   "group": "us_equity"
+  },
+  "GS": {
+   "sector_etf": "XLF",
+   "group": "us_equity"
+  },
+  "MS": {
+   "sector_etf": "XLF",
+   "group": "us_equity"
+  },
+  "SCHW": {
+   "sector_etf": "XLF",
+   "group": "us_equity"
+  },
+  "V": {
+   "sector_etf": "XLF",
+   "group": "us_equity"
+  },
+  "MA": {
+   "sector_etf": "XLF",
+   "group": "us_equity"
+  },
+  "AXP": {
+   "sector_etf": "XLF",
+   "group": "us_equity"
+  },
+  "UNH": {
+   "sector_etf": "XLV",
+   "group": "us_equity"
+  },
+  "LLY": {
+   "sector_etf": "XLV",
+   "group": "us_equity"
+  },
+  "JNJ": {
+   "sector_etf": "XLV",
+   "group": "us_equity"
+  },
+  "MRK": {
+   "sector_etf": "XLV",
+   "group": "us_equity"
+  },
+  "ABBV": {
+   "sector_etf": "XLV",
+   "group": "us_equity"
+  },
+  "MRNA": {
+   "sector_etf": "XLV",
+   "group": "us_equity"
+  },
+  "CVS": {
+   "sector_etf": "XLV",
+   "group": "us_equity"
+  },
+  "XOM": {
+   "sector_etf": "XLE",
+   "group": "us_equity"
+  },
+  "CVX": {
+   "sector_etf": "XLE",
+   "group": "us_equity"
+  },
+  "OXY": {
+   "sector_etf": "XLE",
+   "group": "us_equity"
+  },
+  "SLB": {
+   "sector_etf": "XLE",
+   "group": "us_equity"
+  },
+  "FCX": {
+   "sector_etf": "XLB",
+   "group": "us_equity"
+  },
+  "DAL": {
+   "sector_etf": "XLI",
+   "group": "us_equity"
+  },
+  "UAL": {
+   "sector_etf": "XLI",
+   "group": "us_equity"
+  },
+  "RCL": {
+   "sector_etf": "XLY",
+   "group": "us_equity"
+  },
+  "PEP": {
+   "sector_etf": "XLP",
+   "group": "us_equity"
+  }
+ }
+}

@@ -67,6 +67,24 @@ def fetch_option_quotes_cached(client, hub, *, underlying: str, spot: float, now
                                                                       max_dte=max_dte, max_contracts=max_contracts))
 
 
+def friction_fraction(quote: OptionQuote, round_trip_costs: float) -> float | None:
+    """Bid/ask gap plus modeled round-trip costs of one contract, as a fraction of the premium paid at the ask."""
+    if quote.ask <= 0 or quote.bid < 0 or quote.ask < quote.bid:
+        return None
+    return ((quote.ask - quote.bid) * 100 + round_trip_costs) / (quote.ask * 100)
+
+
+def within_friction(chain: list[OptionQuote], cap: float, round_trip_costs: float) -> list[OptionQuote]:
+    """The contracts an account profile's max_friction_fraction leaves eligible (owner-authorized 2026-11-04). They
+    are removed before the original contract rules run, so another in-range contract can still be selected."""
+    kept = []
+    for quote in chain:
+        friction = friction_fraction(quote, round_trip_costs)
+        if friction is not None and friction <= cap:
+            kept.append(quote)
+    return kept
+
+
 def _f(value: Any) -> float | None:
     try:
         return float(value) if value not in (None, "") else None
