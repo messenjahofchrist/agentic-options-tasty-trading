@@ -299,4 +299,36 @@ python -m trader.cli live-session  --strategy v2 --account-profile small
 
 To run LIVE, set `TRADING_MODE=LIVE`, `ENABLE_LIVE_TRADING=true` and `LIVE_START_CONFIRMATION` **in that terminal only** (`$env:TRADING_MODE = 'LIVE'` …), not in `.env`: the PAPER engines read `.env` and refuse to start when it says LIVE.
 
-**Not built / still open** (sections 11.6 and 11.7 apply unchanged): no broker-resident stop order, so a position is unmanaged if this computer, its clock or its internet stops mid-session; the watchdog and the dashboards do not read `data/live/`; no scheduled task starts LIVE (each start needs the typed confirmation). LIVE V2 has only been tested against the in-memory broker (`tests/test_live_v2.py`, 12 tests); no order, dry-run or cancel has been sent to tastytrade.
+**Not built / still open** (sections 11.6 and 11.7 apply unchanged): no broker-resident stop order, so a position is unmanaged if this computer, its clock or its internet stops mid-session; the watchdog and the dashboards do not read `data/live/`. (Turned on by the owner 2026-11-17 on ****6633; from 2026-11-18 it starts by itself, section 14.)
+
+## 14. Unattended LIVE (owner order 2026-11-18)
+
+Owner: "update the app to no longer require my approval to begin live trading. It should trade daily without my intervention unless I say stop."
+
+- **On:** `powershell -ExecutionPolicy Bypass -File scripts\live_on.ps1`. It writes the standing order `live_autostart.json` (`live-autostart on`, local only, account-bound) and registers the `\OptioBot\LiveEngine` task: weekdays 08:10 CT, `scripts\live_engine.cmd`, which sets the three LIVE settings for its own window only and runs `live-session --strategy v2 --account-profile small --unattended` (log `data\live\live_engine.log`). The session ends by itself after the close; the task starts it again the next weekday.
+- **Off ("stop"):** `powershell -ExecutionPolicy Bypass -File scripts\live_off.ps1`. It disables the task, stops the running LIVE processes and removes the standing order (`live-autostart off`, which marks LIVE STOPPED). Open LIVE positions are not sold; they are listed. Ctrl+C in the LIVE window stops it for the rest of the day only.
+- **What `--unattended` replaces:** only the typed `LIVE 6633`. Still checked on every start: TRADING_MODE/ENABLE_LIVE_TRADING/LIVE_START_CONFIRMATION, the strategy manifests, the authorize-live record for the ACTIVE V2 hash and the account profile, the standing order's account, the kill switch, broker verification and reconciliation. A blocked unattended start writes a `live_autostart_blocked` critical alert (emailed). **A new V2 version still needs a new `authorize-live`**, or LIVE fails closed at its next start.
+- **One LIVE per PC:** `live-session` holds an OS lock on `data\live\live_engine.lock`, so a terminal session and the task cannot both trade; the second one exits (no alert). The lock does not cover two PCs: `export_tasks.ps1` skips LiveEngine and `live_autostart.json` is git-ignored, so a new PC never trades until `live_on.ps1` is run there.
+
+## 15. LIVE entry retries (V2 2.8.2, kept in 2.8.3, owner order 2026-11-19)
+
+On the first attempt a missing stock quote is replaced by the decision's price (same minute); a retry with no stock price stops.
+
+On 2026-11-19 at 09:30 CT LIVE sent an IWM put limit at the decision's $3.36 ask, a quote 11 seconds old; the ask had already moved to $3.41 (where PAPER filled) and the order was cancelled unfilled after the 20-second wait. Owner: "we have to try multiple times for a trade that is perceived to be a good one."
+
+V2 config section `live_entry` (LIVE only; PAPER fills are unchanged). With it enabled, `LiveTrader.open_position` sends up to `max_attempts` limit orders. Before each one it re-reads the contract's quote and the stock's price (`paper_runner._entry_requote`) and bids the **current** ask, waiting `attempt_timeout_seconds`. It stops (`live_execution.entry_retry_stop`) when:
+- the ask is more than `max_chase_fraction` above the decision's ask,
+- premium x 100 plus the modeled costs would exceed the decision's own trade budget (the portfolio stage's `contract_budget`),
+- the stock is at or past the stop, or has already covered `max_move_toward_target` of the way to the target,
+- the broker refused the order itself (dry-run or submission rejected), or an order's final state cannot be confirmed (entries stay blocked as before; a second order is never stacked on an unknown one).
+
+Every order is still dry-run, journaled and confirmed. The booked position's `premium_exposure_dollars`, `modeled_risk_dollars` and `initial_risk_dollars` follow the price actually paid, and it keeps `decision_ask`. Journal events: `entry_retry_stopped`, `entry_requote_failed`; each `order_intent` carries its `attempt`. Without `live_entry` (2.8.1 and earlier) LIVE sends one order at the decision ask and waits 20 seconds.
+
+## 16. Agent picks on LIVE (V2 2.8.5 amended, owner order 2026-11-20)
+
+LIVE buys an advisor agent's `almost_sure` idea (any one agent of `agents.json` `roles.advisor_panel`; agents need not
+agree) through the same entry path, retries and exits as a breakout trade. It keeps every LIVE gate (broker
+verification, reconciliation, settled funds, kill switch, the 1-position limit and the $350 budget). At most one pick per
+day (`agent_picks.max_per_session`). Details: docs/v2/professional_strategy_v2.md, "2.8.5 amended 2026-11-21".
+To stop picks without stopping LIVE, set `agent_picks.enabled` false in a new version (new hash, new authorize-live).
+Emptying `roles.advisor_panel` does NOT stop them: the single `advisor` role then runs and its almost_sure ideas count.

@@ -78,6 +78,43 @@ class ExecutionSettings:
     broker_refresh_seconds: float = 30.0
 
 
+@dataclass(frozen=True)
+class EntryRetry:
+    """V2 2.8.2 live_entry (owner, 2026-11-19): try an approved entry more than once, each time at the contract's
+    current ask, within limits. max_cost_dollars is the decision's own budget for the trade (premium x 100 x qty plus
+    modeled costs must stay within it); max_move_toward_target = give up once the stock has covered this fraction
+    of the way from the decision price to the target."""
+    max_attempts: int
+    attempt_timeout_seconds: float
+    max_chase_fraction: float
+    max_move_toward_target: float
+    max_cost_dollars: float | None = None
+
+
+def entry_retry_stop(*, decision: OptionQuote, fresh: OptionQuote, spot: float | None, template: dict,
+                     retry: EntryRetry, quantity: int) -> str | None:
+    """Why a re-priced entry attempt must not be sent (None = it may be sent). Pure; unit-tested."""
+    cap = round(decision.ask * (1 + retry.max_chase_fraction) + 1e-9, 2)
+    if fresh.ask > cap + 1e-9:
+        return f"ask {fresh.ask:.2f} above the chase limit {cap:.2f} ({retry.max_chase_fraction:.0%} over {decision.ask:.2f})"
+    costs = float(template.get("modeled_risk_dollars") or 0) - float(template.get("premium_exposure_dollars") or 0)
+    cost = fresh.ask * 100 * quantity + max(costs, 0.0)
+    if retry.max_cost_dollars is not None and cost > retry.max_cost_dollars + 1e-9:
+        return f"cost ${cost:.2f} above the trade budget ${retry.max_cost_dollars:.2f}"
+    if spot is None:
+        return "underlying price unknown"
+    direction = 1 if str(template.get("right", "C")).upper().startswith("C") else -1
+    entry, stop, target = (float(template[k]) for k in ("entry_underlying", "stop_underlying", "target_underlying"))
+    if (spot - stop) * direction <= 0:
+        return f"underlying {spot:.2f} is at or past the stop {stop:.2f}"
+    reach = (target - entry) * direction
+    moved = (spot - entry) * direction
+    if reach > 0 and moved > retry.max_move_toward_target * reach:
+        return (f"underlying {spot:.2f} already covered {moved / reach:.0%} of the way to the target "
+                f"(limit {retry.max_move_toward_target:.0%})")
+    return None
+
+
 @dataclass
 class OrderOutcome:
     external_identifier: str
@@ -706,30 +743,91 @@ class LiveTrader:
     # ----- the two calls the strategy loop makes -----------------------------------------------
     async def open_position(self, *, template: dict, quote: OptionQuote, quantity: int, decision_option: str | None,
                             readiness: dict, now: datetime,
-                            quote_fresh: Callable[[OptionQuote, datetime], bool]) -> dict | None:
-        """Execute the strategy's entry decision. Returns the booked position or None (nothing filled)."""
+                            quote_fresh: Callable[[OptionQuote, datetime], bool],
+                            retry: EntryRetry | None = None,
+                            requote: Callable[[], tuple[OptionQuote, float | None]] | None = None) -> dict | None:
+        """Execute the strategy's entry decision. Returns the booked position or None (nothing filled).
+
+        Without retry/requote: one limit order at the decision's ask (the behaviour before V2 2.8.2). With them: up
+        to retry.max_attempts orders, each at the contract's current ask from requote() (the option quote and the
+        underlying price), stopping as soon as entry_retry_stop() or the execution safety checks say no, or an
+        order's final state cannot be confirmed. Each order is dry-run, journaled and confirmed as always."""
         underlying = template["underlying"]
         self.pending_entries.add(underlying)  # reserved synchronously by the caller's slot check
+        attempts = retry.max_attempts if retry is not None and requote is not None else 1
+        timeout = retry.attempt_timeout_seconds if retry is not None and requote is not None \
+            else self.settings.entry_fill_timeout_seconds
         try:
             async with self._entry_lock:
                 await self.refresh()
-                failures = self.entry_safety_failures(underlying=underlying, quote=quote, quantity=quantity,
-                                                      decision_option=decision_option, readiness=readiness, now=now,
-                                                      quote_fresh=quote_fresh)
-                if failures:
-                    self._journal("entry_blocked_by_execution_safety", underlying=underlying,
-                                  option=quote.symbol, failures=failures)
-                    print(f"LIVE NO ENTRY {underlying} {quote.symbol}: {', '.join(failures)}", flush=True)
+                outcome, current = None, quote
+                for attempt in range(1, attempts + 1):
+                    if attempts > 1:
+                        try:
+                            fresh, spot = await asyncio.to_thread(requote)
+                        except Exception as exc:  # no fresh quote: the first attempt may still use the decision quote
+                            fresh, spot = None, None
+                            self._journal("entry_requote_failed", underlying=underlying, option=quote.symbol,
+                                          attempt=attempt, error=f"{type(exc).__name__}: {exc}"[:200])
+                        if fresh is None or fresh.symbol != quote.symbol:
+                            if attempt > 1:
+                                print(f"LIVE ENTRY RETRY STOPPED {underlying} {quote.symbol}: no fresh quote", flush=True)
+                                return None
+                        else:
+                            if spot is None and attempt == 1:
+                                # The decision was made on this minute's bar: its price stands in for a missing stock
+                                # quote on the first attempt (2.8.3 fix; an empty equity quote must not block every
+                                # LIVE entry). A retry still needs a real price.
+                                spot = float(template["entry_underlying"])
+                                self._journal("entry_spot_from_decision", underlying=underlying, option=quote.symbol,
+                                              underlying_price=spot)
+                            why = entry_retry_stop(decision=quote, fresh=fresh, spot=spot, template=template,
+                                                   retry=retry, quantity=quantity)
+                            if why:
+                                self._journal("entry_retry_stopped", underlying=underlying, option=quote.symbol,
+                                              attempt=attempt, reason=why, ask=fresh.ask, decision_ask=quote.ask,
+                                              underlying_price=spot)
+                                print(f"LIVE ENTRY {'SKIPPED' if attempt == 1 else 'RETRY STOPPED'} {underlying} "
+                                      f"{quote.symbol} (attempt {attempt}): {why}", flush=True)
+                                return None
+                            current = fresh
+                    failures = self.entry_safety_failures(underlying=underlying, quote=current, quantity=quantity,
+                                                          decision_option=decision_option, readiness=readiness,
+                                                          now=datetime.now(timezone.utc) if attempt > 1 else now,
+                                                          quote_fresh=quote_fresh)
+                    if failures:
+                        self._journal("entry_blocked_by_execution_safety", underlying=underlying,
+                                      option=current.symbol, failures=failures, attempt=attempt)
+                        print(f"LIVE NO ENTRY {underlying} {current.symbol}: {', '.join(failures)}", flush=True)
+                        return None
+                    outcome = await self.execute_order(
+                        option_symbol=current.symbol, action="Buy to Open", quantity=quantity, limit=current.ask,
+                        fill_timeout=timeout,
+                        intent={"purpose": "entry", "underlying": underlying, "position_template": template,
+                                "attempt": attempt, "decision_ask": quote.ask})
+                    if outcome.filled_quantity > 0 and outcome.average_fill_price is not None:
+                        break
+                    if not outcome.confirmed:
+                        # never send another order while this one's final state is unknown (entries are blocked)
+                        print(f"LIVE ENTRY NOT FILLED {underlying} {current.symbol}: {outcome.status} (unconfirmed)", flush=True)
+                        return None
+                    self._clear_intent(outcome.external_identifier)
+                    print(f"LIVE ENTRY NOT FILLED {underlying} {current.symbol} at ${current.ask:.2f} "
+                          f"(attempt {attempt}/{attempts}): {outcome.status} {outcome.detail}", flush=True)
+                    if outcome.status in ("DRY_RUN_REJECTED", "DRY_RUN_BLOCKED", "REJECTED"):
+                        return None   # the broker refused the order itself; a new price does not change that
+                    if attempt == attempts:
+                        return None
+                if outcome is None:
                     return None
-                outcome = await self.execute_order(
-                    option_symbol=quote.symbol, action="Buy to Open", quantity=quantity, limit=quote.ask,
-                    fill_timeout=self.settings.entry_fill_timeout_seconds,
-                    intent={"purpose": "entry", "underlying": underlying, "position_template": template})
-                if outcome.filled_quantity <= 0 or outcome.average_fill_price is None:
-                    if outcome.confirmed:
-                        self._clear_intent(outcome.external_identifier)
-                    print(f"LIVE ENTRY NOT FILLED {underlying} {quote.symbol}: {outcome.status} {outcome.detail}", flush=True)
-                    return None
+                if current.ask != quote.ask:
+                    # the position's risk figures follow the price actually paid (it may differ from the decision ask)
+                    paid = outcome.average_fill_price * 100 * outcome.filled_quantity
+                    extra = paid - float(template.get("premium_exposure_dollars") or 0)
+                    template = {**template, "premium_exposure_dollars": round(paid, 2),
+                                "modeled_risk_dollars": round(float(template["modeled_risk_dollars"]) + extra, 2),
+                                "initial_risk_dollars": round(float(template["initial_risk_dollars"]) + extra, 2),
+                                "decision_ask": quote.ask}
                 record = self._book_entry(template, outcome.filled_quantity, outcome.average_fill_price, outcome.fees,
                                           outcome.order_id, outcome.external_identifier)
                 self.save()

@@ -215,6 +215,8 @@ KILL_SWITCH
 *.jsonl
 # Owner LIVE authorization (binds the strategy hash to an account fingerprint); local only
 live_authorization.json
+# Owner standing order for unattended LIVE (scripts\live_on.ps1); local only, so a new PC never trades by itself
+live_autostart.json
 
 # PyPI configuration file
 .pypirc

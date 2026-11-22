@@ -32,7 +32,7 @@ class AdvisorTests(unittest.TestCase):
     def test_prompt_carries_state_and_names_no_particular_agent(self):
         text = advisor.prompt({"ledgers": {"a": {"open_positions": [{"underlying": "NFLX"}]}}})
         self.assertIn("NFLX", text)
-        self.assertIn("cannot trade", text)
+        self.assertIn("almost_sure idea IS BOUGHT", text)   # 2.8.5: only almost_sure ideas are traded
         self.assertIn("vetoes", text)
         self.assertNotIn("claude", advisor.prompt({}).lower())
 
@@ -60,6 +60,11 @@ class AdvisorTests(unittest.TestCase):
         from pathlib import Path
         from trader import agents
         out = Path(tempfile.mkdtemp())
+        # no advisor_panel: the role's first answering agent is used (the 2.8.0 behaviour)
+        single = {"roles": {"advisor": ["some-other-bot"]}, "agents": {"some-other-bot": {}}}
+        no_panel = mock.patch.object(agents, "load_config", return_value=single)
+        no_panel.start()
+        self.addCleanup(no_panel.stop)
         advice = dict(GOOD, vetoes=[{"symbol": "NVDA", "side": None, "until_et": "23:59", "reason": "earnings tonight"}],
                       trade_ideas=[{"symbol": "NVDA", "side": "PUT", "thesis": "probe", "stop_pct": 0.6, "target_pct": 1.2}])
         reply = agents.AgentReply("some-other-bot", advisor.check(advice))

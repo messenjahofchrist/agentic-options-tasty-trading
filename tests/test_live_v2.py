@@ -16,7 +16,8 @@ from trader import paper_runner
 from trader.account_profiles import SMALL
 from trader.config import AppConfig, Mode
 from trader.live_execution import LIVE_AUTHORIZATION_STATEMENT, verify_live_authorization
-from trader.live_session import authorize_live, live_plan, live_readiness, run_live_session
+from trader.live_session import (LiveAlreadyRunning, _acquire_live_lock, authorize_live, disable_live_autostart,
+                                 enable_live_autostart, live_plan, live_readiness, run_live_session)
 from trader.strategy_loader import parse_strategy
 from trader.v2 import config as v2config
 from trader.v2.live_support import unsupported_for_live
@@ -186,6 +187,64 @@ class LiveV2GateTests(unittest.TestCase):
         with self.assertRaisesRegex(v2config.V2ConfigError, "not activated"):
             run_live_session(root=self.root, cfg=self.cfg, interactive=True, prompt=lambda _: f"LIVE {ACCOUNT[-4:]}",
                              v2=self.v2, profile_name="small")
+
+    def alerts(self):
+        path = self.root / "data" / "live" / "critical_alerts.jsonl"
+        return [json.loads(line)["event"] for line in path.read_text().splitlines()] if path.exists() else []
+
+    def test_unattended_start_needs_the_owner_standing_order_and_still_the_authorization(self):
+        """Owner order 2026-11-18: LIVE trades daily without intervention until the owner says stop."""
+        def no_prompt(_):
+            raise AssertionError("an unattended start never asks for the typed confirmation")
+        started = []
+        with patch("trader.live_session._run_live_once", side_effect=lambda **kw: started.append(kw)):
+            enable_live_autostart(root=self.root, cfg=self.cfg, note="test")
+            with self.assertRaisesRegex(RuntimeError, "live_authorization.json not found"):   # still required
+                run_live_session(root=self.root, cfg=self.cfg, prompt=no_prompt, v2=self.v2, profile_name="small",
+                                 unattended=True)
+            self.assertEqual(self.alerts(), ["live_autostart_blocked"], "a blocked unattended start alerts the owner")
+            self.authorize(strategy_hash=self.v2.sha256, v2=self.v2, profile_name="small")
+            run_live_session(root=self.root, cfg=self.cfg, prompt=no_prompt, v2=self.v2, profile_name="small",
+                             unattended=True)
+            self.assertEqual(len(started), 1)
+            self.assertEqual(started[0]["cfg"].data_dir, self.root / "data" / "live")
+            result = disable_live_autostart(root=self.root, cfg=self.cfg)   # the owner says stop
+            self.assertEqual((result["autostart_was_on"], result["autostart_on"]), (True, False))
+            expectation = json.loads((self.root / "data" / "live" / "engine_expectation.json").read_text())
+            self.assertEqual((expectation["expected_running"], expectation["state"]), (False, "STOPPED"))
+            with self.assertRaisesRegex(RuntimeError, "no owner standing order"):
+                run_live_session(root=self.root, cfg=self.cfg, prompt=no_prompt, v2=self.v2, profile_name="small",
+                                 unattended=True)
+            self.assertEqual(len(started), 1)
+            with self.assertRaisesRegex(RuntimeError, "interactive terminal"):   # without --unattended: unchanged
+                run_live_session(root=self.root, cfg=self.cfg, interactive=False, v2=self.v2, profile_name="small")
+
+    def test_a_standing_order_for_another_account_does_not_start_live(self):
+        self.authorize(strategy_hash=self.v2.sha256, v2=self.v2, profile_name="small")
+        enable_live_autostart(root=self.root, cfg=replace(self.cfg, account_number="5WT99999"))
+        with patch("trader.live_session._run_live_once") as run_once:
+            with self.assertRaisesRegex(RuntimeError, "different account"):
+                run_live_session(root=self.root, cfg=self.cfg, v2=self.v2, profile_name="small", unattended=True)
+        run_once.assert_not_called()
+
+    def test_a_second_live_session_on_the_same_pc_is_refused(self):
+        self.authorize(strategy_hash=self.v2.sha256, v2=self.v2, profile_name="small")
+        enable_live_autostart(root=self.root, cfg=self.cfg)
+        held = _acquire_live_lock(self.root / "data" / "live")   # e.g. a session started by hand in a terminal
+        try:
+            with patch("trader.live_session._run_live_once") as run_once:
+                with self.assertRaises(LiveAlreadyRunning):
+                    run_live_session(root=self.root, cfg=self.cfg, v2=self.v2, profile_name="small", unattended=True)
+                with self.assertRaises(LiveAlreadyRunning):
+                    run_live_session(root=self.root, cfg=self.cfg, interactive=True, v2=self.v2, profile_name="small",
+                                     prompt=lambda _: f"LIVE {ACCOUNT[-4:]}")
+            run_once.assert_not_called()
+            self.assertEqual(self.alerts(), [], "LIVE already running is not a failure")
+        finally:
+            held.close()
+        with patch("trader.live_session._run_live_once") as run_once:
+            run_live_session(root=self.root, cfg=self.cfg, v2=self.v2, profile_name="small", unattended=True)
+        run_once.assert_called_once()
 
     def test_the_small_profile_gives_live_the_small_account_rules(self):
         strategy, policy = live_plan(self.root, self.strategy, self.v2, "small")

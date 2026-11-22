@@ -252,6 +252,73 @@ class LiveTraderTests(unittest.TestCase):
         self.assertEqual(broker.orders[1]["status"], "Cancelled")
         self.assertEqual(trader.account.positions, [])
 
+    # --- V2 2.8.2 live_entry retry ----------------------------------------------------------------
+    def enter_with_retry(self, trader, requote, retry=None):
+        from trader.live_execution import EntryRetry
+        retry = retry or EntryRetry(max_attempts=3, attempt_timeout_seconds=0.05, max_chase_fraction=0.03,
+                                    max_move_toward_target=0.5, max_cost_dollars=200.0)
+        quote = option()
+        return asyncio.run(trader.open_position(template=self.template(quote.symbol, quote.underlying), quote=quote,
+                                                quantity=1, decision_option=quote.symbol, readiness=READY,
+                                                now=datetime.now(timezone.utc), quote_fresh=_fresh_quote,
+                                                retry=retry, requote=requote))
+
+    def test_entry_retry_reprices_at_the_current_ask_and_fills(self):
+        submissions = []
+        broker = FakeBroker(fill_mode=lambda body: (submissions.append(body["price"]), "rest" if len(submissions) == 1 else "fill")[1])
+        trader = self.trader(broker)
+        asks = iter([1.02, 1.04])
+        record = self.enter_with_retry(trader, lambda: (option(ask=next(asks), bid=1.0), 100.3))
+        self.assertIsNotNone(record)
+        self.assertEqual(submissions, ["1.02", "1.04"])
+        self.assertEqual(broker.cancels, [1])
+        self.assertEqual(record["entry_price"], 1.04)
+        self.assertEqual(record["premium_exposure_dollars"], 104.0)       # risk figures follow the price paid
+        self.assertEqual(record["modeled_risk_dollars"], 107.0)
+        self.assertEqual(len(trader.account.positions), 1)
+        self.assertEqual(json.loads((self.root / "live" / "live_open_intents.json").read_text()), {})
+
+    def test_entry_retry_stops_at_the_chase_limit(self):
+        broker = FakeBroker(fill_mode="rest")
+        trader = self.trader(broker)
+        asks = iter([1.02, 1.09])                                          # limit 1.02 x 1.03 = 1.05
+        self.assertIsNone(self.enter_with_retry(trader, lambda: (option(ask=next(asks), bid=1.0), 100.3)))
+        self.assertEqual(len(broker.submitted), 1)
+        self.assertEqual(trader.account.positions, [])
+        self.assertTrue(trader.reconciled)
+
+    def test_missing_stock_quote_does_not_block_the_first_attempt_but_stops_a_retry(self):
+        broker = FakeBroker(fill_mode="rest")
+        trader = self.trader(broker)
+        self.assertIsNone(self.enter_with_retry(trader, lambda: (option(ask=1.02, bid=1.0), None)))
+        self.assertEqual(len(broker.submitted), 1)                         # attempt 1 sent on the decision's price
+        self.assertEqual(trader.account.positions, [])
+        broker = FakeBroker(fill_mode="fill")
+        trader = self.trader(broker)
+        self.assertIsNotNone(self.enter_with_retry(trader, lambda: (option(ask=1.02, bid=1.0), None)))
+
+    def test_entry_retry_gives_up_after_max_attempts(self):
+        broker = FakeBroker(fill_mode="rest")
+        trader = self.trader(broker)
+        self.assertIsNone(self.enter_with_retry(trader, lambda: (option(ask=1.02, bid=1.0), 100.3)))
+        self.assertEqual(len(broker.submitted), 3)
+        self.assertEqual(broker.cancels, [1, 2, 3])
+        self.assertTrue(trader.reconciled)
+
+    def test_entry_retry_does_not_resend_a_rejected_order(self):
+        broker = FakeBroker(fill_mode="reject")
+        trader = self.trader(broker)
+        self.assertIsNone(self.enter_with_retry(trader, lambda: (option(ask=1.02, bid=1.0), 100.3)))
+        self.assertEqual(len(broker.submitted), 1)
+
+    def test_entry_retry_never_stacks_on_an_unconfirmed_order(self):
+        broker = FakeBroker(fill_mode="rest")
+        broker.ignore_cancel = True
+        trader = self.trader(broker)
+        self.assertIsNone(self.enter_with_retry(trader, lambda: (option(ask=1.02, bid=1.0), 100.3)))
+        self.assertEqual(len(broker.submitted), 1)
+        self.assertTrue(any(key.startswith("order:") for key in trader.entry_block_reasons))
+
     def test_unconfirmed_cancellation_blocks_new_entries(self):
         broker = FakeBroker(fill_mode="rest")
         broker.ignore_cancel = True

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <!-- OptioBot export: enabled on the source PC -->
+  <RegistrationInfo>
+    <Description>OptioBot CREDIT_SPREADS PAPER pass (no broker orders).</Description>
+    <URI>\OptioBot\CreditSpreads</URI>
+  </RegistrationInfo>
+  <Principals>
+    <Principal id="Author">
+      <UserId>{USER_SID}</UserId>
+      <LogonType>InteractiveToken</LogonType>
+    </Principal>
+  </Principals>
+  <Settings>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT10M</ExecutionTimeLimit>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <IdleSettings>
+      <Duration>PT10M</Duration>
+      <WaitTimeout>PT1H</WaitTimeout>
+      <StopOnIdleEnd>true</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>
+  </Settings>
+  <Triggers>
+    <CalendarTrigger>
+      <StartBoundary>2026-10-30T08:45:00</StartBoundary>
+      <Repetition>
+        <Interval>PT15M</Interval>
+        <Duration>PT6H31M</Duration>
+        <StopAtDurationEnd>true</StopAtDurationEnd>
+      </Repetition>
+      <ScheduleByWeek>
+        <WeeksInterval>1</WeeksInterval>
+        <DaysOfWeek>
+          <Monday />
+          <Tuesday />
+          <Wednesday />
+          <Thursday />
+          <Friday />
+        </DaysOfWeek>
+      </ScheduleByWeek>
+    </CalendarTrigger>
+  </Triggers>
+  <Actions Context="Author">
+    <Exec>
+      <Command>{REPO}\.venv\Scripts\pythonw.exe</Command>
+      <Arguments>-m trader.cli spreads-run</Arguments>
+      <WorkingDirectory>{REPO}</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>

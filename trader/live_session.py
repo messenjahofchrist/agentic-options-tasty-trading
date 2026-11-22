@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 import time
 from dataclasses import replace
@@ -28,6 +29,15 @@ from .strategy_loader import Strategy, parse_strategy, verify_manifest
 from .tastytrade_client import TastytradeClient
 
 LIVE_DIR_NAME = "live"
+# Owner order 2026-11-18: "It should trade daily without my intervention unless I say stop." While this file exists
+# the LiveEngine scheduled task starts LIVE each weekday without the typed confirmation (live-session --unattended).
+# scripts\live_on.ps1 writes it (live-autostart on); scripts\live_off.ps1 removes it and stops LIVE.
+LIVE_AUTOSTART_FILE = "live_autostart.json"
+LIVE_LOCK_FILE = "live_engine.lock"
+
+
+class LiveAlreadyRunning(RuntimeError):
+    """A second LIVE session on this PC would trade the same account twice."""
 
 
 def live_data_dir(cfg: AppConfig) -> Path:
@@ -369,6 +379,75 @@ def write_readiness_report(cfg: AppConfig, report: dict) -> Path:
     return path
 
 
+def enable_live_autostart(*, root: Path, cfg: AppConfig, note: str = "") -> Path:
+    """Owner standing order: LIVE may start without the typed per-start confirmation until the owner says stop.
+    It replaces only that confirmation: authorize-live (strategy hash + account) is still checked on every start."""
+    if not cfg.account_number:
+        raise RuntimeError("TASTYTRADE_ACCOUNT_NUMBER is not set")
+    record = {"standing_order": "LIVE starts each trading day without a per-start confirmation until the owner says stop",
+              "account_fingerprint": account_fingerprint(cfg.account_number),
+              "account_masked": mask_account(cfg.account_number),
+              "enabled_at_utc": datetime.now(timezone.utc).isoformat(), "note": note}
+    path = root / LIVE_AUTOSTART_FILE
+    temporary = path.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    atomic_replace(temporary, path)
+    return path
+
+
+def disable_live_autostart(*, root: Path, cfg: AppConfig) -> dict:
+    """Owner said stop: remove the standing order and record LIVE as deliberately stopped (the engine process is
+    stopped by scripts\\live_off.ps1). Positions are never sold here; open ones are listed so the owner can act."""
+    path = root / LIVE_AUTOSTART_FILE
+    was_on = path.exists()
+    path.unlink(missing_ok=True)
+    data_dir = live_data_dir(cfg)
+    open_positions: list[str] = []
+    if data_dir.exists():
+        label = ""
+        try:
+            label = json.loads((data_dir / "engine_heartbeat.json").read_text(encoding="utf-8")).get("symbol") or ""
+        except (OSError, ValueError):
+            pass
+        _set_engine_expected(data_dir, expected=False, state="STOPPED", symbol=label)
+        _write_heartbeat(data_dir / "engine_heartbeat.json", status="stopped", symbol=label, mode="LIVE")
+        try:
+            positions = json.loads((data_dir / "live_account.json").read_text(encoding="utf-8")).get("positions") or []
+            open_positions = [p.get("symbol") for p in (positions.values() if isinstance(positions, dict) else positions)]
+        except (OSError, ValueError):
+            pass
+    return {"autostart_was_on": was_on, "autostart_on": False, "open_live_positions": open_positions}
+
+
+def verify_live_autostart(root: Path, account_number: str) -> dict:
+    path = root / LIVE_AUTOSTART_FILE
+    if not path.is_file():
+        raise RuntimeError(f"LIVE unattended start blocked: no owner standing order ({LIVE_AUTOSTART_FILE}); "
+                           "it is off until scripts\\live_on.ps1 is run")
+    record = json.loads(path.read_text(encoding="utf-8"))
+    if record.get("account_fingerprint") != account_fingerprint(account_number or ""):
+        raise RuntimeError("LIVE unattended start blocked: the standing order was given for a different account")
+    return record
+
+
+def _acquire_live_lock(data_dir: Path):
+    """Hold an OS file lock for the life of the LIVE session (released when the process ends, however it ends)."""
+    data_dir.mkdir(parents=True, exist_ok=True)
+    handle = open(data_dir / LIVE_LOCK_FILE, "a+", encoding="utf-8")
+    try:
+        if os.name == "nt":
+            import msvcrt
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        handle.close()
+        raise LiveAlreadyRunning("LIVE blocked: another LIVE session is already running on this PC") from None
+    return handle
+
+
 def confirm_live_start(cfg: AppConfig, *, prompt: Callable[[str], str] = input, interactive: bool | None = None,
                        running: str = "") -> None:
     """A deliberate, per-start human confirmation; .env settings alone never start LIVE."""
@@ -386,41 +465,63 @@ def confirm_live_start(cfg: AppConfig, *, prompt: Callable[[str], str] = input, 
 
 def run_live_session(*, root: Path, cfg: AppConfig, symbols: tuple[str, ...] | None = None,
                      max_restarts: int = MAX_ENGINE_RESTARTS, prompt: Callable[[str], str] = input,
-                     interactive: bool | None = None, v2: Any = None, profile_name: str | None = None) -> None:
+                     interactive: bool | None = None, v2: Any = None, profile_name: str | None = None,
+                     unattended: bool = False) -> None:
     """LIVE: verify gates, confirm with the operator, then run the shared strategy loop with broker execution.
-    With v2 it runs the active PROFESSIONAL_STRATEGY_V2 version (and the small-account rules with profile_name)."""
-    if cfg.mode is not Mode.LIVE:
-        raise RuntimeError("live-session requires TRADING_MODE=LIVE (and ENABLE_LIVE_TRADING=true plus the confirmation phrase)")
-    cfg.validate_startup()
-    base_strategy = parse_strategy(root / "strategy.txt")
-    verify_manifest(root / "strategy.txt", root / "active_strategy.json")
-    strategy, policy = live_plan(root, base_strategy, v2, profile_name)
-    verify_live_authorization(root, base_strategy, cfg.account_number, v2=v2,
-                              profile=policy.name if policy is not None else None)
-    symbols = _session_symbols(strategy, symbols)
-    running = "" if v2 is None else (f"PROFESSIONAL_STRATEGY_V2 {v2.version}"
-                                     + (f" with the {policy.name} account rules" if policy is not None else ""))
-    confirm_live_start(cfg, prompt=prompt, interactive=interactive, running=running)
+    With v2 it runs the active PROFESSIONAL_STRATEGY_V2 version (and the small-account rules with profile_name).
+    unattended (the LiveEngine scheduled task): the owner's standing order (live_autostart.json) takes the place of
+    the typed confirmation; every other gate is unchanged, and a start that is blocked raises a critical alert."""
     live_cfg = replace(cfg, data_dir=live_data_dir(cfg))
-    live_cfg.data_dir.mkdir(parents=True, exist_ok=True)
+    lock = None
+    try:
+        if cfg.mode is not Mode.LIVE:
+            raise RuntimeError("live-session requires TRADING_MODE=LIVE (and ENABLE_LIVE_TRADING=true plus the confirmation phrase)")
+        cfg.validate_startup()
+        base_strategy = parse_strategy(root / "strategy.txt")
+        verify_manifest(root / "strategy.txt", root / "active_strategy.json")
+        strategy, policy = live_plan(root, base_strategy, v2, profile_name)
+        verify_live_authorization(root, base_strategy, cfg.account_number, v2=v2,
+                                  profile=policy.name if policy is not None else None)
+        symbols = _session_symbols(strategy, symbols)
+        running = "" if v2 is None else (f"PROFESSIONAL_STRATEGY_V2 {v2.version}"
+                                         + (f" with the {policy.name} account rules" if policy is not None else ""))
+        lock = _acquire_live_lock(live_cfg.data_dir)
+        if unattended:
+            order = verify_live_autostart(root, cfg.account_number)
+            print(f"LIVE starting unattended on account {mask_account(cfg.account_number)}"
+                  f"{' running ' + running if running else ''} (owner standing order of {order.get('enabled_at_utc')})",
+                  flush=True)
+        else:
+            confirm_live_start(cfg, prompt=prompt, interactive=interactive, running=running)
+    except Exception as exc:
+        if lock is not None:
+            lock.close()
+        if unattended and not isinstance(exc, LiveAlreadyRunning):
+            record_critical_alert("live_autostart_blocked", mode="LIVE",
+                                  details={"error_type": type(exc).__name__, "error": str(exc)[:500]},
+                                  data_dir=live_cfg.data_dir)
+        raise
     restarts = 0
     label = ",".join(symbols)
-    while True:
-        try:
-            _run_live_once(root=root, cfg=live_cfg, strategy=strategy, symbols=symbols, v2=v2, profile=policy)
-            return
-        except Exception as exc:
-            now = datetime.now(timezone.utc)
-            if not _is_connection_failure(exc) or restarts >= max_restarts or not MarketCalendar().is_open(now):
-                raise
-            restarts += 1
-            delay = min(10 * restarts, 60)
-            print(f"RESTARTING LIVE session in {delay}s after {type(exc).__name__} ({restarts}/{max_restarts}); "
-                  "startup re-verifies the account and reconciles before any entry", flush=True)
-            _set_engine_expected(live_cfg.data_dir, expected=True, state="RECOVERING", symbol=label)
-            _write_heartbeat(live_cfg.data_dir / "engine_heartbeat.json", status="recovering", symbol=label, mode="LIVE",
-                             startup_deadline=now + timedelta(seconds=delay, minutes=5))
-            time.sleep(delay)
+    try:
+        while True:
+            try:
+                _run_live_once(root=root, cfg=live_cfg, strategy=strategy, symbols=symbols, v2=v2, profile=policy)
+                return
+            except Exception as exc:
+                now = datetime.now(timezone.utc)
+                if not _is_connection_failure(exc) or restarts >= max_restarts or not MarketCalendar().is_open(now):
+                    raise
+                restarts += 1
+                delay = min(10 * restarts, 60)
+                print(f"RESTARTING LIVE session in {delay}s after {type(exc).__name__} ({restarts}/{max_restarts}); "
+                      "startup re-verifies the account and reconciles before any entry", flush=True)
+                _set_engine_expected(live_cfg.data_dir, expected=True, state="RECOVERING", symbol=label)
+                _write_heartbeat(live_cfg.data_dir / "engine_heartbeat.json", status="recovering", symbol=label,
+                                 mode="LIVE", startup_deadline=now + timedelta(seconds=delay, minutes=5))
+                time.sleep(delay)
+    finally:
+        lock.close()
 
 
 def _run_live_once(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple[str, ...], v2: Any = None,

@@ -9,6 +9,11 @@
 #   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.6.0   # 2.5.0 + favorites first, volatile-day lean
 #   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.7.0   # 2.5.0 + no re-entry after a failed breakout, target must be reachable, runner trail 1.0R
 #   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.8.0   # 2.5.0 + option cost in R logged on every entry (not blocking), advisor veto
+#   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.8.1   # 2.8.0 + runner trail tightens 1.5R -> 0.75R once the gain reaches 3R
+#   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.8.2   # 2.8.1 + breakout measured in daily ranges, buy only the retest, room to the target, LIVE entry retries (needs a new authorize-live)
+#   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.8.3   # 2.8.1 + LIVE entry retries only (2.8.2 entry rules failed the replay; needs a new authorize-live)
+#   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.8.4   # 2.8.3 + profit lock: once up $30, keep at least 60% of the best profit (needs a new authorize-live)
+#   powershell -ExecutionPolicy Bypass -File scripts\set_v2_version.ps1 2.8.5   # 2.8.4 with the profit lock starting at 10% of the premium paid instead of $30 (needs a new authorize-live); amended 11/21: runner tightens at 2R + agent picks (hash b50aeea7)
 #
 # The saved versions live in strategies\v2_versions\. Ledgers (balances, open trades) are never touched: a running
 # engine is stopped and started again with the chosen version and keeps managing its open trades.

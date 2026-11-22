@@ -518,7 +518,8 @@ class EventTests(unittest.TestCase):
 
 class ManagementTests(unittest.TestCase):
     def setUp(self):
-        self.c = cfg().data["management"]
+        self.c = json.loads(json.dumps(cfg().data["management"]))
+        self.c.pop("profit_lock", None)                         # the profit lock has its own tests (lock_cfg)
 
     def pos(self, qty=1):
         return {"trade_id": "t", "right": "C", "quantity": qty, "entry_price": 2.0, "entry_fees": 1.0,
@@ -537,6 +538,44 @@ class ManagementTests(unittest.TestCase):
         floor = p["v2_management"]["breakeven_option_floor"]
         self.assertAlmostEqual(floor, 2.0 + 0.0002 + 2.0 / 100)
         self.assertEqual(self.step(p, 100.95, floor - 0.01)["exit_reason"], "v2_breakeven_stop")
+
+    def lock_cfg(self):
+        c = json.loads(json.dumps(self.c))
+        c["profit_lock"] = {"enabled": True, "activate_profit_dollars": 30, "keep_fraction": 0.60}
+        return c
+
+    def test_profit_lock_owner_examples_50_keeps_30_and_100_keeps_60(self):
+        c, p = self.lock_cfg(), self.pos()                      # breakeven price 2.0 + 0.0002 + 0.02 = 2.0202
+        self.assertIsNone(self.step(p, 100.3, 2.30, c=c)["exit_reason"])        # +$28: not armed yet
+        self.assertNotIn("profit_lock_floor_bid", p["v2_management"])
+        self.step(p, 100.5, 2.5202, c=c)                                       # +$50 net
+        self.assertAlmostEqual(p["v2_management"]["profit_lock_floor_bid"], 2.3202, places=4)   # keeps $30
+        self.assertIsNone(self.step(p, 100.4, 2.40, c=c)["exit_reason"])
+        self.assertAlmostEqual(p["v2_management"]["profit_lock_floor_bid"], 2.3202, places=4)   # never lowers
+        self.step(p, 101.0, 3.0202, c=c)                                       # +$100 net
+        self.assertAlmostEqual(p["v2_management"]["profit_lock_floor_bid"], 2.6202, places=4)   # keeps $60
+        self.assertEqual(self.step(p, 100.8, 2.62, c=c)["exit_reason"], "v2_profit_lock_stop")
+
+    def test_profit_lock_remembers_the_peak_across_a_restart_from_mfe(self):
+        c, p = self.lock_cfg(), self.pos()
+        p["mfe"] = 50.02                                                       # best bid 2.5002 before the restart
+        self.step(p, 100.3, 2.40, c=c)
+        self.assertAlmostEqual(p["v2_management"]["profit_lock_floor_bid"], 2.0202 + 0.6 * 0.48, places=4)
+        self.assertEqual(self.step(p, 100.2, 2.30, c=c)["exit_reason"], "v2_profit_lock_stop")
+
+    def test_profit_lock_can_start_at_a_percentage_of_the_premium(self):
+        c = self.lock_cfg()
+        c["profit_lock"] = {"enabled": True, "activate_profit_fraction": 0.10, "keep_fraction": 0.60}
+        p = self.pos()                                                         # premium $200 -> starts at +$20
+        self.step(p, 100.2, 2.20, c=c)                                         # +$17.98: not yet
+        self.assertNotIn("profit_lock_floor_bid", p["v2_management"])
+        self.step(p, 100.3, 2.2202, c=c)                                       # +$20
+        self.assertAlmostEqual(p["v2_management"]["profit_lock_floor_bid"], 2.0202 + 0.12, places=4)   # keeps $12
+
+    def test_profit_lock_off_changes_nothing(self):
+        p = self.pos()
+        self.step(p, 100.5, 2.6)
+        self.assertNotIn("profit_lock_floor_bid", p["v2_management"])
 
     def trail_cfg(self):
         # the trailing stop as 2.0.0-2.3.0 ran it (switched off from 2.4.0)
@@ -587,6 +626,8 @@ class ManagementTests(unittest.TestCase):
     def runner_cfg(self):
         c = json.loads(json.dumps(self.c))
         c["let_winners_run"].update(enabled=True, lock_r=1.0, trail_r=1.0)
+        c["let_winners_run"].pop("tighten_after_r", None)   # the plain trail; the 2.8.1 tightening has its own tests
+        c["let_winners_run"].pop("tight_trail_r", None)
         c["trailing"]["enabled"] = False
         return c
 
@@ -602,6 +643,31 @@ class ManagementTests(unittest.TestCase):
         self.assertIsNone(self.step(p, 103.5, 4.5, c=c)["exit_reason"])
         self.assertAlmostEqual(p["v2_management"]["runner_stop_underlying"], 103.0)   # never moves back
         self.assertEqual(self.step(p, 102.9, 4.0, c=c)["exit_reason"], "v2_runner_stop")
+
+    def test_runner_trail_tightens_once_the_gain_reaches_tighten_after_r(self):
+        c = self.runner_cfg()
+        c["let_winners_run"].update(trail_r=1.5, tighten_after_r=3.0, tight_trail_r=0.75)
+        p = self.pos()                                 # entry 100, stop 99 (R = 1), target 102
+        self.step(p, 102.5, 3.0, c=c)
+        self.assertAlmostEqual(p["v2_management"]["runner_stop_underlying"], 101.0)   # 1.5R behind 102.5
+        self.assertNotIn("runner_tightened", p["v2_management"])
+        self.step(p, 104.0, 5.0, c=c)                  # 4R in favour: tight trail
+        self.assertAlmostEqual(p["v2_management"]["runner_stop_underlying"], 103.25)  # 0.75R behind 104
+        self.assertTrue(p["v2_management"]["runner_tightened"])
+        self.assertIsNone(self.step(p, 103.5, 4.5, c=c)["exit_reason"])
+        self.assertEqual(self.step(p, 103.2, 4.2, c=c)["exit_reason"], "v2_runner_stop")
+
+    def test_runner_trail_tightening_put_side_and_never_loosens(self):
+        c = self.runner_cfg()
+        c["let_winners_run"].update(trail_r=1.5, tighten_after_r=3.0, tight_trail_r=0.75)
+        p = dict(self.pos(), right="P", stop_underlying=101.0, target_underlying=98.0)
+        self.step(p, 97.5, 3.0, c=c)
+        self.assertAlmostEqual(p["v2_management"]["runner_stop_underlying"], 99.0)    # 1.5R above 97.5
+        self.step(p, 96.0, 5.0, c=c)
+        self.assertAlmostEqual(p["v2_management"]["runner_stop_underlying"], 96.75)   # 0.75R above 96
+        self.step(p, 96.5, 4.6, c=c)
+        self.assertAlmostEqual(p["v2_management"]["runner_stop_underlying"], 96.75)
+        self.assertEqual(self.step(p, 96.8, 4.4, c=c)["exit_reason"], "v2_runner_stop")
 
     def test_let_winners_run_off_never_holds_past_the_target(self):
         c = json.loads(json.dumps(self.c))
@@ -951,11 +1017,11 @@ class DataHubTests(unittest.TestCase):
 
 
 class SeparationTests(unittest.TestCase):
-    def test_v2_refuses_live_and_test_sessions(self):
+    def test_v2_refuses_test_sessions(self):
+        # LIVE + V2 is allowed since 2026-11-15 (tests/test_live_v2.py covers it, including the refusal of features
+        # LIVE cannot execute). The old "LIVE refused" assertion here passed only outside market hours.
         from trader import paper_runner
         from trader.config import AppConfig
-        with self.assertRaises(RuntimeError):
-            asyncio.run(paper_runner._run(root=ROOT, cfg=AppConfig(), strategy=cfg().base, symbols=("SPY",), live=object(), v2=cfg()))
         with self.assertRaises(RuntimeError):
             asyncio.run(paper_runner._run(root=ROOT, cfg=AppConfig(), strategy=cfg().base, symbols=("SPY",), test_mode=True, v2=cfg()))
 

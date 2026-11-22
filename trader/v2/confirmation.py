@@ -18,6 +18,13 @@ States
 An actionable state stays actionable only while price remains beyond the level by min_distance_atr x ATR and no
 more than the strategy's breakout_lookback_bars have passed since the breakout (the core's own anti-chasing bound).
 
+2.8.2 (owner, 2026-11-19; NFLX 11/18 was bought on a 12-cent poke that a 3-cent lunchtime ATR called "3.4 ATR"):
+  min_distance_adr      every distance-beyond-the-level test also needs min_distance_adr x the average daily range
+  retest_tolerance_adr  a retest counts within max(retest_tolerance_atr x ATR, retest_tolerance_adr x daily range)
+  pullback_only         CONFIRMED is a waiting state, not a buy: from it, a retest moves to PULLBACK_HOLDING and only
+                        PULLBACK_CONFIRMED is actionable
+The daily range comes from set_daily_range(); while it is unknown, a check that needs it is not met (fail closed).
+
 Every REJECTED_BREAKOUT / FAILED_BREAKOUT is also kept in `failures` (side, level, time) for the rest of the session,
 so a later setup can see that the same breakout already failed (V2 failed_level_reentry, 2.7.0).
 """
@@ -67,10 +74,35 @@ class BreakoutTracker:
         self.setup: Setup | None = None
         self.last_bar_time: datetime | None = None
         self.failures: list[dict[str, Any]] = []   # this session's failed breakouts, oldest first
+        self.daily_range: float | None = None      # average daily range (2.8.2 ADR rulers)
+
+    def set_daily_range(self, value: float | None) -> None:
+        self.daily_range = float(value) if value is not None and value > 0 else None
 
     @property
     def state(self) -> str:
         return self.setup.state if self.setup else "NO_SETUP"
+
+    @property
+    def actionable_states(self) -> set[str]:
+        return {"PULLBACK_CONFIRMED"} if self.cfg.get("pullback_only") else ACTIONABLE
+
+    def _min_beyond(self, atr: float) -> float | None:
+        """How far past the level price must be (None = unknown: the ADR ruler is on but the daily range is not known)."""
+        need = self.cfg["min_distance_atr"] * atr
+        adr_fraction = self.cfg.get("min_distance_adr") or 0
+        if adr_fraction:
+            if self.daily_range is None:
+                return None
+            need = max(need, adr_fraction * self.daily_range)
+        return need
+
+    def _retest_tolerance(self, atr: float) -> float:
+        pull = self.cfg["pullback"]
+        tolerance = pull["retest_tolerance_atr"] * atr
+        if pull.get("retest_tolerance_adr") and self.daily_range is not None:
+            tolerance = max(tolerance, pull["retest_tolerance_adr"] * self.daily_range)
+        return tolerance
 
     def _move(self, state: str, bar: Bar, why: str) -> None:
         assert self.setup is not None
@@ -115,10 +147,20 @@ class BreakoutTracker:
             self.failures = self.failures[-20:]
             return self.result(bar)
         setup.closes_beyond = setup.closes_beyond + 1 if beyond > 0 else 0
-        touched = ((bar.low - setup.level) * direction if direction == 1 else (setup.level - bar.high)) <= pull["retest_tolerance_atr"] * atr
+        touched = ((bar.low - setup.level) * direction if direction == 1 else (setup.level - bar.high)) <= self._retest_tolerance(atr)
+        need = self._min_beyond(atr)
+
+        if setup.state == "CONFIRMED" and cfg.get("pullback_only"):
+            # 2.8.2: the breakout is proven but not bought; wait for a retest of the level.
+            if touched and setup.bars_since <= pull["max_wait_bars"]:
+                setup.retest_extreme = bar.high if direction == 1 else bar.low
+                self._move("PULLBACK_HOLDING", bar, "price back at the level after a confirmed breakout; range not lost")
+            elif setup.bars_since >= pull["max_wait_bars"]:
+                self._move("EXPIRED", bar, "no retest of the level within pullback.max_wait_bars (pullback_only)")
+            return self.result(bar)
 
         if setup.state in ACTIONABLE:
-            if setup.bars_since > self.lookback or beyond < cfg["min_distance_atr"] * atr:
+            if setup.bars_since > self.lookback or need is None or beyond < need:
                 if pull["enabled"] and touched and setup.bars_since <= pull["max_wait_bars"]:
                     setup.retest_extreme = bar.high if direction == 1 else bar.low
                     self._move("PULLBACK_HOLDING", bar, "price back at the level; range not lost")
@@ -129,7 +171,8 @@ class BreakoutTracker:
             return self.result(bar)
 
         if setup.state == "PULLBACK_HOLDING":
-            if setup.retest_extreme is not None and beyond > 0 and (close - setup.retest_extreme) * direction > 0:
+            if (setup.retest_extreme is not None and beyond > 0 and (close - setup.retest_extreme) * direction > 0
+                    and need is not None and beyond >= need):
                 self._move("PULLBACK_CONFIRMED", bar, "completed close beyond the level and the retest bar")
             elif touched:
                 setup.retest_extreme = bar.high if direction == 1 else bar.low  # latest retest bar sets the trigger
@@ -154,15 +197,19 @@ class BreakoutTracker:
         assert setup is not None
         direction = 1 if setup.side == "CALL" else -1
         beyond = (bar.close - setup.level) * direction
+        need = self._min_beyond(atr)
         if (setup.bars_since <= self.cfg["max_wait_bars"] and setup.closes_beyond >= self.cfg["confirm_closes"]
-                and beyond >= self.cfg["min_distance_atr"] * atr):
+                and need is not None and beyond >= need):
+            adr = f", {beyond / self.daily_range:.2f} daily ranges" if self.daily_range else ""
             self._move("CONFIRMED", bar, f"{setup.closes_beyond} completed closes beyond the level, "
-                                         f"{beyond / atr:.2f} ATR beyond")
+                                         f"{beyond / atr:.2f} ATR beyond{adr}")
             return True
         return False
 
     def result(self, bar: Bar, note: str | None = None) -> dict[str, Any]:
-        out = {"state": self.state, "actionable": self.state in ACTIONABLE, "bar_utc": bar.timestamp.isoformat()}
+        out = {"state": self.state, "actionable": self.state in self.actionable_states, "bar_utc": bar.timestamp.isoformat()}
+        if self.daily_range is not None:
+            out["daily_range"] = self.daily_range
         if self.setup:
             out["setup"] = self.setup.to_dict()
         if self.failures:

@@ -1,0 +1,1909 @@
+{
+  "source": "massive month chunks + Jun-Oct 2026 cache",
+  "first_day": "2026-11-03",
+  "last_day": "2026-11-04",
+  "days_replayed": 2,
+  "trade_symbols": [
+    "SPY",
+    "QQQ",
+    "IWM",
+    "DIA",
+    "TLT",
+    "NVDA",
+    "AAPL",
+    "AMZN",
+    "GOOGL",
+    "PLTR",
+    "NFLX",
+    "INTC",
+    "UBER",
+    "BAC"
+  ],
+  "strategy_version": "2.8.2",
+  "notes": [
+    "option costs: per-symbol cost table measured on recorded quotes from Oct-Nov 2026, applied to every period (spreads in earlier periods may have differed)",
+    "FOMC windows before June 2026 from the published calendar as recalled (unverified); earnings, IV and option selection are not replayed (as in every replay)",
+    "VIX: prior-session daily closes (19 sessions)"
+  ],
+  "option_cost_contract": "standard_7_21_dte",
+  "model": "What is replayed exactly (the production code, not a re-implementation):\n  core signal and indicators (strategy_engine.evaluate_underlying_diagnostics), breakout confirmation (confirmation.py),\n  market context, regime, sector confirmation, VWAP alignment, FOMC windows, correlation clusters and the aggregate\n  cap (pipeline.evaluate_candidate stages 1-7), trailing stop and time stop (management.py).\nWhat is NOT replayed (no historical data): option selection, option bid/ask, Greeks and the expected-net-R gate,\n  IV rank/HV checks, earnings dates, the dollar daily-loss limit. Breakeven is approximated on the underlying (exit\n  when the close returns to the entry price after arming). P&L is the underlying proxy the original backtest uses:\n  100 shares, $0.01/share slippage each way, $1.40 fees per trade, R = net / (|entry - stop| x 100).\nHarness rules for both strategies: completed-bar decisions, entry at that bar's close, exits on later completed bar\ncloses (like the live exit check), flat at the session's last bar, max 4 open / 6 entries per session (original risk\nlimits), no averaging, same-minute candidates ranked by trend efficiency (expected net R needs option quotes), the\n3-consecutive-loss block reset each session (live carries it across sessions; resetting stops one streak from\nending the replay). No bar after the decision bar is ever used for a decision.",
+  "variants": {
+    "v2": {
+      "all": {
+        "trades": 1,
+        "win_rate": 0.0,
+        "avg_win_r": null,
+        "avg_loss_r": -0.162,
+        "expectancy_r": -0.162,
+        "total_r": -0.16,
+        "max_drawdown_r": 0.16,
+        "profit_factor": 0.0,
+        "net_pnl_100sh": -16.4,
+        "fees": 1.4,
+        "slippage": 2.0
+      },
+      "net_of_option_cost": {
+        "available": true,
+        "coverage": "1 of 1 trades",
+        "contract": "standard_7_21_dte",
+        "estimated_with_median_cost": 0,
+        "median_cost_bps_used": 9.809,
+        "gross_total_r": -0.16,
+        "cost_total_r": 0.16,
+        "net_total_r": -0.32,
+        "net_expectancy_r": -0.319,
+        "net_win_rate": 0.0,
+        "net_profit_factor": 0.0,
+        "median_cost_r": 0.157,
+        "by_symbol": {
+          "SPY": {
+            "trades": 1,
+            "gross_r": -0.16,
+            "cost_r": 0.16,
+            "net_r": -0.32
+          }
+        }
+      },
+      "by_quarter": {
+        "2026-Q4": {
+          "gross": {
+            "trades": 1,
+            "win_rate": 0.0,
+            "avg_win_r": null,
+            "avg_loss_r": -0.162,
+            "expectancy_r": -0.162,
+            "total_r": -0.16,
+            "max_drawdown_r": 0.16,
+            "profit_factor": 0.0,
+            "net_pnl_100sh": -16.4,
+            "fees": 1.4,
+            "slippage": 2.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "1 of 1 trades",
+            "contract": "standard_7_21_dte",
+            "estimated_with_median_cost": 0,
+            "median_cost_bps_used": 9.809,
+            "gross_total_r": -0.16,
+            "cost_total_r": 0.16,
+            "net_total_r": -0.32,
+            "net_expectancy_r": -0.319,
+            "net_win_rate": 0.0,
+            "net_profit_factor": 0.0,
+            "median_cost_r": 0.157,
+            "by_symbol": {
+              "SPY": {
+                "trades": 1,
+                "gross_r": -0.16,
+                "cost_r": 0.16,
+                "net_r": -0.32
+              }
+            }
+          }
+        }
+      },
+      "by_symbol": {
+        "SPY": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.162,
+          "expectancy_r": -0.162,
+          "total_r": -0.16,
+          "max_drawdown_r": 0.16,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -16.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        }
+      },
+      "by_side": {
+        "CALL": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.162,
+          "expectancy_r": -0.162,
+          "total_r": -0.16,
+          "max_drawdown_r": 0.16,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -16.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        }
+      },
+      "by_hour_et": {
+        "10:00": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.162,
+          "expectancy_r": -0.162,
+          "total_r": -0.16,
+          "max_drawdown_r": 0.16,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -16.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        }
+      }
+    },
+    "v282_all_off": {
+      "all": {
+        "trades": 10,
+        "win_rate": 0.3,
+        "avg_win_r": 0.461,
+        "avg_loss_r": -0.832,
+        "expectancy_r": -0.444,
+        "total_r": -4.44,
+        "max_drawdown_r": 4.44,
+        "profit_factor": 0.237,
+        "net_pnl_100sh": -958.5,
+        "fees": 14.0,
+        "slippage": 20.0
+      },
+      "net_of_option_cost": {
+        "available": true,
+        "coverage": "10 of 10 trades",
+        "contract": "standard_7_21_dte",
+        "estimated_with_median_cost": 0,
+        "median_cost_bps_used": 9.809,
+        "gross_total_r": -4.44,
+        "cost_total_r": 1.26,
+        "net_total_r": -5.7,
+        "net_expectancy_r": -0.57,
+        "net_win_rate": 0.2,
+        "net_profit_factor": 0.142,
+        "median_cost_r": 0.101,
+        "by_symbol": {
+          "AAPL": {
+            "trades": 1,
+            "gross_r": -0.34,
+            "cost_r": 0.03,
+            "net_r": -0.37
+          },
+          "AMZN": {
+            "trades": 1,
+            "gross_r": 0.1,
+            "cost_r": 0.1,
+            "net_r": -0.0
+          },
+          "GOOGL": {
+            "trades": 1,
+            "gross_r": -0.92,
+            "cost_r": 0.04,
+            "net_r": -0.96
+          },
+          "INTC": {
+            "trades": 1,
+            "gross_r": -0.04,
+            "cost_r": 0.2,
+            "net_r": -0.24
+          },
+          "IWM": {
+            "trades": 2,
+            "gross_r": -0.66,
+            "cost_r": 0.58,
+            "net_r": -1.24
+          },
+          "PLTR": {
+            "trades": 1,
+            "gross_r": 0.43,
+            "cost_r": 0.05,
+            "net_r": 0.38
+          },
+          "QQQ": {
+            "trades": 2,
+            "gross_r": -2.2,
+            "cost_r": 0.2,
+            "net_r": -2.4
+          },
+          "SPY": {
+            "trades": 1,
+            "gross_r": -0.81,
+            "cost_r": 0.06,
+            "net_r": -0.87
+          }
+        }
+      },
+      "by_quarter": {
+        "2026-Q4": {
+          "gross": {
+            "trades": 10,
+            "win_rate": 0.3,
+            "avg_win_r": 0.461,
+            "avg_loss_r": -0.832,
+            "expectancy_r": -0.444,
+            "total_r": -4.44,
+            "max_drawdown_r": 4.44,
+            "profit_factor": 0.237,
+            "net_pnl_100sh": -958.5,
+            "fees": 14.0,
+            "slippage": 20.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "10 of 10 trades",
+            "contract": "standard_7_21_dte",
+            "estimated_with_median_cost": 0,
+            "median_cost_bps_used": 9.809,
+            "gross_total_r": -4.44,
+            "cost_total_r": 1.26,
+            "net_total_r": -5.7,
+            "net_expectancy_r": -0.57,
+            "net_win_rate": 0.2,
+            "net_profit_factor": 0.142,
+            "median_cost_r": 0.101,
+            "by_symbol": {
+              "AAPL": {
+                "trades": 1,
+                "gross_r": -0.34,
+                "cost_r": 0.03,
+                "net_r": -0.37
+              },
+              "AMZN": {
+                "trades": 1,
+                "gross_r": 0.1,
+                "cost_r": 0.1,
+                "net_r": -0.0
+              },
+              "GOOGL": {
+                "trades": 1,
+                "gross_r": -0.92,
+                "cost_r": 0.04,
+                "net_r": -0.96
+              },
+              "INTC": {
+                "trades": 1,
+                "gross_r": -0.04,
+                "cost_r": 0.2,
+                "net_r": -0.24
+              },
+              "IWM": {
+                "trades": 2,
+                "gross_r": -0.66,
+                "cost_r": 0.58,
+                "net_r": -1.24
+              },
+              "PLTR": {
+                "trades": 1,
+                "gross_r": 0.43,
+                "cost_r": 0.05,
+                "net_r": 0.38
+              },
+              "QQQ": {
+                "trades": 2,
+                "gross_r": -2.2,
+                "cost_r": 0.2,
+                "net_r": -2.4
+              },
+              "SPY": {
+                "trades": 1,
+                "gross_r": -0.81,
+                "cost_r": 0.06,
+                "net_r": -0.87
+              }
+            }
+          }
+        }
+      },
+      "by_symbol": {
+        "AAPL": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.34,
+          "expectancy_r": -0.34,
+          "total_r": -0.34,
+          "max_drawdown_r": 0.34,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -161.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "AMZN": {
+          "trades": 1,
+          "win_rate": 1.0,
+          "avg_win_r": 0.098,
+          "avg_loss_r": null,
+          "expectancy_r": 0.098,
+          "total_r": 0.1,
+          "max_drawdown_r": 0.0,
+          "profit_factor": null,
+          "net_pnl_100sh": 17.6,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "GOOGL": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.924,
+          "expectancy_r": -0.924,
+          "total_r": -0.92,
+          "max_drawdown_r": 0.92,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -312.9,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "INTC": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.039,
+          "expectancy_r": -0.039,
+          "total_r": -0.04,
+          "max_drawdown_r": 0.04,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -3.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "IWM": {
+          "trades": 2,
+          "win_rate": 0.5,
+          "avg_win_r": 0.858,
+          "avg_loss_r": -1.513,
+          "expectancy_r": -0.328,
+          "total_r": -0.66,
+          "max_drawdown_r": 1.51,
+          "profit_factor": 0.567,
+          "net_pnl_100sh": -31.8,
+          "fees": 2.8,
+          "slippage": 4.0
+        },
+        "PLTR": {
+          "trades": 1,
+          "win_rate": 1.0,
+          "avg_win_r": 0.427,
+          "avg_loss_r": null,
+          "expectancy_r": 0.427,
+          "total_r": 0.43,
+          "max_drawdown_r": 0.0,
+          "profit_factor": null,
+          "net_pnl_100sh": 158.1,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "QQQ": {
+          "trades": 2,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -1.101,
+          "expectancy_r": -1.101,
+          "total_r": -2.2,
+          "max_drawdown_r": 2.2,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -417.3,
+          "fees": 2.8,
+          "slippage": 4.0
+        },
+        "SPY": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.807,
+          "expectancy_r": -0.807,
+          "total_r": -0.81,
+          "max_drawdown_r": 0.81,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -207.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        }
+      },
+      "by_side": {
+        "CALL": {
+          "trades": 9,
+          "win_rate": 0.333,
+          "avg_win_r": 0.461,
+          "avg_loss_r": -0.965,
+          "expectancy_r": -0.489,
+          "total_r": -4.4,
+          "max_drawdown_r": 4.4,
+          "profit_factor": 0.239,
+          "net_pnl_100sh": -955.1,
+          "fees": 12.6,
+          "slippage": 18.0
+        },
+        "PUT": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.039,
+          "expectancy_r": -0.039,
+          "total_r": -0.04,
+          "max_drawdown_r": 0.04,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -3.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        }
+      },
+      "by_hour_et": {
+        "09:00": {
+          "trades": 2,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.927,
+          "expectancy_r": -0.927,
+          "total_r": -1.85,
+          "max_drawdown_r": 1.85,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -234.8,
+          "fees": 2.8,
+          "slippage": 4.0
+        },
+        "10:00": {
+          "trades": 4,
+          "win_rate": 0.5,
+          "avg_win_r": 0.642,
+          "avg_loss_r": -0.596,
+          "expectancy_r": 0.023,
+          "total_r": 0.09,
+          "max_drawdown_r": 1.15,
+          "profit_factor": 1.078,
+          "net_pnl_100sh": -22.1,
+          "fees": 5.6,
+          "slippage": 8.0
+        },
+        "11:00": {
+          "trades": 2,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.866,
+          "expectancy_r": -0.866,
+          "total_r": -1.73,
+          "max_drawdown_r": 1.73,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -520.3,
+          "fees": 2.8,
+          "slippage": 4.0
+        },
+        "13:00": {
+          "trades": 2,
+          "win_rate": 0.5,
+          "avg_win_r": 0.098,
+          "avg_loss_r": -1.05,
+          "expectancy_r": -0.476,
+          "total_r": -0.95,
+          "max_drawdown_r": 1.05,
+          "profit_factor": 0.093,
+          "net_pnl_100sh": -181.3,
+          "fees": 2.8,
+          "slippage": 4.0
+        }
+      }
+    },
+    "v282_only_ruler": {
+      "all": {
+        "trades": 9,
+        "win_rate": 0.333,
+        "avg_win_r": 0.461,
+        "avg_loss_r": -0.968,
+        "expectancy_r": -0.492,
+        "total_r": -4.43,
+        "max_drawdown_r": 4.43,
+        "profit_factor": 0.238,
+        "net_pnl_100sh": -1018.1,
+        "fees": 12.6,
+        "slippage": 18.0
+      },
+      "net_of_option_cost": {
+        "available": true,
+        "coverage": "9 of 9 trades",
+        "contract": "standard_7_21_dte",
+        "estimated_with_median_cost": 0,
+        "median_cost_bps_used": 9.809,
+        "gross_total_r": -4.43,
+        "cost_total_r": 0.97,
+        "net_total_r": -5.4,
+        "net_expectancy_r": -0.599,
+        "net_win_rate": 0.222,
+        "net_profit_factor": 0.149,
+        "median_cost_r": 0.098,
+        "by_symbol": {
+          "AAPL": {
+            "trades": 1,
+            "gross_r": -0.39,
+            "cost_r": 0.03,
+            "net_r": -0.42
+          },
+          "AMZN": {
+            "trades": 1,
+            "gross_r": 0.1,
+            "cost_r": 0.1,
+            "net_r": -0.0
+          },
+          "GOOGL": {
+            "trades": 1,
+            "gross_r": -0.92,
+            "cost_r": 0.04,
+            "net_r": -0.96
+          },
+          "INTC": {
+            "trades": 1,
+            "gross_r": -1.59,
+            "cost_r": 0.2,
+            "net_r": -1.79
+          },
+          "IWM": {
+            "trades": 1,
+            "gross_r": 0.86,
+            "cost_r": 0.29,
+            "net_r": 0.57
+          },
+          "PLTR": {
+            "trades": 1,
+            "gross_r": 0.43,
+            "cost_r": 0.05,
+            "net_r": 0.38
+          },
+          "QQQ": {
+            "trades": 2,
+            "gross_r": -2.2,
+            "cost_r": 0.2,
+            "net_r": -2.4
+          },
+          "SPY": {
+            "trades": 1,
+            "gross_r": -0.71,
+            "cost_r": 0.06,
+            "net_r": -0.77
+          }
+        }
+      },
+      "by_quarter": {
+        "2026-Q4": {
+          "gross": {
+            "trades": 9,
+            "win_rate": 0.333,
+            "avg_win_r": 0.461,
+            "avg_loss_r": -0.968,
+            "expectancy_r": -0.492,
+            "total_r": -4.43,
+            "max_drawdown_r": 4.43,
+            "profit_factor": 0.238,
+            "net_pnl_100sh": -1018.1,
+            "fees": 12.6,
+            "slippage": 18.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "9 of 9 trades",
+            "contract": "standard_7_21_dte",
+            "estimated_with_median_cost": 0,
+            "median_cost_bps_used": 9.809,
+            "gross_total_r": -4.43,
+            "cost_total_r": 0.97,
+            "net_total_r": -5.4,
+            "net_expectancy_r": -0.599,
+            "net_win_rate": 0.222,
+            "net_profit_factor": 0.149,
+            "median_cost_r": 0.098,
+            "by_symbol": {
+              "AAPL": {
+                "trades": 1,
+                "gross_r": -0.39,
+                "cost_r": 0.03,
+                "net_r": -0.42
+              },
+              "AMZN": {
+                "trades": 1,
+                "gross_r": 0.1,
+                "cost_r": 0.1,
+                "net_r": -0.0
+              },
+              "GOOGL": {
+                "trades": 1,
+                "gross_r": -0.92,
+                "cost_r": 0.04,
+                "net_r": -0.96
+              },
+              "INTC": {
+                "trades": 1,
+                "gross_r": -1.59,
+                "cost_r": 0.2,
+                "net_r": -1.79
+              },
+              "IWM": {
+                "trades": 1,
+                "gross_r": 0.86,
+                "cost_r": 0.29,
+                "net_r": 0.57
+              },
+              "PLTR": {
+                "trades": 1,
+                "gross_r": 0.43,
+                "cost_r": 0.05,
+                "net_r": 0.38
+              },
+              "QQQ": {
+                "trades": 2,
+                "gross_r": -2.2,
+                "cost_r": 0.2,
+                "net_r": -2.4
+              },
+              "SPY": {
+                "trades": 1,
+                "gross_r": -0.71,
+                "cost_r": 0.06,
+                "net_r": -0.77
+              }
+            }
+          }
+        }
+      },
+      "by_symbol": {
+        "AAPL": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.395,
+          "expectancy_r": -0.395,
+          "total_r": -0.39,
+          "max_drawdown_r": 0.39,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -187.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "AMZN": {
+          "trades": 1,
+          "win_rate": 1.0,
+          "avg_win_r": 0.098,
+          "avg_loss_r": null,
+          "expectancy_r": 0.098,
+          "total_r": 0.1,
+          "max_drawdown_r": 0.0,
+          "profit_factor": null,
+          "net_pnl_100sh": 17.6,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "GOOGL": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.924,
+          "expectancy_r": -0.924,
+          "total_r": -0.92,
+          "max_drawdown_r": 0.92,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -312.9,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "INTC": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -1.588,
+          "expectancy_r": -1.588,
+          "total_r": -1.59,
+          "max_drawdown_r": 1.59,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -137.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "IWM": {
+          "trades": 1,
+          "win_rate": 1.0,
+          "avg_win_r": 0.858,
+          "avg_loss_r": null,
+          "expectancy_r": 0.858,
+          "total_r": 0.86,
+          "max_drawdown_r": 0.0,
+          "profit_factor": null,
+          "net_pnl_100sh": 41.6,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "PLTR": {
+          "trades": 1,
+          "win_rate": 1.0,
+          "avg_win_r": 0.427,
+          "avg_loss_r": null,
+          "expectancy_r": 0.427,
+          "total_r": 0.43,
+          "max_drawdown_r": 0.0,
+          "profit_factor": null,
+          "net_pnl_100sh": 158.1,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "QQQ": {
+          "trades": 2,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -1.098,
+          "expectancy_r": -1.098,
+          "total_r": -2.2,
+          "max_drawdown_r": 2.2,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -416.3,
+          "fees": 2.8,
+          "slippage": 4.0
+        },
+        "SPY": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.706,
+          "expectancy_r": -0.706,
+          "total_r": -0.71,
+          "max_drawdown_r": 0.71,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -181.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        }
+      },
+      "by_side": {
+        "CALL": {
+          "trades": 8,
+          "win_rate": 0.375,
+          "avg_win_r": 0.461,
+          "avg_loss_r": -0.844,
+          "expectancy_r": -0.355,
+          "total_r": -2.84,
+          "max_drawdown_r": 2.84,
+          "profit_factor": 0.327,
+          "net_pnl_100sh": -880.7,
+          "fees": 11.2,
+          "slippage": 16.0
+        },
+        "PUT": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -1.588,
+          "expectancy_r": -1.588,
+          "total_r": -1.59,
+          "max_drawdown_r": 1.59,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -137.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        }
+      },
+      "by_hour_et": {
+        "09:00": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.395,
+          "expectancy_r": -0.395,
+          "total_r": -0.39,
+          "max_drawdown_r": 0.39,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -187.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "10:00": {
+          "trades": 3,
+          "win_rate": 0.667,
+          "avg_win_r": 0.642,
+          "avg_loss_r": -1.588,
+          "expectancy_r": -0.101,
+          "total_r": -0.3,
+          "max_drawdown_r": 1.59,
+          "profit_factor": 0.809,
+          "net_pnl_100sh": 62.3,
+          "fees": 4.2,
+          "slippage": 6.0
+        },
+        "11:00": {
+          "trades": 2,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -1.002,
+          "expectancy_r": -1.002,
+          "total_r": -2.0,
+          "max_drawdown_r": 2.0,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -517.3,
+          "fees": 2.8,
+          "slippage": 4.0
+        },
+        "12:00": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.706,
+          "expectancy_r": -0.706,
+          "total_r": -0.71,
+          "max_drawdown_r": 0.71,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -181.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "13:00": {
+          "trades": 2,
+          "win_rate": 0.5,
+          "avg_win_r": 0.098,
+          "avg_loss_r": -1.118,
+          "expectancy_r": -0.51,
+          "total_r": -1.02,
+          "max_drawdown_r": 1.12,
+          "profit_factor": 0.088,
+          "net_pnl_100sh": -194.3,
+          "fees": 2.8,
+          "slippage": 4.0
+        }
+      }
+    },
+    "v282_only_pullback": {
+      "all": {
+        "trades": 3,
+        "win_rate": 0.667,
+        "avg_win_r": 0.546,
+        "avg_loss_r": -1.062,
+        "expectancy_r": 0.01,
+        "total_r": 0.03,
+        "max_drawdown_r": 1.06,
+        "profit_factor": 1.029,
+        "net_pnl_100sh": 41.0,
+        "fees": 4.2,
+        "slippage": 6.0
+      },
+      "net_of_option_cost": {
+        "available": true,
+        "coverage": "3 of 3 trades",
+        "contract": "standard_7_21_dte",
+        "estimated_with_median_cost": 0,
+        "median_cost_bps_used": 9.809,
+        "gross_total_r": 0.03,
+        "cost_total_r": 0.46,
+        "net_total_r": -0.42,
+        "net_expectancy_r": -0.142,
+        "net_win_rate": 0.667,
+        "net_profit_factor": 0.635,
+        "median_cost_r": 0.101,
+        "by_symbol": {
+          "NFLX": {
+            "trades": 1,
+            "gross_r": 0.51,
+            "cost_r": 0.31,
+            "net_r": 0.2
+          },
+          "PLTR": {
+            "trades": 1,
+            "gross_r": 0.59,
+            "cost_r": 0.05,
+            "net_r": 0.54
+          },
+          "QQQ": {
+            "trades": 1,
+            "gross_r": -1.06,
+            "cost_r": 0.1,
+            "net_r": -1.16
+          }
+        }
+      },
+      "by_quarter": {
+        "2026-Q4": {
+          "gross": {
+            "trades": 3,
+            "win_rate": 0.667,
+            "avg_win_r": 0.546,
+            "avg_loss_r": -1.062,
+            "expectancy_r": 0.01,
+            "total_r": 0.03,
+            "max_drawdown_r": 1.06,
+            "profit_factor": 1.029,
+            "net_pnl_100sh": 41.0,
+            "fees": 4.2,
+            "slippage": 6.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "3 of 3 trades",
+            "contract": "standard_7_21_dte",
+            "estimated_with_median_cost": 0,
+            "median_cost_bps_used": 9.809,
+            "gross_total_r": 0.03,
+            "cost_total_r": 0.46,
+            "net_total_r": -0.42,
+            "net_expectancy_r": -0.142,
+            "net_win_rate": 0.667,
+            "net_profit_factor": 0.635,
+            "median_cost_r": 0.101,
+            "by_symbol": {
+              "NFLX": {
+                "trades": 1,
+                "gross_r": 0.51,
+                "cost_r": 0.31,
+                "net_r": 0.2
+              },
+              "PLTR": {
+                "trades": 1,
+                "gross_r": 0.59,
+                "cost_r": 0.05,
+                "net_r": 0.54
+              },
+              "QQQ": {
+                "trades": 1,
+                "gross_r": -1.06,
+                "cost_r": 0.1,
+                "net_r": -1.16
+              }
+            }
+          }
+        }
+      },
+      "by_symbol": {
+        "NFLX": {
+          "trades": 1,
+          "win_rate": 1.0,
+          "avg_win_r": 0.507,
+          "avg_loss_r": null,
+          "expectancy_r": 0.507,
+          "total_r": 0.51,
+          "max_drawdown_r": 0.0,
+          "profit_factor": null,
+          "net_pnl_100sh": 25.1,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "PLTR": {
+          "trades": 1,
+          "win_rate": 1.0,
+          "avg_win_r": 0.586,
+          "avg_loss_r": null,
+          "expectancy_r": 0.586,
+          "total_r": 0.59,
+          "max_drawdown_r": 0.0,
+          "profit_factor": null,
+          "net_pnl_100sh": 217.1,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "QQQ": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -1.062,
+          "expectancy_r": -1.062,
+          "total_r": -1.06,
+          "max_drawdown_r": 1.06,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -201.2,
+          "fees": 1.4,
+          "slippage": 2.0
+        }
+      },
+      "by_side": {
+        "CALL": {
+          "trades": 3,
+          "win_rate": 0.667,
+          "avg_win_r": 0.546,
+          "avg_loss_r": -1.062,
+          "expectancy_r": 0.01,
+          "total_r": 0.03,
+          "max_drawdown_r": 1.06,
+          "profit_factor": 1.029,
+          "net_pnl_100sh": 41.0,
+          "fees": 4.2,
+          "slippage": 6.0
+        }
+      },
+      "by_hour_et": {
+        "11:00": {
+          "trades": 1,
+          "win_rate": 1.0,
+          "avg_win_r": 0.586,
+          "avg_loss_r": null,
+          "expectancy_r": 0.586,
+          "total_r": 0.59,
+          "max_drawdown_r": 0.0,
+          "profit_factor": null,
+          "net_pnl_100sh": 217.1,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "13:00": {
+          "trades": 2,
+          "win_rate": 0.5,
+          "avg_win_r": 0.507,
+          "avg_loss_r": -1.062,
+          "expectancy_r": -0.277,
+          "total_r": -0.55,
+          "max_drawdown_r": 1.06,
+          "profit_factor": 0.478,
+          "net_pnl_100sh": -176.1,
+          "fees": 2.8,
+          "slippage": 4.0
+        }
+      }
+    },
+    "v282_only_room": {
+      "all": {
+        "trades": 5,
+        "win_rate": 0.2,
+        "avg_win_r": 0.858,
+        "avg_loss_r": -1.19,
+        "expectancy_r": -0.781,
+        "total_r": -3.9,
+        "max_drawdown_r": 3.9,
+        "profit_factor": 0.18,
+        "net_pnl_100sh": -621.51,
+        "fees": 7.0,
+        "slippage": 10.0
+      },
+      "net_of_option_cost": {
+        "available": true,
+        "coverage": "5 of 5 trades",
+        "contract": "standard_7_21_dte",
+        "estimated_with_median_cost": 0,
+        "median_cost_bps_used": 9.809,
+        "gross_total_r": -3.9,
+        "cost_total_r": 0.86,
+        "net_total_r": -4.76,
+        "net_expectancy_r": -0.952,
+        "net_win_rate": 0.2,
+        "net_profit_factor": 0.106,
+        "median_cost_r": 0.101,
+        "by_symbol": {
+          "GOOGL": {
+            "trades": 1,
+            "gross_r": -1.04,
+            "cost_r": 0.07,
+            "net_r": -1.12
+          },
+          "IWM": {
+            "trades": 2,
+            "gross_r": -0.66,
+            "cost_r": 0.58,
+            "net_r": -1.24
+          },
+          "QQQ": {
+            "trades": 2,
+            "gross_r": -2.2,
+            "cost_r": 0.2,
+            "net_r": -2.4
+          }
+        }
+      },
+      "by_quarter": {
+        "2026-Q4": {
+          "gross": {
+            "trades": 5,
+            "win_rate": 0.2,
+            "avg_win_r": 0.858,
+            "avg_loss_r": -1.19,
+            "expectancy_r": -0.781,
+            "total_r": -3.9,
+            "max_drawdown_r": 3.9,
+            "profit_factor": 0.18,
+            "net_pnl_100sh": -621.51,
+            "fees": 7.0,
+            "slippage": 10.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "5 of 5 trades",
+            "contract": "standard_7_21_dte",
+            "estimated_with_median_cost": 0,
+            "median_cost_bps_used": 9.809,
+            "gross_total_r": -3.9,
+            "cost_total_r": 0.86,
+            "net_total_r": -4.76,
+            "net_expectancy_r": -0.952,
+            "net_win_rate": 0.2,
+            "net_profit_factor": 0.106,
+            "median_cost_r": 0.101,
+            "by_symbol": {
+              "GOOGL": {
+                "trades": 1,
+                "gross_r": -1.04,
+                "cost_r": 0.07,
+                "net_r": -1.12
+              },
+              "IWM": {
+                "trades": 2,
+                "gross_r": -0.66,
+                "cost_r": 0.58,
+                "net_r": -1.24
+              },
+              "QQQ": {
+                "trades": 2,
+                "gross_r": -2.2,
+                "cost_r": 0.2,
+                "net_r": -2.4
+              }
+            }
+          }
+        }
+      },
+      "by_symbol": {
+        "GOOGL": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -1.045,
+          "expectancy_r": -1.045,
+          "total_r": -1.04,
+          "max_drawdown_r": 1.04,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -172.41,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "IWM": {
+          "trades": 2,
+          "win_rate": 0.5,
+          "avg_win_r": 0.858,
+          "avg_loss_r": -1.513,
+          "expectancy_r": -0.328,
+          "total_r": -0.66,
+          "max_drawdown_r": 1.51,
+          "profit_factor": 0.567,
+          "net_pnl_100sh": -31.8,
+          "fees": 2.8,
+          "slippage": 4.0
+        },
+        "QQQ": {
+          "trades": 2,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -1.101,
+          "expectancy_r": -1.101,
+          "total_r": -2.2,
+          "max_drawdown_r": 2.2,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -417.3,
+          "fees": 2.8,
+          "slippage": 4.0
+        }
+      },
+      "by_side": {
+        "CALL": {
+          "trades": 5,
+          "win_rate": 0.2,
+          "avg_win_r": 0.858,
+          "avg_loss_r": -1.19,
+          "expectancy_r": -0.781,
+          "total_r": -3.9,
+          "max_drawdown_r": 3.9,
+          "profit_factor": 0.18,
+          "net_pnl_100sh": -621.51,
+          "fees": 7.0,
+          "slippage": 10.0
+        }
+      },
+      "by_hour_et": {
+        "09:00": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -1.513,
+          "expectancy_r": -1.513,
+          "total_r": -1.51,
+          "max_drawdown_r": 1.51,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -73.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "10:00": {
+          "trades": 2,
+          "win_rate": 0.5,
+          "avg_win_r": 0.858,
+          "avg_loss_r": -1.153,
+          "expectancy_r": -0.147,
+          "total_r": -0.29,
+          "max_drawdown_r": 1.15,
+          "profit_factor": 0.744,
+          "net_pnl_100sh": -176.8,
+          "fees": 2.8,
+          "slippage": 4.0
+        },
+        "13:00": {
+          "trades": 2,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -1.047,
+          "expectancy_r": -1.047,
+          "total_r": -2.09,
+          "max_drawdown_r": 2.09,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -371.31,
+          "fees": 2.8,
+          "slippage": 4.0
+        }
+      }
+    },
+    "v282_no_prior_extreme": {
+      "all": {
+        "trades": 3,
+        "win_rate": 0.333,
+        "avg_win_r": 0.098,
+        "avg_loss_r": -0.875,
+        "expectancy_r": -0.551,
+        "total_r": -1.65,
+        "max_drawdown_r": 1.65,
+        "profit_factor": 0.056,
+        "net_pnl_100sh": -136.2,
+        "fees": 4.2,
+        "slippage": 6.0
+      },
+      "net_of_option_cost": {
+        "available": true,
+        "coverage": "3 of 3 trades",
+        "contract": "standard_7_21_dte",
+        "estimated_with_median_cost": 0,
+        "median_cost_bps_used": 9.809,
+        "gross_total_r": -1.65,
+        "cost_total_r": 0.45,
+        "net_total_r": -2.11,
+        "net_expectancy_r": -0.702,
+        "net_win_rate": 0.0,
+        "net_profit_factor": 0.0,
+        "median_cost_r": 0.157,
+        "by_symbol": {
+          "AMZN": {
+            "trades": 1,
+            "gross_r": 0.1,
+            "cost_r": 0.1,
+            "net_r": -0.0
+          },
+          "INTC": {
+            "trades": 1,
+            "gross_r": -1.59,
+            "cost_r": 0.2,
+            "net_r": -1.79
+          },
+          "SPY": {
+            "trades": 1,
+            "gross_r": -0.16,
+            "cost_r": 0.16,
+            "net_r": -0.32
+          }
+        }
+      },
+      "by_quarter": {
+        "2026-Q4": {
+          "gross": {
+            "trades": 3,
+            "win_rate": 0.333,
+            "avg_win_r": 0.098,
+            "avg_loss_r": -0.875,
+            "expectancy_r": -0.551,
+            "total_r": -1.65,
+            "max_drawdown_r": 1.65,
+            "profit_factor": 0.056,
+            "net_pnl_100sh": -136.2,
+            "fees": 4.2,
+            "slippage": 6.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "3 of 3 trades",
+            "contract": "standard_7_21_dte",
+            "estimated_with_median_cost": 0,
+            "median_cost_bps_used": 9.809,
+            "gross_total_r": -1.65,
+            "cost_total_r": 0.45,
+            "net_total_r": -2.11,
+            "net_expectancy_r": -0.702,
+            "net_win_rate": 0.0,
+            "net_profit_factor": 0.0,
+            "median_cost_r": 0.157,
+            "by_symbol": {
+              "AMZN": {
+                "trades": 1,
+                "gross_r": 0.1,
+                "cost_r": 0.1,
+                "net_r": -0.0
+              },
+              "INTC": {
+                "trades": 1,
+                "gross_r": -1.59,
+                "cost_r": 0.2,
+                "net_r": -1.79
+              },
+              "SPY": {
+                "trades": 1,
+                "gross_r": -0.16,
+                "cost_r": 0.16,
+                "net_r": -0.32
+              }
+            }
+          }
+        }
+      },
+      "by_symbol": {
+        "AMZN": {
+          "trades": 1,
+          "win_rate": 1.0,
+          "avg_win_r": 0.098,
+          "avg_loss_r": null,
+          "expectancy_r": 0.098,
+          "total_r": 0.1,
+          "max_drawdown_r": 0.0,
+          "profit_factor": null,
+          "net_pnl_100sh": 17.6,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "INTC": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -1.588,
+          "expectancy_r": -1.588,
+          "total_r": -1.59,
+          "max_drawdown_r": 1.59,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -137.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "SPY": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.162,
+          "expectancy_r": -0.162,
+          "total_r": -0.16,
+          "max_drawdown_r": 0.16,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -16.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        }
+      },
+      "by_side": {
+        "CALL": {
+          "trades": 2,
+          "win_rate": 0.5,
+          "avg_win_r": 0.098,
+          "avg_loss_r": -0.162,
+          "expectancy_r": -0.032,
+          "total_r": -0.06,
+          "max_drawdown_r": 0.16,
+          "profit_factor": 0.604,
+          "net_pnl_100sh": 1.2,
+          "fees": 2.8,
+          "slippage": 4.0
+        },
+        "PUT": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -1.588,
+          "expectancy_r": -1.588,
+          "total_r": -1.59,
+          "max_drawdown_r": 1.59,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -137.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        }
+      },
+      "by_hour_et": {
+        "10:00": {
+          "trades": 2,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.875,
+          "expectancy_r": -0.875,
+          "total_r": -1.75,
+          "max_drawdown_r": 1.75,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -153.8,
+          "fees": 2.8,
+          "slippage": 4.0
+        },
+        "13:00": {
+          "trades": 1,
+          "win_rate": 1.0,
+          "avg_win_r": 0.098,
+          "avg_loss_r": null,
+          "expectancy_r": 0.098,
+          "total_r": 0.1,
+          "max_drawdown_r": 0.0,
+          "profit_factor": null,
+          "net_pnl_100sh": 17.6,
+          "fees": 1.4,
+          "slippage": 2.0
+        }
+      }
+    },
+    "v281_tighten_2r": {
+      "all": {
+        "trades": 10,
+        "win_rate": 0.3,
+        "avg_win_r": 0.585,
+        "avg_loss_r": -0.832,
+        "expectancy_r": -0.407,
+        "total_r": -4.07,
+        "max_drawdown_r": 4.07,
+        "profit_factor": 0.301,
+        "net_pnl_100sh": -940.5,
+        "fees": 14.0,
+        "slippage": 20.0
+      },
+      "net_of_option_cost": {
+        "available": true,
+        "coverage": "10 of 10 trades",
+        "contract": "standard_7_21_dte",
+        "estimated_with_median_cost": 0,
+        "median_cost_bps_used": 9.809,
+        "gross_total_r": -4.07,
+        "cost_total_r": 1.26,
+        "net_total_r": -5.33,
+        "net_expectancy_r": -0.533,
+        "net_win_rate": 0.2,
+        "net_profit_factor": 0.198,
+        "median_cost_r": 0.101,
+        "by_symbol": {
+          "AAPL": {
+            "trades": 1,
+            "gross_r": -0.34,
+            "cost_r": 0.03,
+            "net_r": -0.37
+          },
+          "AMZN": {
+            "trades": 1,
+            "gross_r": 0.1,
+            "cost_r": 0.1,
+            "net_r": -0.0
+          },
+          "GOOGL": {
+            "trades": 1,
+            "gross_r": -0.92,
+            "cost_r": 0.04,
+            "net_r": -0.96
+          },
+          "INTC": {
+            "trades": 1,
+            "gross_r": -0.04,
+            "cost_r": 0.2,
+            "net_r": -0.24
+          },
+          "IWM": {
+            "trades": 2,
+            "gross_r": -0.28,
+            "cost_r": 0.58,
+            "net_r": -0.87
+          },
+          "PLTR": {
+            "trades": 1,
+            "gross_r": 0.43,
+            "cost_r": 0.05,
+            "net_r": 0.38
+          },
+          "QQQ": {
+            "trades": 2,
+            "gross_r": -2.2,
+            "cost_r": 0.2,
+            "net_r": -2.4
+          },
+          "SPY": {
+            "trades": 1,
+            "gross_r": -0.81,
+            "cost_r": 0.06,
+            "net_r": -0.87
+          }
+        }
+      },
+      "by_quarter": {
+        "2026-Q4": {
+          "gross": {
+            "trades": 10,
+            "win_rate": 0.3,
+            "avg_win_r": 0.585,
+            "avg_loss_r": -0.832,
+            "expectancy_r": -0.407,
+            "total_r": -4.07,
+            "max_drawdown_r": 4.07,
+            "profit_factor": 0.301,
+            "net_pnl_100sh": -940.5,
+            "fees": 14.0,
+            "slippage": 20.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "10 of 10 trades",
+            "contract": "standard_7_21_dte",
+            "estimated_with_median_cost": 0,
+            "median_cost_bps_used": 9.809,
+            "gross_total_r": -4.07,
+            "cost_total_r": 1.26,
+            "net_total_r": -5.33,
+            "net_expectancy_r": -0.533,
+            "net_win_rate": 0.2,
+            "net_profit_factor": 0.198,
+            "median_cost_r": 0.101,
+            "by_symbol": {
+              "AAPL": {
+                "trades": 1,
+                "gross_r": -0.34,
+                "cost_r": 0.03,
+                "net_r": -0.37
+              },
+              "AMZN": {
+                "trades": 1,
+                "gross_r": 0.1,
+                "cost_r": 0.1,
+                "net_r": -0.0
+              },
+              "GOOGL": {
+                "trades": 1,
+                "gross_r": -0.92,
+                "cost_r": 0.04,
+                "net_r": -0.96
+              },
+              "INTC": {
+                "trades": 1,
+                "gross_r": -0.04,
+                "cost_r": 0.2,
+                "net_r": -0.24
+              },
+              "IWM": {
+                "trades": 2,
+                "gross_r": -0.28,
+                "cost_r": 0.58,
+                "net_r": -0.87
+              },
+              "PLTR": {
+                "trades": 1,
+                "gross_r": 0.43,
+                "cost_r": 0.05,
+                "net_r": 0.38
+              },
+              "QQQ": {
+                "trades": 2,
+                "gross_r": -2.2,
+                "cost_r": 0.2,
+                "net_r": -2.4
+              },
+              "SPY": {
+                "trades": 1,
+                "gross_r": -0.81,
+                "cost_r": 0.06,
+                "net_r": -0.87
+              }
+            }
+          }
+        }
+      },
+      "by_symbol": {
+        "AAPL": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.34,
+          "expectancy_r": -0.34,
+          "total_r": -0.34,
+          "max_drawdown_r": 0.34,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -161.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "AMZN": {
+          "trades": 1,
+          "win_rate": 1.0,
+          "avg_win_r": 0.098,
+          "avg_loss_r": null,
+          "expectancy_r": 0.098,
+          "total_r": 0.1,
+          "max_drawdown_r": 0.0,
+          "profit_factor": null,
+          "net_pnl_100sh": 17.6,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "GOOGL": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.924,
+          "expectancy_r": -0.924,
+          "total_r": -0.92,
+          "max_drawdown_r": 0.92,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -312.9,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "INTC": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.039,
+          "expectancy_r": -0.039,
+          "total_r": -0.04,
+          "max_drawdown_r": 0.04,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -3.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "IWM": {
+          "trades": 2,
+          "win_rate": 0.5,
+          "avg_win_r": 1.229,
+          "avg_loss_r": -1.513,
+          "expectancy_r": -0.142,
+          "total_r": -0.28,
+          "max_drawdown_r": 1.51,
+          "profit_factor": 0.812,
+          "net_pnl_100sh": -13.8,
+          "fees": 2.8,
+          "slippage": 4.0
+        },
+        "PLTR": {
+          "trades": 1,
+          "win_rate": 1.0,
+          "avg_win_r": 0.427,
+          "avg_loss_r": null,
+          "expectancy_r": 0.427,
+          "total_r": 0.43,
+          "max_drawdown_r": 0.0,
+          "profit_factor": null,
+          "net_pnl_100sh": 158.1,
+          "fees": 1.4,
+          "slippage": 2.0
+        },
+        "QQQ": {
+          "trades": 2,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -1.101,
+          "expectancy_r": -1.101,
+          "total_r": -2.2,
+          "max_drawdown_r": 2.2,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -417.3,
+          "fees": 2.8,
+          "slippage": 4.0
+        },
+        "SPY": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.807,
+          "expectancy_r": -0.807,
+          "total_r": -0.81,
+          "max_drawdown_r": 0.81,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -207.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        }
+      },
+      "by_side": {
+        "CALL": {
+          "trades": 9,
+          "win_rate": 0.333,
+          "avg_win_r": 0.585,
+          "avg_loss_r": -0.965,
+          "expectancy_r": -0.448,
+          "total_r": -4.03,
+          "max_drawdown_r": 4.03,
+          "profit_factor": 0.303,
+          "net_pnl_100sh": -937.1,
+          "fees": 12.6,
+          "slippage": 18.0
+        },
+        "PUT": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.039,
+          "expectancy_r": -0.039,
+          "total_r": -0.04,
+          "max_drawdown_r": 0.04,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -3.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        }
+      },
+      "by_hour_et": {
+        "09:00": {
+          "trades": 2,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.927,
+          "expectancy_r": -0.927,
+          "total_r": -1.85,
+          "max_drawdown_r": 1.85,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -234.8,
+          "fees": 2.8,
+          "slippage": 4.0
+        },
+        "10:00": {
+          "trades": 4,
+          "win_rate": 0.5,
+          "avg_win_r": 0.828,
+          "avg_loss_r": -0.596,
+          "expectancy_r": 0.116,
+          "total_r": 0.46,
+          "max_drawdown_r": 1.15,
+          "profit_factor": 1.389,
+          "net_pnl_100sh": -4.1,
+          "fees": 5.6,
+          "slippage": 8.0
+        },
+        "11:00": {
+          "trades": 2,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.866,
+          "expectancy_r": -0.866,
+          "total_r": -1.73,
+          "max_drawdown_r": 1.73,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -520.3,
+          "fees": 2.8,
+          "slippage": 4.0
+        },
+        "13:00": {
+          "trades": 2,
+          "win_rate": 0.5,
+          "avg_win_r": 0.098,
+          "avg_loss_r": -1.05,
+          "expectancy_r": -0.476,
+          "total_r": -0.95,
+          "max_drawdown_r": 1.05,
+          "profit_factor": 0.093,
+          "net_pnl_100sh": -181.3,
+          "fees": 2.8,
+          "slippage": 4.0
+        }
+      }
+    },
+    "v282_tighten_2r": {
+      "all": {
+        "trades": 1,
+        "win_rate": 0.0,
+        "avg_win_r": null,
+        "avg_loss_r": -0.162,
+        "expectancy_r": -0.162,
+        "total_r": -0.16,
+        "max_drawdown_r": 0.16,
+        "profit_factor": 0.0,
+        "net_pnl_100sh": -16.4,
+        "fees": 1.4,
+        "slippage": 2.0
+      },
+      "net_of_option_cost": {
+        "available": true,
+        "coverage": "1 of 1 trades",
+        "contract": "standard_7_21_dte",
+        "estimated_with_median_cost": 0,
+        "median_cost_bps_used": 9.809,
+        "gross_total_r": -0.16,
+        "cost_total_r": 0.16,
+        "net_total_r": -0.32,
+        "net_expectancy_r": -0.319,
+        "net_win_rate": 0.0,
+        "net_profit_factor": 0.0,
+        "median_cost_r": 0.157,
+        "by_symbol": {
+          "SPY": {
+            "trades": 1,
+            "gross_r": -0.16,
+            "cost_r": 0.16,
+            "net_r": -0.32
+          }
+        }
+      },
+      "by_quarter": {
+        "2026-Q4": {
+          "gross": {
+            "trades": 1,
+            "win_rate": 0.0,
+            "avg_win_r": null,
+            "avg_loss_r": -0.162,
+            "expectancy_r": -0.162,
+            "total_r": -0.16,
+            "max_drawdown_r": 0.16,
+            "profit_factor": 0.0,
+            "net_pnl_100sh": -16.4,
+            "fees": 1.4,
+            "slippage": 2.0
+          },
+          "net": {
+            "available": true,
+            "coverage": "1 of 1 trades",
+            "contract": "standard_7_21_dte",
+            "estimated_with_median_cost": 0,
+            "median_cost_bps_used": 9.809,
+            "gross_total_r": -0.16,
+            "cost_total_r": 0.16,
+            "net_total_r": -0.32,
+            "net_expectancy_r": -0.319,
+            "net_win_rate": 0.0,
+            "net_profit_factor": 0.0,
+            "median_cost_r": 0.157,
+            "by_symbol": {
+              "SPY": {
+                "trades": 1,
+                "gross_r": -0.16,
+                "cost_r": 0.16,
+                "net_r": -0.32
+              }
+            }
+          }
+        }
+      },
+      "by_symbol": {
+        "SPY": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.162,
+          "expectancy_r": -0.162,
+          "total_r": -0.16,
+          "max_drawdown_r": 0.16,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -16.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        }
+      },
+      "by_side": {
+        "CALL": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.162,
+          "expectancy_r": -0.162,
+          "total_r": -0.16,
+          "max_drawdown_r": 0.16,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -16.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        }
+      },
+      "by_hour_et": {
+        "10:00": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_win_r": null,
+          "avg_loss_r": -0.162,
+          "expectancy_r": -0.162,
+          "total_r": -0.16,
+          "max_drawdown_r": 0.16,
+          "profit_factor": 0.0,
+          "net_pnl_100sh": -16.4,
+          "fees": 1.4,
+          "slippage": 2.0
+        }
+      }
+    }
+  }
+}

@@ -127,7 +127,10 @@ SCHEMA: dict[str, Any] = {
     "sector_map_file": _string, "economic_calendar_file": _string,
     "context": {"broad_symbols": _tickers, "sector_etfs": _tickers, "volatility_index": _string,
                 "max_bar_age_seconds": _num(60, 900), "vix_max_age_seconds": _num(30, 900),
-                "daily_history_sessions": _num(20, 250, integer=True), "premarket_start_et": _hhmm},
+                "daily_history_sessions": _num(20, 250, integer=True), "premarket_start_et": _hhmm,
+                # 2.8.2: sessions in the average daily range (high minus low) that min_distance_adr,
+                # retest_tolerance_adr and room_to_target measure against. Required when any of them is used.
+                "average_range_sessions": _Optional(_num(5, 60, integer=True))},
     "regime": {"enabled": _bool, "vix_disorderly_level": _num(0, lo_open=True),
                "vix_disorderly_change_fraction": _num(0, 1, lo_open=True),
                "spy_disorderly_atr_fraction": _num(0, 1, lo_open=True),
@@ -143,8 +146,15 @@ SCHEMA: dict[str, Any] = {
     "vwap_alignment": {"enabled": _bool},
     "confirmation": {"enabled": _bool, "confirm_closes": _num(1, 10, integer=True), "min_distance_atr": _num(0, 10),
                      "max_wait_bars": _num(1, 60, integer=True),
+                     # 2.8.2 (owner, 2026-11-19): the breakout must also clear the level by this fraction of the
+                     # average daily range (a one-minute ATR at lunch can be 3 cents, so 0.25 ATR is noise).
+                     "min_distance_adr": _Optional(_num(0, 1)),
+                     # 2.8.2: CONFIRMED is no longer a buy; only PULLBACK_CONFIRMED (retest of the level, then a
+                     # close beyond the retest bar) is. No chasing the first push.
+                     "pullback_only": _Optional(_bool),
                      "pullback": {"enabled": _bool, "retest_tolerance_atr": _num(0, 10),
-                                  "max_wait_bars": _num(1, 120, integer=True)}},
+                                  "max_wait_bars": _num(1, 120, integer=True),
+                                  "retest_tolerance_adr": _Optional(_num(0, 1))}},
     "correlation": {"enabled": _bool, "lookback_sessions": _num(10, 250, integer=True),
                     "min_observations": _num(10, 250, integer=True), "threshold": _num(0, 1, lo_open=True),
                     "fallback": _choice("sector_and_index_groups")},
@@ -178,11 +188,20 @@ SCHEMA: dict[str, Any] = {
     "min_opening_range": {"enabled": _bool, "etf_fraction": _num(0, 0.1), "equity_fraction": _num(0, 0.1)},
     "management": {"breakeven": {"enabled": _bool, "trigger_r": _num(0, lo_open=True),
                                  "require_option_above_floor": _bool},
-                   "let_winners_run": {"enabled": _bool, "lock_r": _num(0, 10), "trail_r": _num(0, 10, lo_open=True)},
+                   # 2.8.1 (owner, 2026-11-17): tighten_after_r + tight_trail_r, given together or not at all.
+                   "let_winners_run": {"enabled": _bool, "lock_r": _num(0, 10), "trail_r": _num(0, 10, lo_open=True),
+                                       "tighten_after_r": _Optional(_num(0, 20, lo_open=True)),
+                                       "tight_trail_r": _Optional(_num(0, 10, lo_open=True))},
                    "trailing": {"enabled": _bool, "trigger_r": _num(0, lo_open=True),
                                 "atr_multiple": _atr_multiple},
                    "time_stop": {"enabled": _bool, "after_minutes": _num(1, 390, integer=True), "min_progress_r": _num(0, 10)},
-                   "partial_profit": {"enabled": _bool, "trigger_r": _num(0, lo_open=True), "fraction": _num(0, 1, lo_open=True)}},
+                   "partial_profit": {"enabled": _bool, "trigger_r": _num(0, lo_open=True), "fraction": _num(0, 1, lo_open=True)},
+                   # 2.8.4 (owner, 2026-11-20): trail the profit in dollars (option bid), keep keep_fraction of the best.
+                   # 2.8.5: activate_profit_fraction (of the premium paid) instead of activate_profit_dollars.
+                   "profit_lock": _Optional({"enabled": _bool,
+                                             "activate_profit_dollars": _Optional(_num(0, 10000, lo_open=True)),
+                                             "activate_profit_fraction": _Optional(_num(0, 10, lo_open=True)),
+                                             "keep_fraction": _num(0, 1, lo_open=True)})},
     "shadow_benchmark": {"enabled": _bool},
     # 2.8.0 (owner, 2026-11-11): round-trip option cost as a fraction of the trade's own planned risk, per profile.
     # enforce false = measured and logged on every approved candidate, never blocks.
@@ -204,6 +223,25 @@ SCHEMA: dict[str, Any] = {
     # 2.9.0 (owner, 2026-11-12): a stop at least min_stop_fraction of the price away, and a target at least
     # min_target_multiple stops away, so the option's round-trip cost is a smaller share of the risk.
     "stop_policy": _Optional({"enabled": _bool, "min_stop_fraction": _num(0, 0.1), "min_target_multiple": _num(0, 10)}),
+    # 2.8.2 (owner, 2026-11-19, after NFLX was bought at the day's high on 11/18): skip an entry whose target needs a
+    # bigger day than the stock normally has, or lies past the prior session's high (calls) / low (puts).
+    "room_to_target": _Optional({"enabled": _bool, "max_day_range_adr": _num(0.1, 10),
+                                 "reject_target_past_prior_extreme": _bool}),
+    # 2.8.2 (owner, 2026-11-19, after a LIVE IWM entry at the 11-second-old ask was cancelled unfilled while paper
+    # filled): LIVE entry orders. Each attempt re-reads the contract's quote and bids its current ask; it gives up
+    # when the ask is more than max_chase_fraction above the decision's ask, the trade's budget would be exceeded,
+    # the stock is past the stop, or it already covered max_move_toward_target of the way to the target.
+    # PAPER fills are unchanged (always at the decision ask plus slippage).
+    "live_entry": _Optional({"enabled": _bool, "max_attempts": _num(1, 6, integer=True),
+                             "attempt_timeout_seconds": _num(2, 30), "max_chase_fraction": _num(0, 0.25),
+                             "max_move_toward_target": _num(0, 1)}),
+    # 2.8.5 (owner, 2026-11-20): an "almost_sure" trade idea from ANY advisor agent (data/advisor/agent_picks.json) is
+    # bought; agents need not agree. The breakout, regime, sector and volume stages are skipped; the safety limits
+    # stay (kill switch, broker checks, entry window, late cutoff, events, budget, risk engine, option quality). See
+    # trader/v2/agent_picks.py.
+    "agent_picks": _Optional({"enabled": _bool, "valid_minutes": _num(5, 240, integer=True),
+                              "max_per_session": _num(0, 10, integer=True), "max_move_toward_target": _num(0, 1),
+                              "min_expected_net_r": _num(-5, 10), "honor_vetoes": _bool}),
 }
 
 
@@ -320,6 +358,20 @@ def load_v2_config(root: Path, path: str | Path = CONFIG_FILE) -> V2Config:
                             f"but {base_info['filename']} is {base.version} {base.sha256[:12]}")
     if data["correlation"]["min_observations"] > data["correlation"]["lookback_sessions"]:
         raise V2ConfigError("correlation.min_observations cannot exceed lookback_sessions")
+    runner = data["management"]["let_winners_run"]
+    if ("tighten_after_r" in runner) != ("tight_trail_r" in runner):
+        raise V2ConfigError("let_winners_run needs tighten_after_r and tight_trail_r together")
+    if "tight_trail_r" in runner and runner["tight_trail_r"] > runner["trail_r"]:
+        raise V2ConfigError("let_winners_run.tight_trail_r cannot be wider than trail_r")
+    lock = data["management"].get("profit_lock")
+    if lock is not None and (("activate_profit_dollars" in lock) == ("activate_profit_fraction" in lock)):
+        raise V2ConfigError("profit_lock needs exactly one of activate_profit_dollars or activate_profit_fraction")
+    uses_adr = (data["confirmation"].get("min_distance_adr") or data["confirmation"]["pullback"].get("retest_tolerance_adr")
+                or (data.get("room_to_target") or {}).get("enabled"))
+    if uses_adr and "average_range_sessions" not in data["context"]:
+        raise V2ConfigError("min_distance_adr, retest_tolerance_adr and room_to_target need context.average_range_sessions")
+    if data["confirmation"].get("pullback_only") and not data["confirmation"]["pullback"]["enabled"]:
+        raise V2ConfigError("confirmation.pullback_only needs confirmation.pullback.enabled")
     policy = data.get("contract_policy") or {}
     if policy and policy["min_dte"] > policy["max_dte"]:
         raise V2ConfigError("contract_policy.min_dte cannot exceed max_dte")

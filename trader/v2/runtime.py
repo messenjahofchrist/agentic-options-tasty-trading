@@ -37,6 +37,7 @@ from .options import fetch_option_quotes_cached
 from .regime import RegimeResult, classify
 from .sectors import SectorMap
 from .vetoes import VETO_FILE, load_vetoes
+from . import agent_picks as picks_mod
 
 ET = ZoneInfo("America/New_York")
 TRACKER_REPLAY_BARS = 60
@@ -72,6 +73,7 @@ class V2Session:
         self.events = EventEngine(config.calendar, self.cfg["events"], next_session=self._next_session)
         self.correlation = CorrelationModel(self.cfg["correlation"], self.sector_map, {})
         self.daily_closes: dict[str, list[float]] = {}
+        self.average_daily_range: dict[str, float | None] = {}
         self.metrics: dict[str, dict] = {}
         self.metrics_error: str | None = None
         self.last_metrics_refresh: datetime | None = None
@@ -86,6 +88,9 @@ class V2Session:
         self._snapshot_built = datetime.now(timezone.utc)
         self._chains: dict[tuple[str, datetime], list[OptionQuote]] = {}
         self._veto_cache: tuple[float | None, dict | None] = (None, None)
+        self._picks_cache: tuple[float | None, dict | None] = (None, None)
+        self.pick_book = picks_mod.PickBook(data_dir / "v2_agent_picks.json")
+        self._pick_notes: dict[str, str] = {}   # last logged reason per pick, so a waiting pick is logged once per reason
         self.decisions_log = data_dir / "v2_decisions.jsonl"
         self.snapshot_path = data_dir / "v2_context_snapshot.json"
         self.status_path = data_dir / "v2_status.json"
@@ -137,6 +142,17 @@ class V2Session:
                                             {s: [(r["session_date"], r["close"]) for r in rows] for s, rows in daily.items()})
         self.daily_closes = {s: [float(r["close"]) for r in rows if r["session_date"] < today.isoformat()]
                              for s, rows in daily.items()}
+        # 2.8.2: average daily range for the ADR rulers (confirmation) and room_to_target.
+        range_sessions = self.cfg["context"].get("average_range_sessions")
+        if range_sessions:
+            for symbol, rows in daily.items():
+                adr = pipeline.average_daily_range([float(r["high"]) - float(r["low"]) for r in rows
+                                                    if r["session_date"] < today.isoformat()], int(range_sessions))
+                self.average_daily_range[symbol] = adr
+                if symbol in self.trackers:
+                    self.trackers[symbol].set_daily_range(adr)
+            status["average_daily_range"] = {s: round(v, 4) if v else None for s, v in self.average_daily_range.items()
+                                             if s in self.trackers}
         self.context.provenance["daily_history"] = {"source": "tastytrade DXLink {=1d} candles (shared cache)",
                                                     "symbols": len(daily), "failures": failures, "today": today.isoformat()}
         status["daily_history"] = {"symbols": len(daily), "failures": failures}
@@ -287,10 +303,96 @@ class V2Session:
             self._veto_cache = (stamp, load_vetoes(self.root))
         return self._veto_cache[1]
 
+    def agent_picks_document(self) -> dict | None:
+        """data/advisor/agent_picks.json, re-read only when it changes. None when agent_picks is off or absent."""
+        if not (self.cfg.get("agent_picks") or {}).get("enabled"):
+            return None
+        try:
+            stamp = (self.root / picks_mod.PICKS_FILE).stat().st_mtime
+        except OSError:
+            return None
+        if self._picks_cache[0] != stamp:
+            self._picks_cache = (stamp, picks_mod.load_picks(self.root))
+        return self._picks_cache[1]
+
+    def _note_pick(self, pick: dict, symbol: str, now: datetime, status: str, reason: str, **extra: Any) -> None:
+        if self._pick_notes.get(pick["id"]) == status + reason:
+            return
+        self._pick_notes[pick["id"]] = status + reason
+        self._log({"type": "agent_pick", "timestamp": now.isoformat(), "symbol": symbol, "pick_id": pick["id"],
+                   "agent": pick.get("agent"), "side": pick.get("side"), "status": status, "reason": reason, **extra})
+        self.logger.info("V2 AGENT PICK %s %s (%s): %s: %s", symbol, pick.get("side"), pick.get("agent"), status, reason)
+
+    async def evaluate_agent_pick(self, *, symbol: str, bars: list[Bar], now: datetime, account, equity: float,
+                                  strategy: Strategy, risk_state, data_fresh: bool, entries_blocked: str | None,
+                                  pending: list[dict], cash: float | None = None) -> pipeline.CandidateReport | None:
+        """2.8.5 (owner, 2026-11-20): an advisor agent's almost_sure pick for this symbol, as a candidate report
+        (None = no pick waiting). Agents need not agree; every safety limit still applies (agent_picks.py)."""
+        cfg = self.cfg.get("agent_picks") or {}
+        document = self.agent_picks_document()
+        if not document or not bars:
+            return None
+        day = now.astimezone(ET).date().isoformat()
+        waiting = [p for p in picks_mod.active_picks(document, now, int(cfg["valid_minutes"]))
+                   if p["symbol"] == symbol and not self.pick_book.is_done(day, p["id"])]
+        if not waiting:
+            return None
+        pick = waiting[0]
+        if self.pick_book.taken_count(day) >= int(cfg["max_per_session"]):
+            self._note_pick(pick, symbol, now, "SKIPPED", f"already bought {cfg['max_per_session']} agent pick(s) today "
+                            "(agent_picks.max_per_session)")
+            return None
+        if entries_blocked:
+            # Not anchored yet: a pick seen outside the entry window (or while blocked) waits for a tradable bar.
+            self._note_pick(pick, symbol, now, "WAITING", f"entries blocked: {entries_blocked}")
+            return None
+        spot = bars[-1].close
+        anchor = self.pick_book.anchor(day, pick["id"], spot, now)
+        plan = picks_mod.levels(pick, anchor=anchor, price=spot, max_move_toward_target=float(cfg["max_move_toward_target"]))
+        if not plan["ok"]:
+            if plan.get("expired"):
+                self.pick_book.expire(day, pick["id"], plan["reason"])
+            self._note_pick(pick, symbol, now, "EXPIRED" if plan.get("expired") else "WAITING", plan["reason"], levels=plan)
+            return None
+        setup = {"side": pick["side"], "stop_distance": plan["stop_distance"], "target_distance": plan["target_distance"],
+                 "trigger_time": None, "agent_pick_id": pick["id"]}
+        tracker = {"state": "AGENT_PICK", "actionable": True, "setup": setup, "failures": []}
+        snap = self.snapshot(now)
+        regime = classify(snap, self.cfg["regime"])
+        core_signal, core_metrics = self.last_core.get(symbol, (None, {}))
+        pick_info = {k: pick.get(k) for k in ("id", "agent", "also_picked_by", "stop_pct", "target_pct", "created_utc")}
+        pick_info.update(thesis=str(pick.get("thesis") or "")[:300], anchor_price=plan["anchor_price"],
+                         stop_underlying=plan["stop_underlying"], target_underlying=plan["target_underlying"])
+        inputs = pipeline.CandidateInputs(
+            symbol=symbol, now=now, bars=list(bars), core_metrics=dict(core_metrics or {}), tracker=tracker,
+            snapshot=snap, regime=regime, strategy=strategy, v2=self.cfg, sector_map=self.sector_map, events=self.events,
+            metrics=self.metrics.get(symbol) if not self.metrics_error or symbol in self.metrics else None,
+            correlation=self.correlation, risk_state=risk_state, positions=copy.deepcopy(account.positions),
+            pending=list(pending), cash=float(account.cash if cash is None else cash), equity=equity,
+            profile_name=self.profile_name,
+            fetch_chain=lambda: self.chain_sync(symbol, bars[-1].timestamp, spot, now,
+                                                dte=pipeline.contract_range(self.cfg, strategy)[:2]), data_fresh=data_fresh,
+            entries_blocked=None, core_signal_now=core_signal is not None,
+            daily_closes=self.daily_closes.get(symbol), session_close=self.session_close,
+            vetoes=self.vetoes() if cfg.get("honor_vetoes") else None,
+            average_daily_range=self.average_daily_range.get(symbol), agent_pick=pick_info)
+        report = await asyncio.to_thread(pipeline.evaluate_candidate, inputs)
+        record = pipeline.report_record(report)
+        self._log({"type": "candidate", "timestamp": now.isoformat(), "agent_pick_id": pick["id"], **record})
+        self._note_pick(pick, symbol, now, report.outcome, "; ".join(report.reasons)[:400] or "all stages passed")
+        return report
+
     async def evaluate(self, *, symbol: str, bars: list[Bar], now: datetime, account, equity: float, strategy: Strategy,
                        risk_state, data_fresh: bool, entries_blocked: str | None, pending: list[dict],
                        cash: float | None = None) -> pipeline.CandidateReport | None:
-        """`cash` overrides the ledger's cash (LIVE passes the broker's settled funds; the LIVE ledger holds none)."""
+        """`cash` overrides the ledger's cash (LIVE passes the broker's settled funds; the LIVE ledger holds none).
+        2.8.5: an approved agent pick for the symbol comes first; otherwise the breakout candidate as before."""
+        if (self.cfg.get("agent_picks") or {}).get("enabled"):
+            picked = await self.evaluate_agent_pick(symbol=symbol, bars=bars, now=now, account=account, equity=equity,
+                                                    strategy=strategy, risk_state=risk_state, data_fresh=data_fresh,
+                                                    entries_blocked=entries_blocked, pending=pending, cash=cash)
+            if picked is not None and picked.outcome == "APPROVED":
+                return picked
         tracker = self.last_tracker.get(symbol)
         if not tracker or tracker["state"] == "NO_SETUP":
             return None
@@ -313,7 +415,10 @@ class V2Session:
             fetch_chain=lambda: self.chain_sync(symbol, bars[-1].timestamp, spot, now,
                                                 dte=pipeline.contract_range(self.cfg, strategy)[:2]), data_fresh=data_fresh,
             entries_blocked=entries_blocked, core_signal_now=core_signal is not None,
-            daily_closes=self.daily_closes.get(symbol), session_close=self.session_close, vetoes=self.vetoes())
+            daily_closes=self.daily_closes.get(symbol), session_close=self.session_close, vetoes=self.vetoes(),
+            average_daily_range=self.average_daily_range.get(symbol),
+            prior_day_high=prior.high if (prior := self.context.prior.get(symbol)) else None,
+            prior_day_low=prior.low if prior else None)
         report = await asyncio.to_thread(pipeline.evaluate_candidate, inputs)
         record = pipeline.report_record(report)
         self.latest_reports[symbol] = record
@@ -333,6 +438,13 @@ class V2Session:
                              "reasons": report.reasons[:4], "regime": report.stages.get("market_regime", {}).get("regime")})
 
     def record_entry(self, report: pipeline.CandidateReport, record: dict) -> None:
+        pick = (report.entry or {}).get("agent_pick")
+        if pick:
+            day = datetime.fromisoformat(record["entry_time"]).astimezone(ET).date().isoformat()
+            self.pick_book.mark_taken(day, pick["id"], str(record["trade_id"]), str(record["entry_time"]))
+            self._log({"type": "agent_pick", "timestamp": record["entry_time"], "symbol": record["underlying"],
+                       "pick_id": pick["id"], "agent": pick.get("agent"), "status": "BOUGHT",
+                       "reason": f"{record['symbol']} x{record['quantity']} @ {record['entry_price']}"})
         self._log({"type": "entry", "timestamp": record["entry_time"], "trade_id": record["trade_id"], "underlying": record["underlying"],
                    "option": record["symbol"], "quantity": record["quantity"], "entry_price": record["entry_price"],
                    "regime": record["v2_entry"]["regime"], "setup_type": record["v2_entry"]["setup_type"],
@@ -347,6 +459,7 @@ class V2Session:
                 "strategy_hash": self.config.sha256, "base_strategy_hash": self.config.base.sha256,
                 "entry_delta": entry["option"].delta if entry.get("option") else None,
                 "v2_entry": {"regime": entry.get("regime"), "setup_type": entry.get("setup_type"),
+                             "agent_pick": entry.get("agent_pick"),
                              "quality": entry.get("quality"), "breakout_bar_utc": trigger,
                              "confirmation_delay_minutes": round(delay, 1) if delay is not None else None,
                              "ledger_profile": self.profile_name},

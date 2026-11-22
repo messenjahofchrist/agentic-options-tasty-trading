@@ -377,8 +377,11 @@ def _run_paper_session_once(*, root: Path, cfg: AppConfig, strategy: Strategy, s
         cfg.require_market_data_credentials()
         verify_manifest(root / "strategy.txt", root / "active_strategy.json")
         if v2 is not None:
-            from .v2.config import verify_v2_manifest
-            verify_v2_manifest(root, v2)
+            from .v2.config import MANIFEST_FILE, side_manifest_path, verify_v2_manifest
+            # A side version (2.9.0) is checked against its own manifest, the active version against the active one.
+            active_file = (root / "strategies" / "professional_v2.json").resolve()
+            own = root / MANIFEST_FILE if Path(v2.path).resolve() == active_file else side_manifest_path(Path(v2.path))
+            verify_v2_manifest(root, v2, own)
         _set_engine_expected(cfg.data_dir, expected=True, state="STARTING", symbol=label)
         _write_heartbeat(heartbeat, status="starting", symbol=label)
         asyncio.run(_run(root=root, cfg=cfg, strategy=strategy, symbols=symbols, profile=profile, v2=v2))
@@ -1284,7 +1287,8 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
                 "premium_exposure_dollars": entry["premium_exposure_dollars"],
                 "expected_net_r": entry["expected_net_r"], "mfe": 0.0, "mae": 0.0, "last_bid": selected.bid, **extra},
                 quote=selected, quantity=quantity, decision_option=selected.symbol, readiness=state.report,
-                now=datetime.now(timezone.utc), quote_fresh=_fresh_quote)
+                now=datetime.now(timezone.utc), quote_fresh=_fresh_quote,
+                **_live_entry_retry(v2.data, report, client, selected))
             account.unrealized_pnl = _unrealized_pnl(account, executor)
             if booked is None:
                 v2s.log_outcome(symbol, bar_now, "LIVE_NOT_FILLED", "the broker order was blocked, rejected or not filled")
@@ -1439,6 +1443,38 @@ async def _run(*, root: Path, cfg: AppConfig, strategy: Strategy, symbols: tuple
         for task in tasks + ([heartbeat_task] if heartbeat_task else []):
             task.cancel()
         await asyncio.gather(*tasks, *([heartbeat_task] if heartbeat_task else []), return_exceptions=True)
+
+
+def _live_entry_retry(v2_data: dict, report, client: TastytradeClient, selected: OptionQuote) -> dict:
+    """V2 2.8.2 live_entry: the retry settings and a re-quote function for LiveTrader.open_position ({} = off)."""
+    from .live_execution import EntryRetry
+    cfg = v2_data.get("live_entry") or {}
+    if not cfg.get("enabled"):
+        return {}
+    budget = (report.stages.get("portfolio_correlation") or {}).get("contract_budget")
+    retry = EntryRetry(max_attempts=int(cfg["max_attempts"]), attempt_timeout_seconds=float(cfg["attempt_timeout_seconds"]),
+                       max_chase_fraction=float(cfg["max_chase_fraction"]),
+                       max_move_toward_target=float(cfg["max_move_toward_target"]),
+                       max_cost_dollars=float(budget) if budget is not None else None)
+    return {"retry": retry, "requote": lambda: _entry_requote(client, selected)}
+
+
+def _entry_requote(client: TastytradeClient, selected: OptionQuote) -> tuple[OptionQuote, float | None]:
+    """The selected contract's current quote (Greeks kept from the decision) and the underlying's current price."""
+    items = client.quotes(urlencode({"equity-option[]": selected.symbol})).get("data", {}).get("items", [])
+    item = next((i for i in items if i.get("symbol") == selected.symbol), None)
+    if item is None:
+        raise RuntimeError(f"no quote returned for {selected.symbol}")
+    fresh = replace(selected, bid=float(item.get("bid") or 0), ask=float(item.get("ask") or 0),
+                    bid_size=int(float(item.get("bid-size") or 0)), ask_size=int(float(item.get("ask-size") or 0)),
+                    quote_timestamp=datetime.fromisoformat(item["updated-at"].replace("Z", "+00:00")))
+    spot = None
+    stock = client.quotes(urlencode({"equity[]": selected.underlying})).get("data", {}).get("items", [])
+    row = next((i for i in stock if i.get("symbol") == selected.underlying), None)
+    if row is not None:
+        bid, ask = float(row.get("bid") or 0), float(row.get("ask") or 0)
+        spot = (bid + ask) / 2 if bid > 0 and ask >= bid else (float(row["last"]) if row.get("last") else None)
+    return fresh, spot
 
 
 def _option_marks(client: TastytradeClient, positions: list[dict]) -> list[OptionQuote]:

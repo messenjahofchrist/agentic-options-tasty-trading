@@ -5,7 +5,7 @@
 // Plain-English companion: docs/v2/professional_strategy_v2.md.
 {
   "strategy_id": "PROFESSIONAL_STRATEGY_V2",
-  "version": "2.8.0",
+  "version": "2.8.5",
   "status": "research_test",
   "mode": "PAPER",
   "base_strategy": {
@@ -175,12 +175,24 @@
     "breakeven": {"enabled": true, "trigger_r": 1.0, "require_option_above_floor": true},
     // let_winners_run: at the target, hold instead of selling; the stop locks in lock_r x R and trails trail_r x R
     // behind the best price (R = the initial stop distance). 2.4.0 (owner, 2026-10-29): trail 1.5R behind.
-    "let_winners_run": {"enabled": true, "lock_r": 1.0, "trail_r": 1.5},
+    // 2.8.1 (owner, 2026-11-17, after a LIVE IWM put gave back about half its peak gain on a 1.5R trail): once the
+    // best price is 3R in favour (tighten_after_r), the trail closes to 0.75R behind it (tight_trail_r).
+    // 2.8.5 (owner, 2026-11-20): tighten at 2R instead of 3R ("2X"). Replay 11/19 (reports/new_rules_20261119):
+    // -0.198R vs -0.200R net per trade on 2.8.1 entries, i.e. no measurable change either way.
+    "let_winners_run": {"enabled": true, "lock_r": 1.0, "trail_r": 1.5, "tighten_after_r": 2.0, "tight_trail_r": 0.75},
     // trailing: off from 2.4.0, so a winner is no longer sold on a 1-ATR dip before it reaches the target.
     // atr_multiple: "rules.stop_underlying_atr" or a number of ATRs.
     "trailing": {"enabled": false, "trigger_r": 1.0, "atr_multiple": "rules.stop_underlying_atr"},
     "time_stop": {"enabled": false, "after_minutes": 60, "min_progress_r": 0.25},
-    "partial_profit": {"enabled": false, "trigger_r": 1.0, "fraction": 0.5}
+    "partial_profit": {"enabled": false, "trigger_r": 1.0, "fraction": 0.5},
+    // 2.8.4 (owner, 2026-11-20, LIVE NFLX put up ~$50 with only a breakeven stop below it): "I don't want to lose more
+    // than $20 ... If it goes to $100 in profit, I want at least $60. The bot needs to trail the profit." Once the
+    // best net profit on the option bid (after fees) reaches activate_profit_dollars per contract, sell when the bid
+    // falls to keep_fraction of that best profit (up $50 -> keep $30, up $100 -> keep $60). Only ever rises.
+    // 2.8.5 (owner, 2026-11-20 13:20 CT: "the profit lock is a fixed amount? I want it to be a percentage"): the lock
+    // starts once the net profit is activate_profit_fraction of the premium paid (10%: $26 on a $257 contract, $100 on a
+    // $1,000 one) instead of a fixed $30; it still keeps keep_fraction (60%) of the best net profit.
+    "profit_lock": {"enabled": true, "activate_profit_fraction": 0.10, "keep_fraction": 0.60}
   },
 
   "shadow_benchmark": {"enabled": true},
@@ -202,5 +214,28 @@
   // 2.8.0 (owner-authorized 2026-11-11). The advisor (any agent, see agents.json) may block entries in one symbol
   // for a stated reason until a stated time (data/advisor/vetoes.json). Block-only: it never adds a trade or changes
   // size. The file is ignored once older than max_age_minutes, so a stopped advisor leaves no block behind.
-  "ai_veto": {"enabled": true, "enforce": true, "max_age_minutes": 90}
+  "ai_veto": {"enabled": true, "enforce": true, "max_age_minutes": 90},
+
+  // 2.8.3 (owner, 2026-11-20) = 2.8.1 + this LIVE entry retry only. The 2.8.2 entry rules (daily-range ruler,
+  // pullback-only, room to the target) were dropped: the 2-year replay (reports/new_rules_20261119) put 2.8.2 at
+  // -0.31R net per trade vs -0.20R for 2.8.1. Origin: LIVE IWM put 2026-11-19 cancelled unfilled at the 11-second-old
+  // $3.36 ask while paper filled at $3.41. LIVE entries only: up to max_attempts limit orders, each at the contract's
+  // current ask, each waiting attempt_timeout_seconds. Stops when the ask is more than max_chase_fraction above the
+  // decision ask, the trade's budget would be exceeded, the stock is past the stop, or it already covered
+  // max_move_toward_target of the way to the target. PAPER fills are unchanged.
+  "live_entry": {"enabled": true, "max_attempts": 3, "attempt_timeout_seconds": 8, "max_chase_fraction": 0.03,
+                 "max_move_toward_target": 0.5},
+
+  // 2.8.5 (owner, 2026-11-20): "agents don't need to agree if one agent finds an almost sure winner that should be
+  // purchased." Every agent in agents.json roles.advisor_panel reviews the news hourly (08:00-14:00 CT); an idea any
+  // one of them marks "almost_sure" is bought, PAPER and LIVE (trader/v2/agent_picks.py). Skips the breakout,
+  // regime, sector and volume stages. Keeps the kill switch, broker checks, entry window, 10:00-10:30 ET pause,
+  // late cutoff, events, position limits, budget, risk engine, option quality and the management exits.
+  // valid_minutes: a pick not bought within this time after the agent's reply is dropped.
+  // max_per_session: agent picks bought per account per day.
+  // max_move_toward_target: no chasing; skip once the stock covered this much of the way to the pick's target.
+  // min_expected_net_r: replaces the strategy's 1.0 minimum for picks (the option cost must not eat the target).
+  // honor_vetoes false: another agent's veto does not block a pick (agents need not agree).
+  "agent_picks": {"enabled": true, "valid_minutes": 50, "max_per_session": 1, "max_move_toward_target": 0.5,
+                  "min_expected_net_r": 0.3, "honor_vetoes": false}
 }

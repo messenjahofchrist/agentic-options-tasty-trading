@@ -141,3 +141,72 @@ Built at the owner's request but never switched on; 2.5.0 stays active. On 2026-
 * **Volatile-day lean** (`regime.high_volatility_lean`): HIGH_VOLATILITY (R2) still allows nothing by itself, but a direction is allowed when most of the market leans that way: at least 2 of SPY/QQQ/IWM with bias <= -1 (PUT) or >= +1 (CALL), at least 6 of the 11 sector ETFs leaning the same way, and SPY below (PUT) or above (CALL) the prior close. The regime notes say which side was allowed and why.
 
 Both sections are optional in the schema, so saved versions before 2.6.0 still load unchanged.
+
+## 2.8.2 (owner-ordered 2026-11-19; switched on only if the two-year replay is not worse after option costs)
+
+Built after the LIVE NFLX call of 2026-11-18 was bought within half a cent of the day's high and stopped out, and the LIVE IWM put of 2026-11-19 was cancelled unfilled while paper filled. Everything else is 2.8.1 unchanged. All new keys are optional in the schema, so earlier saved versions load and behave exactly as before.
+
+* **Bigger ruler** (`confirmation.min_distance_adr` 0.10, `confirmation.pullback.retest_tolerance_adr` 0.05, `context.average_range_sessions` 14): a breakout must close at least 10% of the stock's average daily range past the level, not just 0.25 of a one-minute ATR (NFLX at lunch: ATR 3 cents, so 0.8 cents counted). A retest counts within the larger of the two tolerances. Unknown daily range = not confirmed (fail closed).
+* **Buy the retest, not the push** (`confirmation.pullback_only`): CONFIRMED proves the breakout but is not a buy; the entry is PULLBACK_CONFIRMED (price comes back to the level without losing the range, then closes past the retest bar and the minimum distance). No retest within `pullback.max_wait_bars` = EXPIRED.
+* **Room to the target** (`room_to_target`): skip when reaching the target would make today's range more than 1.25x the average daily range, or when the target lies past the prior session's high (calls) / low (puts). A similar "already ran > 0.4-0.6 daily range" guard failed validation on 2026-11-09 (`reports/entry_guards_20261109.md`).
+* **LIVE entry retries** (`live_entry`): up to 3 orders at the contract's current ask, 8 seconds each, never more than 3% over the decision's ask or the trade's budget, and not once the stock is past the stop or halfway to the target. LIVE only; see `docs/live_trading.md` section 15.
+
+On 2026-11-18 data, 2.8.2 does not take the NFLX 13:31 ET call: it never confirms by 0.10 of NFLX's $1.70 average range, and its $61.20 target was above the prior day's $61.01 high. Replay: `reports/new_rules_20261119/`.
+
+## 2.8.3 (owner-ordered 2026-11-20; active from the 2026-11-20 open, paper and LIVE)
+
+2.8.3 = 2.8.1 + the LIVE entry retry (`live_entry`) only. The two-year replay (2024-12-01..2026-11-10, net of option
+cost) failed 2.8.2's entry rules: 2.8.2 made -0.31R per trade over 465 trades against 2.8.1's -0.20R over 2,115. It lost
+less in total only because it traded 78% less, and a random cut to 465 trades would have lost about -93R against its
+-142R. Each rule alone: the daily-range ruler -0.199R (no effect), buy only the retest -0.23R, room to the target -0.32R.
+Tightening the runner trail at 2R instead of 3R made no measurable difference (-0.198R vs -0.200R on 2.8.1) and is not in 2.8.3.
+The retry is a LIVE-only order fix that the replay cannot test; paper fills are unchanged. 2.8.3 also fixes the first
+attempt: when the stock quote is missing, the decision's own price is used instead of skipping the entry.
+
+## 2.8.4 (owner-ordered 2026-11-20 12:30 CT; active from 12:36 CT, paper and LIVE)
+
+2.8.4 = 2.8.3 + `management.profit_lock`. The owner's LIVE NFLX put was up about $50 with only a breakeven stop
+below it: "I don't want to lose more than $20 ... If it goes to $100 in profit, I want at least $60. The bot needs to
+trail the profit." Net profit is measured on the option bid after fees (bid minus the breakeven price, x 100 x
+quantity). Once the best net profit reaches $30 per contract, the position is sold when the bid falls to 60% of that
+best profit: up $50 keeps $30, up $100 keeps $60. The floor only rises. The best bid is seeded from the position's
+`mfe`, so a restart does not forget an earlier peak. The sale is at the next minute's bid, so the result can land a few
+dollars below the floor. Not replay-tested before going live (owner order); the target runner trail and breakeven stop
+are unchanged and still apply.
+
+## 2.8.5 (owner-ordered 2026-11-20 13:20 CT; active from 13:29 CT, paper and LIVE)
+
+2.8.5 = 2.8.4 with the profit lock's start as a percentage: `activate_profit_fraction` 0.10 = the lock starts once the
+net profit is 10% of the premium paid (about $26 on a $257 contract, $100 on a $1,000 one) instead of a fixed $30. It
+still keeps 60% of the best net profit. `activate_profit_dollars` remains available (exactly one of the two).
+
+LIVE ledger note 2026-11-20: the owner sold the LIVE NFLX Dec 11 $59 put in the tastytrade app at 12:48 CT for $3.00
+(order 528941504). The ledger still held it and blocked entries (broker/ledger mismatch). With LIVE stopped, the sale
+was booked from the broker transaction with the same arithmetic as an automatic exit (reason `owner_manual_close`,
++$41.75 after $1.25 fees). Backup: data/live/live_account.before_manual_nflx_close_20261120.json.
+
+### 2.8.5 amended 2026-11-21 (owner-ordered 2026-11-20 evening; hash b50aeea7…2859, paper and LIVE from Mon 11/23)
+
+The owner asked for two more things in 2.8.5 itself (same version number, new hash, new `authorize-live`):
+
+1. **Runner trail tightens at 2R ("2X")**: `let_winners_run.tighten_after_r` 3.0 -> 2.0. Once the best price is 2R in
+   favour, the trail closes from 1.5R to 0.75R behind it. Replay 11/19: -0.198R vs -0.200R net per trade on 2.8.1
+   entries (no measurable change either way).
+2. **Agent picks**: "agents don't need to agree if one agent finds an almost sure winner that should be purchased."
+   - Hourly (08:00-14:00 CT, task `\OptioBot\Advisor`) every agent in `agents.json` `roles.advisor_panel`
+     (claude, codex, gemini) reviews the news on its own, in parallel. Each agent's note, ideas and vetoes are logged
+     under its own name; vetoes of all agents are combined into `data/advisor/vetoes.json`.
+   - An idea marked `confidence: "almost_sure"` by ANY one agent goes to `data/advisor/agent_picks.json`. The agents
+     are told that such an idea is bought with real money.
+   - The engines (paper $10K, paper $1K, LIVE) buy it through the normal V2 path (`trader/v2/agent_picks.py`,
+     `pipeline.py` with `agent_pick`): the breakout, regime, sector and volume stages are NOT_APPLICABLE; the kill
+     switch, broker checks, entry window, 10:00-10:30 ET pause, late cutoff, events, position limits, budget, risk
+     engine, option quality and every exit (stop, breakeven, profit lock, runner, close) still apply.
+   - Stop and target are the agent's `stop_pct` / `target_pct` from the price when the engine first sees the pick.
+   - Settings (`agent_picks`): `valid_minutes` 50, `max_per_session` 1 per account per day, `max_move_toward_target`
+     0.5 (no chasing), `min_expected_net_r` 0.3 for picks (the strategy's 1.0 would block most), `honor_vetoes` false.
+   - Engine state: `<data_dir>/v2_agent_picks.json`; decisions log rows `type: agent_pick` (WAITING, SKIPPED,
+     EXPIRED, APPROVED, REJECTED, BOUGHT). Ledger rows carry `v2_entry.setup_type = "AGENT_PICK"` and
+     `v2_entry.agent_pick`.
+   - Track record before this change: 30 Claude ideas 11/11-11/20, all "low" confidence, +0.29R per idea on the
+     stock move after option cost, but -$365 option P&L on the 16 with recorded option prices. Not replay-tested.

@@ -448,16 +448,44 @@ VARIANTS = {
     "v23_hold_be1p5": ("v2", True, {"trailing": {"enabled": False}, "breakeven": {"trigger_r": 1.5}}),
     "v23_hold_no_be": ("v2", True, {"trailing": {"enabled": False}, "breakeven": {"enabled": False}}),
     "v23_trail_1p5_2atr": ("v2", True, {"trailing": {"trigger_r": 1.5, "atr_multiple": 2.0}}),
+    # 2.8.2 ablations (2026-11-19), run on the 2.8.2 config: each turns one or more of the new entry rules off.
+    # "v2" on 2.8.2 = all on; "v282_all_off" should reproduce 2.8.1.
+    "v282_all_off": ("v2", True, {"confirmation": {"min_distance_adr": 0, "pullback_only": False,
+                                                   "pullback": {"retest_tolerance_adr": 0}},
+                                  "room_to_target": {"enabled": False}}),
+    "v282_only_ruler": ("v2", True, {"confirmation": {"pullback_only": False}, "room_to_target": {"enabled": False}}),
+    "v282_only_pullback": ("v2", True, {"confirmation": {"min_distance_adr": 0, "pullback": {"retest_tolerance_adr": 0}},
+                                        "room_to_target": {"enabled": False}}),
+    "v282_only_room": ("v2", True, {"confirmation": {"min_distance_adr": 0, "pullback_only": False,
+                                                     "pullback": {"retest_tolerance_adr": 0}}}),
+    "v282_only_room_range": ("v2", True, {"confirmation": {"min_distance_adr": 0, "pullback_only": False,
+                                                           "pullback": {"retest_tolerance_adr": 0}},
+                                          "room_to_target": {"reject_target_past_prior_extreme": False}}),
+    "v282_no_ruler": ("v2", True, {"confirmation": {"min_distance_adr": 0, "pullback": {"retest_tolerance_adr": 0}}}),
+    "v282_no_pullback_only": ("v2", True, {"confirmation": {"pullback_only": False}}),
+    "v282_no_room": ("v2", True, {"room_to_target": {"enabled": False}}),
+    "v282_no_prior_extreme": ("v2", True, {"room_to_target": {"reject_target_past_prior_extreme": False}}),
+    # Owner 2026-11-19: tighten the runner trail (1.5R -> 0.75R behind the best price) from 2R in favour instead of 3R.
+    "v281_tighten_2r": ("v2", True, {"confirmation": {"min_distance_adr": 0, "pullback_only": False,
+                                                      "pullback": {"retest_tolerance_adr": 0}},
+                                     "room_to_target": {"enabled": False}, "let_winners_run": {"tighten_after_r": 2.0}}),
+    "v282_tighten_2r": ("v2", True, {"let_winners_run": {"tighten_after_r": 2.0}}),
 }
 _MANAGEMENT_KEYS = ("breakeven", "trailing", "time_stop", "partial_profit", "let_winners_run")
 
 
 def variant_config(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
-    """The V2 config with a variant's overrides merged in (management sub-keys are given at the top level)."""
+    """The V2 config with a variant's overrides merged in (management sub-keys are given at the top level). Nested
+    objects merge key by key (2.8.2: confirmation.pullback), so an override names only what it changes."""
+    def merge(into: dict, value: dict) -> dict:
+        out = dict(into)
+        for k, v in value.items():
+            out[k] = merge(out.get(k) or {}, v) if isinstance(v, dict) and isinstance(out.get(k), dict) else v
+        return out
     cfg = copy.deepcopy(base)
     for key, value in overrides.items():
         section = cfg["management"] if key in _MANAGEMENT_KEYS else cfg
-        section[key] = {**section.get(key, {}), **value}
+        section[key] = merge(section.get(key, {}), value)
     return cfg
 
 
@@ -530,9 +558,27 @@ def replay_days(*, config: V2Config, trade_symbols: list[str], rth: dict[str, di
             prior = sorted(d for d in rth.get(s, {}) if d < day)[-14:]
             if prior:
                 adr[s] = sum(max(b.high for b in rth[s][d]) - min(b.low for b in rth[s][d]) for d in prior) / len(prior)
+        # 2.8.2 average daily range (context.average_range_sessions): regular-session high-low of completed sessions.
+        # Live uses tastytrade daily candles for the same sessions.
+        range_sessions = int(cfg["context"].get("average_range_sessions") or 14)
+        live_adr = {}
+        for s in trade_symbols:
+            ranges = [max(b.high for b in rth[s][d]) - min(b.low for b in rth[s][d])
+                      for d in sorted(d for d in rth.get(s, {}) if d < day)]
+            live_adr[s] = pipeline.average_daily_range(ranges, range_sessions)
         index_of = {s: {b.timestamp: i for i, b in enumerate(bars)} for s, bars in day_bars.items()}
         minutes = sorted({b.timestamp for s in trade_symbols for b in day_bars[s]})
-        trackers = {s: BreakoutTracker(cfg["confirmation"], int(rules["breakout_lookback_bars"])) for s in trade_symbols}
+        # One tracker set per distinct confirmation config (2.8.2 variants change it; the others share one set).
+        tracker_sets: dict[str, dict[str, BreakoutTracker]] = {}
+        variant_trackers: dict[str, str] = {}
+        for name in selected:
+            key = json.dumps(variant_cfgs[name]["confirmation"], sort_keys=True)
+            variant_trackers[name] = key
+            if key not in tracker_sets:
+                tracker_sets[key] = {s: BreakoutTracker(variant_cfgs[name]["confirmation"], int(rules["breakout_lookback_bars"]))
+                                     for s in trade_symbols}
+                for s, t in tracker_sets[key].items():
+                    t.set_daily_range(live_adr.get(s))
         books = {name: {"open": [], "closed": [], "closed_today": [], "entries": 0, "consecutive": 0} for name in selected}
         last_minute = minutes[-1]
         for minute in minutes:
@@ -551,17 +597,19 @@ def replay_days(*, config: V2Config, trade_symbols: list[str], rth: dict[str, di
             snap = ctx.snapshot(now, trade_symbols)
             regime = classify(snap, cfg["regime"])
             core: dict[str, tuple] = {}
-            tracked: dict[str, dict] = {}
+            tracked_by_set: dict[str, dict[str, dict]] = {key: {} for key in tracker_sets}
             for s in trade_symbols:
                 if index_of[s].get(minute) is None:
                     continue
                 signal, metrics, _ = evaluate_underlying_diagnostics(growing[s], strategy, opening_range_start=session_open)
                 core[s] = (signal, metrics)
-                tracked[s] = trackers[s].update(growing[s][-1], signal, metrics)
+                for key, trackers in tracker_sets.items():
+                    tracked_by_set[key][s] = trackers[s].update(growing[s][-1], signal, metrics)
             for name in selected:
                 entry_rule, managed, _ = VARIANTS[name]
                 vcfg = variant_cfgs[name]
                 book = books[name]
+                tracked = tracked_by_set[variant_trackers[name]]
                 _manage_exits(book, minute, now, growing, core, vcfg, rules, managed, last_minute, regime)
                 candidates = []
                 for s in core:
@@ -588,7 +636,10 @@ def replay_days(*, config: V2Config, trade_symbols: list[str], rth: dict[str, di
                             correlation=model, risk_state=RiskState(10_000, 0, 0, 0, book["entries"], len(book["open"])),
                             positions=book["open"], pending=[], cash=10_000, equity=10_000,
                             profile_name="ORIGINAL_ACCOUNT_PAPER", fetch_chain=_no_options,
-                            daily_closes=prior_closes.get(s), session_close=last_minute + timedelta(minutes=1))
+                            daily_closes=prior_closes.get(s), session_close=last_minute + timedelta(minutes=1),
+                            average_daily_range=live_adr.get(s),
+                            prior_day_high=ctx.prior[s].high if s in ctx.prior else None,
+                            prior_day_low=ctx.prior[s].low if s in ctx.prior else None)
                         report = pipeline.evaluate_candidate(inp)
                         # Stages 1-7 all passed exactly when the pipeline went on to request the option chain.
                         reached_options = report.stages.get("option_pricing", {}).get("reason", "").startswith(

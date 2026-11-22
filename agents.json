@@ -19,6 +19,10 @@
   "roles": {
     // Market-news advisor: sentiment, in-play watchlist, vetoes and trade ideas (trader/advisor.py). Web search.
     "advisor": ["claude", "codex"],
+    // Owner 2026-11-20 (V2 2.8.5): EVERY agent listed here runs the hourly advisor review on its own, at the same time.
+    // Agents do not need to agree: one agent's "almost_sure" trade idea is bought (V2 agent_picks). Add or remove
+    // agents here. An agent that fails (no quota, not installed) is logged and skipped; the others still count.
+    "advisor_panel": ["claude", "codex", "gemini"],
     // The hourly supervisor review has two independent reviewers with no tools (trader/supervisor.py). Keep them
     // different agents: the point is a second opinion. A list adds a fallback for that slot.
     "reviewer_1": "claude-review",

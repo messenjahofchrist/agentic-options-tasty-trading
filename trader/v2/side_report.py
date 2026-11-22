@@ -322,4 +322,10 @@ def write_all(root: Path, data_dir: Path, now: datetime | None = None) -> dict[s
         dated.parent.mkdir(parents=True, exist_ok=True)
         dated.write_text(compare_html(views, today), encoding="utf-8")
         out["dated"] = str(dated)
+    try:
+        # LIVE 2.8 vs the paper accounts (owner, 2026-11-17). Its own failure must not stop the pages above.
+        from .live_compare import write as write_live_compare
+        out.update(write_live_compare(root, data_dir, now))
+    except Exception as exc:  # noqa: BLE001
+        out["live_vs_paper_error"] = f"{type(exc).__name__}: {exc}"
     return out

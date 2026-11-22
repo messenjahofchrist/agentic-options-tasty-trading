@@ -86,6 +86,13 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("--account-profile", choices=("small",), default=None,
                              help="v2 only. small: the small-account rules of the $1K PAPER ledger (per-trade cap, one "
                                   "position, tighter option quality) for a real account of about $1,000.")
+    live.add_argument("--unattended", action="store_true",
+                      help="Start without the typed confirmation, under the owner's standing order (live-autostart on). "
+                           "Used by the LiveEngine scheduled task (scripts\\live_engine.cmd).")
+    autostart = sub.add_parser("live-autostart",
+                               help="Owner standing order: LIVE starts by itself each weekday (on) or not at all (off)")
+    autostart.add_argument("action", choices=("on", "off"))
+    autostart.add_argument("--note", default="")
     sub.add_parser("v2-validate", help="Validate PROFESSIONAL_STRATEGY_V2 config, sector map and calendar (offline)")
     v2_activate = sub.add_parser("v2-activate", help="Owner action: activate the current V2 configuration for PAPER")
     v2_activate.add_argument("--approve", action="store_true", help="Write the V2 manifest. Without it, only validate.")
@@ -181,7 +188,14 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "live-session":
             from .live_session import run_live_session
             run_live_session(root=root, cfg=cfg, symbols=tuple(args.symbols) if args.symbols else None,
-                             v2=_live_v2(args, root), profile_name=args.account_profile)
+                             v2=_live_v2(args, root), profile_name=args.account_profile, unattended=args.unattended)
+        elif args.command == "live-autostart":
+            from .live_session import disable_live_autostart, enable_live_autostart
+            if args.action == "on":
+                path = enable_live_autostart(root=root, cfg=cfg, note=args.note)
+                print(json.dumps({"autostart_on": True, "file": str(path)}, indent=2))
+            else:
+                print(json.dumps(disable_live_autostart(root=root, cfg=cfg), indent=2))
         elif args.command == "live-check":
             from .live_session import live_readiness, write_readiness_report
             report = live_readiness(root=root, cfg=cfg, symbols=tuple(args.symbols) if args.symbols else None,

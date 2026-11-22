@@ -23,6 +23,12 @@ reason and the inputs that decided it):
                             (expected net R) + full portfolio check + sizing.py
   12 final                  APPROVED / WAIT_FOR_CONFIRMATION / REJECTED / INSUFFICIENT_DATA
 Expensive stages (8+) run only when 1-7 pass, so a candidate that is waiting or rejected costs no option requests.
+
+Agent picks (2.8.5, owner 2026-11-20; trader/v2/agent_picks.py): with inputs.agent_pick set, the candidate is an
+advisor agent's almost_sure idea. Stage 1 keeps the kill switch / broker / data checks, entry_filters and the late
+cutoff, and skips the breakout-specific checks; stages 2-5 are NOT_APPLICABLE; stages 6-11 run as usual, except that
+the expected-net-R minimum is agent_picks.min_expected_net_r and the favorites rule does not apply. Vetoes apply only
+with agent_picks.honor_vetoes (the caller passes no veto file otherwise).
 """
 from __future__ import annotations
 
@@ -135,6 +141,10 @@ class CandidateInputs:
     daily_closes: list[float] | None = None  # completed prior sessions' closes, oldest first (daily_trend stage-1 check)
     session_close: datetime | None = None    # today's actual close (early closes); None = 16:00 ET (late_entry_cutoff)
     vetoes: dict[str, Any] | None = None     # the advisor's veto file (ai_veto); None = no advisor / replay
+    average_daily_range: float | None = None  # mean high-low of the last context.average_range_sessions sessions (2.8.2)
+    prior_day_high: float | None = None       # the prior session's high / low (room_to_target, 2.8.2)
+    prior_day_low: float | None = None
+    agent_pick: dict[str, Any] | None = None  # 2.8.5: an advisor agent's almost_sure pick (agent_picks.py)
 
 
 @dataclass
@@ -177,6 +187,47 @@ def _finish(report: CandidateReport) -> CandidateReport:
     return report
 
 
+def room_to_target_check(room: dict[str, Any], *, side: str, price: float, bars: list[Bar], setup: dict[str, Any],
+                         cfg: dict[str, Any], adr: float | None, prior_high: float | None,
+                         prior_low: float | None) -> dict[str, Any]:
+    """2.8.2 room_to_target (owner, 2026-11-19). NFLX 11/18 was bought after a ~$1 climb on a stock whose whole day
+    was $1.08, for a target above both that day's and the prior day's high. Two checks, each fail-closed:
+    the day's range if the target is reached must not exceed max_day_range_adr x the average daily range, and
+    (optionally) the target must not lie past the prior session's high (calls) / low (puts)."""
+    if setup.get("stop_distance") is None or setup.get("target_distance") is None or not bars:
+        return {"status": "INSUFFICIENT_DATA", "reason": "stop/target distance unknown (room_to_target)"}
+    _, target_d = stop_and_target(cfg, price, float(setup["stop_distance"]), float(setup["target_distance"]))
+    direction = 1 if side == "CALL" else -1
+    target = price + direction * target_d
+    low, high = min(b.low for b in bars), max(b.high for b in bars)
+    out: dict[str, Any] = {"target": round(target, 4), "session_low": low, "session_high": high,
+                           "average_daily_range": adr, "prior_day_high": prior_high, "prior_day_low": prior_low}
+    if adr is None or adr <= 0:
+        return {**out, "status": "INSUFFICIENT_DATA", "reason": "average daily range unknown (room_to_target)"}
+    day_range = (max(high, target) - low) if direction == 1 else (high - min(low, target))
+    out["day_range_at_target_adr"] = round(day_range / adr, 3)
+    limit = float(room["max_day_range_adr"])
+    if day_range > limit * adr:
+        return {**out, "status": "REJECT",
+                "reason": f"reaching the target {target:.2f} makes today's range {day_range:.2f} = "
+                          f"{day_range / adr:.2f}x the average daily range {adr:.2f} (limit {limit}x; room_to_target)"}
+    if room["reject_target_past_prior_extreme"]:
+        extreme = prior_high if direction == 1 else prior_low
+        if extreme is None:
+            return {**out, "status": "INSUFFICIENT_DATA", "reason": "prior session high/low unknown (room_to_target)"}
+        if (target - extreme) * direction > 0:
+            return {**out, "status": "REJECT",
+                    "reason": f"target {target:.2f} lies past the prior session's {'high' if direction == 1 else 'low'} "
+                              f"{extreme:.2f} (room_to_target)"}
+    return {**out, "status": "PASS", "reason": "room to the target"}
+
+
+def average_daily_range(ranges: list[float] | None, sessions: int) -> float | None:
+    """Mean of the last `sessions` completed sessions' high minus low (None when fewer are known)."""
+    values = [float(r) for r in (ranges or []) if r is not None and r > 0][-sessions:]
+    return sum(values) / len(values) if len(values) == sessions else None
+
+
 def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
     setup = inp.tracker.get("setup") or {}
     side = setup.get("side")
@@ -184,6 +235,7 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
     cfg, rules, strategy = inp.v2, inp.strategy.rules, inp.strategy
     metrics = inp.core_metrics
     price = inp.bars[-1].close
+    pick = inp.agent_pick
 
     # 1 technical signal --------------------------------------------------------------------------
     if inp.entries_blocked:
@@ -224,7 +276,7 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
                        cutoff_et=cutoff.astimezone(ET).isoformat(timespec="minutes"))
             return _finish(report)
     reentry = cfg.get("failed_level_reentry") or {}
-    if reentry.get("enabled") and side:
+    if reentry.get("enabled") and side and not pick:
         # 2.7.0 (owner, 2026-11-10): after a breakout closes back inside the opening range, the same-side breakout of
         # the same range is not traded again for lookback_minutes (IWM 11/10: failed at 14:11 and 14:55 ET, bought at
         # 14:52 and 15:29). Only failures before this setup's breakout bar count.
@@ -241,7 +293,7 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
                        recent_failures=recent, lookback_minutes=int(reentry["lookback_minutes"]))
             return _finish(report)
     reach = cfg.get("time_to_target") or {}
-    if reach.get("enabled"):
+    if reach.get("enabled") and not pick:
         # 2.7.0 (owner, 2026-11-10): the target must be within reach before the close. Reach = reach_multiple x
         # one-minute ATR x sqrt(minutes left), a random-walk estimate of how far price can travel in the time left.
         close = inp.session_close or datetime.combine(inp.now.astimezone(ET).date(), time(16, 0), ET)
@@ -258,7 +310,7 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
                        reachable=round(reachable, 4), reach_multiple=float(reach["reach_multiple"]))
             return _finish(report)
     width = cfg.get("min_opening_range") or {}
-    if width.get("enabled"):
+    if width.get("enabled") and not pick:
         if setup.get("range_high") is None or setup.get("range_low") is None or not price > 0:
             report.set("technical_signal", "INSUFFICIENT_DATA", "opening range unknown (min_opening_range)")
             return _finish(report)
@@ -268,6 +320,14 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
         if height < need:
             report.set("technical_signal", "REJECT", f"opening range too narrow ({height:.4f} < {need:.4f} of the price; "
                        "min_opening_range)", range_fraction=round(height, 5), required_fraction=need)
+            return _finish(report)
+    room = cfg.get("room_to_target") or {}
+    if room.get("enabled") and side and not pick:
+        verdict = room_to_target_check(room, side=side, price=price, bars=inp.bars, setup=setup, cfg=cfg,
+                                       adr=inp.average_daily_range, prior_high=inp.prior_day_high,
+                                       prior_low=inp.prior_day_low)
+        if verdict["status"] != "PASS":
+            report.set("technical_signal", verdict["status"], verdict["reason"], room_to_target=verdict)
             return _finish(report)
     fast, slow, atr = metrics.get("ema_fast"), metrics.get("ema_slow"), metrics.get("atr")
     trend_ok = fast is not None and slow is not None and ((fast > slow) if side == "CALL" else (fast < slow))
@@ -280,7 +340,7 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
         tech["ai_veto_not_enforced"] = veto_hit
     daily = cfg.get("daily_trend") or {}
     daily_ok = True
-    if daily.get("enabled"):
+    if daily.get("enabled") and not pick:
         sessions = int(daily["sma_sessions"])
         closes = list(inp.daily_closes or [])[-sessions:]
         sma = sum(closes) / len(closes) if len(closes) == sessions else None
@@ -289,7 +349,10 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
             report.set("technical_signal", "INSUFFICIENT_DATA", f"fewer than {sessions} daily closes for the daily trend", **tech)
             return _finish(report)
         daily_ok = (price > sma) if side == "CALL" else (price < sma)
-    if not (trend_ok and atr_ok and spike_ok and daily_ok):
+    if pick:
+        report.set("technical_signal", "PASS", f"agent pick by {pick.get('agent')}: the breakout signal is not required "
+                   "(agent_picks)", agent_pick=pick, **tech)
+    elif not (trend_ok and atr_ok and spike_ok and daily_ok):
         failed = [n for n, ok in (("ema_trend", trend_ok), ("atr_filter", atr_ok), ("volatility_spike", spike_ok),
                                   ("daily_trend", daily_ok)) if not ok]
         report.set("technical_signal", "REJECT", "core conditions no longer hold on this bar: " + ",".join(failed), **tech)
@@ -298,7 +361,9 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
 
     # 2 breakout confirmation ------------------------------------------------------------------------
     state = inp.tracker["state"]
-    if not cfg["confirmation"]["enabled"]:
+    if pick:
+        report.set("breakout_confirmation", "NOT_APPLICABLE", "agent pick (agent_picks)", state=state)
+    elif not cfg["confirmation"]["enabled"]:
         # Without the confirmation wait, V2 enters exactly where the original would: on a bar whose core signal qualifies.
         if inp.core_signal_now:
             report.set("breakout_confirmation", "NOT_APPLICABLE", "confirmation stage disabled; core signal on this bar", state=state)
@@ -306,14 +371,19 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
             report.set("breakout_confirmation", "REJECT", "confirmation stage disabled and no core signal on this bar", state=state)
     elif inp.tracker["actionable"]:
         report.set("breakout_confirmation", "PASS", state, setup=setup)
-    elif state in ("AWAITING_CONFIRMATION", "PULLBACK_HOLDING"):
-        report.set("breakout_confirmation", "WAIT", state, setup=setup)
+    elif state in ("AWAITING_CONFIRMATION", "PULLBACK_HOLDING", "CONFIRMED"):
+        # CONFIRMED is only non-actionable under 2.8.2 pullback_only: the breakout is proven, the retest is awaited.
+        report.set("breakout_confirmation", "WAIT", state + (" (pullback_only: waiting for a retest of the level)"
+                                                             if state == "CONFIRMED" else ""), setup=setup)
     else:
         report.set("breakout_confirmation", "REJECT", state, setup=setup)
 
     # 3 regime ------------------------------------------------------------------------------------
     regime = inp.regime
-    if not cfg["regime"]["enabled"]:
+    if pick:
+        report.set("market_regime", "NOT_APPLICABLE", f"agent pick: {regime.regime} not required (agent_picks)",
+                   **regime.to_dict())
+    elif not cfg["regime"]["enabled"]:
         report.set("market_regime", "NOT_APPLICABLE", "regime stage disabled", regime=regime.regime)
     elif regime.regime == "UNCLEAR":
         report.set("market_regime", "INSUFFICIENT_DATA", "regime UNCLEAR: " + "; ".join(regime.notes), **regime.to_dict())
@@ -323,7 +393,9 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
         report.set("market_regime", "REJECT", f"{regime.regime} does not allow {side}", **regime.to_dict())
 
     # 4 sector ------------------------------------------------------------------------------------
-    if not cfg["sector"]["enabled"]:
+    if pick:
+        report.set("sector_confirmation", "NOT_APPLICABLE", "agent pick (agent_picks)")
+    elif not cfg["sector"]["enabled"]:
         report.set("sector_confirmation", "NOT_APPLICABLE", "sector stage disabled")
     else:
         symbol_state = {"change_from_open": indicators.change(price, inp.bars[0].open) if inp.bars else None}
@@ -338,7 +410,9 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
     vwap_ok = (not cfg["vwap_alignment"]["enabled"]) or (vwap is not None and ((price > vwap) if side == "CALL" else (price < vwap)))
     details = {"breakout_bar_relative_volume": rv, "relative_volume_min": rules["relative_volume_min"],
                "this_bar_relative_volume": metrics.get("relative_volume"), "session_vwap": vwap, "price": price}
-    if vwap is None and cfg["vwap_alignment"]["enabled"]:
+    if pick:
+        report.set("volume_confirmation", "NOT_APPLICABLE", "agent pick (agent_picks)", **details)
+    elif vwap is None and cfg["vwap_alignment"]["enabled"]:
         report.set("volume_confirmation", "INSUFFICIENT_DATA", "session VWAP unavailable", **details)
     elif not volume_ok:
         report.set("volume_confirmation", "REJECT", "breakout bar relative volume below the strategy minimum", **details)
@@ -462,12 +536,18 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
             report.set("position_sizing", "REJECT", f"round-trip option cost {cost_r if cost_r is not None else float('nan'):.2f}R "
                        f"above the {limit}R limit (cost_gate)", **sizing_inputs)
             return _finish(report)
-    if not gate["accepted"] and not (cost_enforced and cost_cfg.get("replaces_expected_net_r_gate")):
+    if pick:
+        need = float((cfg.get("agent_picks") or {}).get("min_expected_net_r", strategy.execution["min_expected_net_r"]))
+        if gate["expected_net_r"] < need:
+            report.set("position_sizing", "REJECT", f"expected net R {gate['expected_net_r']:.2f} below the agent-pick "
+                       f"minimum {need} (option cost eats the target; agent_picks)", **sizing_inputs)
+            return _finish(report)
+    elif not gate["accepted"] and not (cost_enforced and cost_cfg.get("replaces_expected_net_r_gate")):
         report.set("position_sizing", "REJECT", f"expected net R {gate['expected_net_r']:.2f} below the strategy minimum "
                    f"{strategy.execution['min_expected_net_r']}", **sizing_inputs)
         return _finish(report)
     favorites = cfg.get("favorites") or {}
-    if favorites.get("enabled") and inp.symbol not in favorites["symbols"]:
+    if favorites.get("enabled") and inp.symbol not in favorites["symbols"] and not pick:
         # Favorites are looked at first: same-minute candidates are ranked by expected net R, so another symbol only
         # takes a slot from a favorite by scoring higher, and on its own it must clear this higher minimum.
         need = float(favorites["others_min_expected_net_r"])
@@ -505,6 +585,8 @@ def evaluate_candidate(inp: CandidateInputs) -> CandidateReport:
                     "quality": {"regime": inp.regime.regime, "confirmation": state, "expected_net_r": gate["expected_net_r"],
                                 "trend_efficiency": metrics.get("trend_efficiency"),
                                 "breakout_relative_volume": rv, "affects_size": False}}
+    if pick:
+        report.entry["agent_pick"] = pick
     return _finish(report)
 
 

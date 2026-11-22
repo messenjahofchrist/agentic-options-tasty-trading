@@ -33,7 +33,9 @@ SECRET_NAME = re.compile(r"SECRET|TOKEN|PASSWORD|PASSWD|API.?KEY|_KEY$|ACCOUNT.?
 
 
 class AgentError(RuntimeError):
-    pass
+    def __init__(self, message: str = "", errors: list[str] | None = None) -> None:
+        super().__init__(message)
+        self.errors = list(errors) if errors else ([message] if message else [])
 
 
 @dataclass
@@ -134,22 +136,48 @@ def ask_json(role: str, prompt: str, *, validate: Callable[[Any], Any] | None = 
              runner: Callable[..., str] | None = None) -> AgentReply:
     """Ask the role's agent(s) for a JSON reply. Each agent gets attempts_per_agent tries; the next configured agent
     is used only when the previous one keeps failing. validate(data) may raise ValueError and may return cleaned data."""
-    runner = runner or run_agent
     config = load_config(root)
     errors: list[str] = []
     attempts = 0
     for name in agents_for(role, config):
-        for _ in range(attempts_per_agent):
-            attempts += 1
-            try:
-                data = extract_json(runner(name, prompt, config=config, timeout=timeout))
-                if validate is not None:
-                    cleaned = validate(data)
-                    data = data if cleaned is None else cleaned
-                return AgentReply(name, data, attempts, errors)
-            except (AgentError, ValueError, OSError, subprocess.SubprocessError) as exc:
-                errors.append(f"{name}: {type(exc).__name__}: {exc}"[:600])
+        try:
+            reply = ask_agent_json(name, prompt, validate=validate, timeout=timeout, attempts=attempts_per_agent,
+                                   config=config, runner=runner)
+            return AgentReply(name, reply.data, attempts + reply.attempts, errors + reply.errors)
+        except AgentError as exc:
+            attempts += attempts_per_agent
+            errors.extend(exc.errors)
     raise AgentError("; ".join(errors) or f"no agent answered for role {role}")
+
+
+def ask_agent_json(name: str, prompt: str, *, validate: Callable[[Any], Any] | None = None, timeout: int = 420,
+                   attempts: int = 2, config: dict[str, Any], runner: Callable[..., str] | None = None) -> AgentReply:
+    """One named agent, up to `attempts` tries, for a JSON reply (AgentError when every try fails)."""
+    runner = runner or run_agent
+    errors: list[str] = []
+    for attempt in range(1, attempts + 1):
+        try:
+            data = extract_json(runner(name, prompt, config=config, timeout=timeout))
+            if validate is not None:
+                cleaned = validate(data)
+                data = data if cleaned is None else cleaned
+            return AgentReply(name, data, attempt, errors)
+        except (AgentError, ValueError, OSError, subprocess.SubprocessError) as exc:
+            errors.append(f"{name}: {type(exc).__name__}: {exc}"[:600])
+    raise AgentError("; ".join(errors), errors)
+
+
+def panel_for(role: str, config: dict[str, Any]) -> list[str]:
+    """Owner 2026-11-20 (V2 2.8.5): every agent in roles[<role>_panel] answers on its own each run (no fallback order,
+    no agreement needed). Without a panel entry the role's normal list is used, first answer only."""
+    panel = config["roles"].get(f"{role}_panel")
+    if not panel:
+        return agents_for(role, config)[:1]
+    names = [panel] if isinstance(panel, str) else list(panel)
+    unknown = [n for n in names if n not in config["agents"]]
+    if unknown:
+        raise AgentError(f"role {role}_panel: unknown agent(s) {', '.join(unknown)}")
+    return names
 
 
 def main(argv: list[str] | None = None) -> int:

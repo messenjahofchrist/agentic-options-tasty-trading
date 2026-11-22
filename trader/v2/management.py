@@ -12,7 +12,8 @@ R = the position's initial underlying stop distance |entry_underlying - stop_und
                 fire on the bar it arms at a loss (a wide option spread can lag a small underlying move).
   let_winners_run  once the underlying reaches the original target, keep the position: its stop becomes the tighter
                 of entry + lock_r x R and best price - trail_r x R (only ever rising), and the position is sold when the
-                underlying closes back through it (or at the session close).
+                underlying closes back through it (or at the session close). Optional (2.8.1): once the best price
+                is tighten_after_r x R in favour, the trail closes to tight_trail_r x R behind it.
   trailing      once the underlying has moved trigger_r x R in favour, trail the underlying stop at the best price
                 since entry minus k x ATR(14) of the latest completed bar, k = atr_multiple (a number, or the
                 strategy's stop_underlying_atr when it is "rules.stop_underlying_atr"). It
@@ -76,7 +77,15 @@ def manage(position: dict, *, underlying: float, atr: float | None, option_bid: 
     target_r = abs(float(position["target_underlying"]) - entry) / r
     if runner.get("enabled") and favourable_r >= target_r:
         lock = entry + direction * float(runner["lock_r"]) * r
-        trail_behind = best - direction * float(runner["trail_r"]) * r
+        trail_r = float(runner["trail_r"])
+        # 2.8.1: once the best price is tighten_after_r x R in favour, trail tight_trail_r x R behind it instead.
+        if runner.get("tighten_after_r") is not None and favourable_r >= float(runner["tighten_after_r"]):
+            trail_r = float(runner["tight_trail_r"])
+            if not state.get("runner_tightened"):
+                state["runner_tightened"] = True
+                events.append({"event": "runner_trail_tightened", "favourable_r": round(favourable_r, 3),
+                               "trail_r": trail_r})
+        trail_behind = best - direction * trail_r * r
         level = max(lock, trail_behind) if direction == 1 else min(lock, trail_behind)
         previous = state.get("runner_stop_underlying")
         if previous is not None:
@@ -110,12 +119,42 @@ def manage(position: dict, *, underlying: float, atr: float | None, option_bid: 
         result["partial_quantity"] = sell
         events.append({"event": "partial_profit_due", "quantity": sell, "of": quantity})
 
+    lock = cfg.get("profit_lock") or {}
+    if lock.get("enabled"):
+        # 2.8.4 (owner, 2026-11-20): trail the PROFIT in dollars on the option bid. Net profit = (bid - the breakeven
+        # price, which includes entry and estimated exit fees and slippage) x 100 x quantity. Once the best net profit
+        # reaches activate_profit_dollars per contract, exit when the bid falls to keep_fraction of the best profit.
+        # The best bid is seeded from the position's mfe, so a restart does not forget an earlier peak.
+        breakeven_price = breakeven_option_price(position, exit_fees_estimate=exit_fees_estimate,
+                                                 slippage_per_contract=slippage_per_contract)
+        seeded = float(position["entry_price"]) + float(position.get("mfe") or 0) / (100 * quantity)
+        peak_bid = max(float(state.get("profit_peak_bid") or 0), seeded, option_bid)
+        state["profit_peak_bid"] = round(peak_bid, 4)
+        peak_profit = (peak_bid - breakeven_price) * 100 * quantity
+        # 2.8.5 (owner, 2026-11-20): the start can be a fraction of the premium paid instead of fixed dollars.
+        if lock.get("activate_profit_fraction") is not None:
+            activate = float(lock["activate_profit_fraction"]) * float(position["entry_price"]) * 100 * quantity
+        else:
+            activate = float(lock["activate_profit_dollars"]) * quantity
+        if peak_profit >= activate:
+            floor_bid = breakeven_price + float(lock["keep_fraction"]) * (peak_bid - breakeven_price)
+            previous = state.get("profit_lock_floor_bid")
+            floor_bid = max(floor_bid, float(previous)) if previous is not None else floor_bid
+            if previous is None or round(floor_bid, 4) != previous:
+                events.append({"event": "profit_lock_armed" if previous is None else "profit_lock_raised",
+                               "floor_bid": round(floor_bid, 4), "peak_bid": round(peak_bid, 4),
+                               "keeps_dollars": round((floor_bid - breakeven_price) * 100 * quantity, 2)})
+            state["profit_lock_floor_bid"] = round(floor_bid, 4)
+
     trail_stop = state.get("trail_stop_underlying")
     runner_stop = state.get("runner_stop_underlying")
+    lock_floor = state.get("profit_lock_floor_bid")
     if runner_stop is not None and (underlying - runner_stop) * direction <= 0:
         result["exit_reason"] = "v2_runner_stop"
     elif trail_stop is not None and (underlying - trail_stop) * direction <= 0:
         result["exit_reason"] = "v2_trailing_stop"
+    elif lock_floor is not None and option_bid <= float(lock_floor):
+        result["exit_reason"] = "v2_profit_lock_stop"
     elif state.get("breakeven_armed") and option_bid <= float(state["breakeven_option_floor"]):
         result["exit_reason"] = "v2_breakeven_stop"
     else:

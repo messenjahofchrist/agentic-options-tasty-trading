@@ -5,12 +5,19 @@ that symbol's own average for the same minutes over the previous `lookback_sessi
 `max_symbols` highest at or above `min_relative_volume` (price at least `min_price`) are the only symbols 2.9 trades
 that day. Unusual opening volume is how a stock shows it has news, earnings or a big gap.
 
-  baseline   nightly, from the Massive month chunks (trader.v2.history_cache): data/in_play/baseline.json
+  baseline   nightly, from tastytrade DXLink candles: data/in_play/baseline.json
   scan       at scan_at_et, today's opening bars from tastytrade DXLink: data/in_play/YYYY-MM-DD.json
              (both 2.9 engines use the same file; whichever starts first writes it)
 
-    python -m trader.v2.in_play baseline [--no-download]     # refresh this month's chunks, rebuild the baseline
-    python -m trader.v2.in_play replay-scan --date 2026-11-12  # what the scan would have picked, from history
+Both sides of the comparison MUST come from the same source. tastytrade's feed reports a different share of the
+market's volume for each stock (measured 2026-11-13: 14% to 84% of Massive's consolidated figure, steady for one stock,
+very different between stocks), so a Massive baseline made every stock look quiet and the 11/13 scan picked nothing.
+The scan therefore accepts only a tastytrade baseline and rebuilds it itself when the stored one is missing, stale or
+from another source. Massive is still used on both sides by the replay (replay-scan, trader.v2.replay).
+
+    python -m trader.v2.in_play baseline [--no-download]     # refresh this month's replay chunks, rebuild the baseline
+    python -m trader.v2.in_play replay-scan --date 2026-11-12  # what the scan would have picked, from Massive history
+    python -m trader.v2.in_play live-rescan --date 2026-11-13  # the same day from tastytrade on both sides (prints only)
 """
 from __future__ import annotations
 
@@ -26,6 +33,8 @@ from typing import Any, Iterable
 from zoneinfo import ZoneInfo
 
 ET = ZoneInfo("America/New_York")
+SOURCE = "tastytrade_dxlink"
+BASELINE_CALENDAR_DAYS = 45      # 15-minute candles reach back further than this; one-minute candles do not (8000-row cap)
 DAY_DIR = "data/in_play"
 BASELINE_FILE = "data/in_play/baseline.json"
 SIDE_CONFIG = "strategies/v2_versions/professional_v2_2.9.0.json"
@@ -86,20 +95,86 @@ def rank(today: dict[str, dict], averages: dict[str, dict], cfg: dict[str, Any])
 
 
 # --- baseline (nightly) -------------------------------------------------------------------------------------------
-def build_baseline(root: Path, symbols: list[str], for_day: date, cfg: dict[str, Any]) -> dict[str, Any]:
-    """Average opening volume over the lookback sessions strictly before for_day, from the month chunks."""
-    from .history_cache import iter_rows
+def _baseline(days_by_symbol: dict[str, dict[date, dict]], for_day: date, cfg: dict[str, Any], source: str) -> dict[str, Any]:
+    """Average opening volume over the lookback sessions strictly before for_day."""
     minutes, lookback = int(cfg["opening_minutes"]), int(cfg["lookback_sessions"])
     out: dict[str, Any] = {}
-    for symbol in symbols:
-        days = opening_from_rows(iter_rows(root, symbol, for_day - timedelta(days=lookback * 2 + 14), for_day - timedelta(days=1)),
-                                 minutes)
+    for symbol, days in days_by_symbol.items():
         recent = [days[d] for d in sorted(days) if d < for_day and days[d]["bars"] >= minutes * 0.6][-lookback:]
         if recent:
             out[symbol] = {"avg_open_volume": sum(r["volume"] for r in recent) / len(recent), "sessions": len(recent),
                            "last_session": max(d for d in days if d < for_day).isoformat()}
     return {"built_at_utc": datetime.now(timezone.utc).isoformat(), "for_sessions_after": (for_day - timedelta(days=1)).isoformat(),
-            "opening_minutes": minutes, "lookback_sessions": lookback, "symbols": out}
+            "source": source, "opening_minutes": minutes, "lookback_sessions": lookback, "symbols": out}
+
+
+def build_baseline(root: Path, symbols: list[str], for_day: date, cfg: dict[str, Any]) -> dict[str, Any]:
+    """The baseline from the Massive month chunks. For the replay only: the live scan must not use it."""
+    from .history_cache import iter_rows
+    minutes, lookback = int(cfg["opening_minutes"]), int(cfg["lookback_sessions"])
+    days = {symbol: opening_from_rows(iter_rows(root, symbol, for_day - timedelta(days=lookback * 2 + 14),
+                                                for_day - timedelta(days=1)), minutes) for symbol in symbols}
+    return _baseline(days, for_day, cfg, "massive")
+
+
+def opening_from_period_rows(rows: Iterable[dict], minutes: int) -> dict[date, dict[str, float]]:
+    """The same figure from candles whose period IS the opening window (one 09:30 ET candle per session)."""
+    days = opening_from_rows((r for r in rows if _is_open_stamp(r)), minutes)
+    for item in days.values():
+        item["bars"] = minutes          # one whole-window candle counts as a complete window
+    return days
+
+
+def _is_open_stamp(row: dict) -> bool:
+    stamp = datetime.fromisoformat(str(row["timestamp"]).replace("Z", "+00:00")).astimezone(ET)
+    return (stamp.hour, stamp.minute) == (9, 30)
+
+
+async def _fetch_history_days(token: dict[str, Any], symbols: list[str], for_day: date, minutes: int,
+                              batch: int = 35) -> tuple[dict[str, dict], dict[str, str]]:
+    from .datahub import history_batch
+    if minutes not in (5, 10, 15, 30):
+        raise ValueError("the tastytrade baseline needs opening_minutes of 5, 10, 15 or 30 (one candle from 09:30)")
+    start = datetime.combine(for_day - timedelta(days=BASELINE_CALENDAR_DAYS), time(0, 0), ET).astimezone(timezone.utc)
+    days, failures = {}, {}
+    for i in range(0, len(symbols), batch):
+        part = symbols[i:i + batch]
+        got, failed = await history_batch(dxlink_url=token["dxlink-url"], quote_token=token["token"],
+                                          series={s: f"{s}{{={minutes}m,tho=true}}" for s in part}, start=start,
+                                          timeout_seconds=90)
+        failures.update(failed)
+        for symbol, rows in got.items():
+            days[symbol] = opening_from_period_rows(rows, minutes)
+    return days, failures
+
+
+def _quote_token(app_cfg) -> dict[str, Any]:
+    from ..tastytrade_client import TastytradeClient
+    client = TastytradeClient(app_cfg.client_id, app_cfg.client_secret, app_cfg.refresh_token, base_url=app_cfg.production_base_url)
+    return client.quote_token().get("data", {})
+
+
+def build_baseline_tastytrade(token: dict[str, Any], symbols: list[str], for_day: date, cfg: dict[str, Any]) -> dict[str, Any]:
+    """The baseline the live scan uses: the same tastytrade feed as the scan's own opening bars."""
+    days, failures = asyncio.run(_fetch_history_days(token, symbols, for_day, int(cfg["opening_minutes"])))
+    baseline = _baseline(days, for_day, cfg, SOURCE)
+    baseline["fetch_failures"] = failures
+    return baseline
+
+
+def baseline_problem(baseline: dict[str, Any] | None, day: date, cfg: dict[str, Any]) -> str | None:
+    """Why the stored baseline cannot be used for `day`'s scan (None when it can)."""
+    if not baseline or not baseline.get("symbols"):
+        return "missing"
+    if baseline.get("source") != SOURCE:
+        return f"built from {baseline.get('source') or 'another source'}, not from tastytrade"
+    if int(baseline.get("opening_minutes") or 0) != int(cfg["opening_minutes"]) \
+            or int(baseline.get("lookback_sessions") or 0) != int(cfg["lookback_sessions"]):
+        return "built for other scan rules"
+    after = baseline.get("for_sessions_after")
+    if not after or date.fromisoformat(after) >= day or (day - date.fromisoformat(after)).days > 5:
+        return "older than 5 days" if after and date.fromisoformat(after) < day else "not for this session"
+    return None
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -158,16 +233,25 @@ def todays_selection(root: Path, app_cfg, v2data: dict[str, Any], *, now: dateti
                               "universe": len(universe), "rules": cfg,
                               "baseline_built_at_utc": baseline.get("built_at_utc"),
                               "baseline_for_sessions_after": baseline.get("for_sessions_after")}
-    stale = not baseline.get("for_sessions_after") or \
-        (day - date.fromisoformat(baseline["for_sessions_after"])).days > 5
-    if stale:
-        record.update(status="failed", error="opening-volume baseline missing or older than 5 days "
-                                             "(python -m trader.v2.in_play baseline)", selected=[], scored=[])
-        write_json(path, record)
-        return record
-    from ..tastytrade_client import TastytradeClient
-    client = TastytradeClient(app_cfg.client_id, app_cfg.client_secret, app_cfg.refresh_token, base_url=app_cfg.production_base_url)
-    token = client.quote_token().get("data", {})
+    token = _quote_token(app_cfg)
+    problem = baseline_problem(baseline, day, cfg)
+    if problem:
+        # Rebuild it now, from the same feed the scan reads (a few seconds), instead of trading on a wrong comparison.
+        log(f"in_play: stored baseline is {problem}; rebuilding it from tastytrade")
+        try:
+            baseline = build_baseline_tastytrade(token, universe, day, cfg)
+        except Exception as exc:  # noqa: BLE001 - the scan must end in a written record, never a crash
+            baseline = {"error": f"{type(exc).__name__}: {exc}"}
+        if len(baseline.get("symbols") or {}) < max(1, len(universe) // 2):
+            record.update(status="failed", selected=[], scored=[],
+                          error=f"opening-volume baseline was {problem} and could not be rebuilt from tastytrade "
+                                f"({baseline.get('error') or str(len(baseline.get('symbols') or {})) + ' symbols'})")
+            write_json(path, record)
+            return record
+        write_json(root / BASELINE_FILE, baseline)
+        record.update(baseline_rebuilt_because=problem, baseline_built_at_utc=baseline["built_at_utc"],
+                      baseline_for_sessions_after=baseline["for_sessions_after"])
+    record["baseline_source"] = baseline.get("source")
     today, failures = asyncio.run(_fetch_opening(token, universe, day, int(cfg["opening_minutes"])))
     ranked = rank(today, baseline.get("symbols") or {}, cfg)
     record.update(status="ok", symbols_with_opening_bars=len(today), fetch_failures=len(failures),
@@ -185,6 +269,8 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--for-day", help="YYYY-MM-DD (default: the next weekday)")
     r = sub.add_parser("replay-scan")
     r.add_argument("--date", required=True)
+    lr = sub.add_parser("live-rescan")
+    lr.add_argument("--date", required=True)
     parser.add_argument("--config", default=SIDE_CONFIG)
     args = parser.parse_args(argv)
     root = Path.cwd()
@@ -194,25 +280,39 @@ def main(argv: list[str] | None = None) -> int:
     universe = in_play_universe(root, v2data)
     if args.command == "baseline":
         today = datetime.now(ET).date()
-        if not args.no_download:
-            from ..config import load_dotenv
-            from .history_cache import download, months
-            load_dotenv()
-            month = f"{today:%Y-%m}"
-            first = today.replace(day=1)
-            span = months(f"{first - timedelta(days=40):%Y-%m}", month)
-            # this month always (it is incomplete, so always fetched); earlier months only when missing
-            result = download(root, universe, span, os.getenv("MASSIVE_API_KEY", ""),
-                              log=lambda t: print(f"{datetime.now():%H:%M:%S} {t}", flush=True))
-            print(json.dumps(result))
+        from ..config import AppConfig, load_dotenv
+        load_dotenv()
         for_day = date.fromisoformat(args.for_day) if args.for_day else today + timedelta(days=1)
         while for_day.weekday() >= 5:
             for_day += timedelta(days=1)
-        baseline = build_baseline(root, universe, for_day, cfg)
-        write_json(root / BASELINE_FILE, baseline)
-        print(json.dumps({"symbols": len(baseline["symbols"]), "for_sessions_after": baseline["for_sessions_after"],
-                          "missing": sorted(set(universe) - set(baseline["symbols"]))}))
+        # The live baseline first (tastytrade, seconds), so a slow or failed replay download cannot delay it.
+        baseline = build_baseline_tastytrade(_quote_token(AppConfig.from_env()), universe, for_day, cfg)
+        if baseline["symbols"]:
+            write_json(root / BASELINE_FILE, baseline)
+        print(json.dumps({"source": baseline["source"], "symbols": len(baseline["symbols"]),
+                          "for_sessions_after": baseline["for_sessions_after"],
+                          "missing": sorted(set(universe) - set(baseline["symbols"]))}), flush=True)
+        if not args.no_download:
+            from .history_cache import download, months
+            month = f"{today:%Y-%m}"
+            first = today.replace(day=1)
+            span = months(f"{first - timedelta(days=40):%Y-%m}", month)
+            # Massive month chunks, for the replay only. This month always (it is incomplete); earlier ones when missing.
+            result = download(root, universe, span, os.getenv("MASSIVE_API_KEY", ""),
+                              log=lambda t: print(f"{datetime.now():%H:%M:%S} {t}", flush=True))
+            print(json.dumps(result))
         return 0 if baseline["symbols"] else 1
+    if args.command == "live-rescan":
+        # Both sides from tastytrade, as the live scan now works. Prints only; writes nothing.
+        from ..config import AppConfig, load_dotenv
+        load_dotenv()
+        day = date.fromisoformat(args.date)
+        token = _quote_token(AppConfig.from_env())
+        baseline = build_baseline_tastytrade(token, universe, day, cfg)
+        days, _ = asyncio.run(_fetch_history_days(token, universe, day + timedelta(days=1), int(cfg["opening_minutes"])))
+        today_rows = {s: d[day] for s, d in days.items() if day in d}
+        print(json.dumps({"baseline_symbols": len(baseline["symbols"]), **rank(today_rows, baseline["symbols"], cfg)}, indent=1))
+        return 0
     from .history_cache import iter_rows
     day = date.fromisoformat(args.date)
     baseline = build_baseline(root, universe, day, cfg)
